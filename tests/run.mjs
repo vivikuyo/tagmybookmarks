@@ -998,6 +998,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(bm.includes("addEventListener('dblclick'") && bm.includes("colW[key] = null"), 'T107e 双击分隔线恢复默认');
   ok(bm.includes('attachColSplit(cols)') && bm.includes("attachColSplit(outerHead)"), 'T107f 双窗栏内列头与平铺外层表头都有分隔线');
   ok(css.includes('minmax(130px, 1fr)'), 'T107g 目录列吃剩余空间');
+  ok(!css.includes('grid-template-columns: 30px minmax(220px, 1.5fr)'), 'T107h 覆盖规则不得回退为固定栅格（曾导致拖拽失效）');
 }
 
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
