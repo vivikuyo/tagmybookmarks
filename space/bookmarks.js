@@ -24,6 +24,64 @@ let st = {
 const PANE_LIST = ['L', 'R'];
 let dual = false; // 双窗开关（存本机 bm.dual）
 let railFrac = 0.5; // 双窗左右宽度比（0.15–0.85，存本机 bm.railFrac）
+let colW = { t: null, g: null }; // 表头列宽（px，存本机 bm.colW）：t=标题/网址列，g=标签列，目录列吃剩余
+
+function applyColW() {
+  const table = document.querySelector('.bm-table');
+  if (!table) return;
+  if (colW.t) table.style.setProperty('--bm-colW-t', `${colW.t}px`);
+  else table.style.removeProperty('--bm-colW-t');
+  if (colW.g) table.style.setProperty('--bm-colW-g', `${colW.g}px`);
+  else table.style.removeProperty('--bm-colW-g');
+}
+
+/** 表头列分隔线：可拖拽调列宽（标题≥180px 标签≥120px），双击恢复默认 */
+function attachColSplit(head) {
+  const kids = [...head.children].filter((el) => el.tagName === 'SPAN');
+  if (kids.length < 4) return;
+  const places = [];
+  const mk = (targetIdx, key, minW) => {
+    const h = document.createElement('div');
+    h.className = 'bm-colsplit';
+    const place = () => {
+      const t = kids[targetIdx];
+      if (t) h.style.left = `${t.offsetLeft}px`;
+    };
+    places.push(place);
+    h.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const startX = e.clientX;
+      const startW = kids[targetIdx - 1].getBoundingClientRect().width; // 分隔线左侧列的当前宽
+      h.classList.add('drag');
+      const move = (ev) => {
+        colW[key] = Math.max(minW, Math.round(startW + ev.clientX - startX));
+        applyColW();
+        place();
+      };
+      const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+        h.classList.remove('drag');
+        chrome.storage.local.set({ 'bm.colW': colW });
+        place();
+      };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    });
+    h.addEventListener('dblclick', () => {
+      colW[key] = null;
+      applyColW();
+      chrome.storage.local.set({ 'bm.colW': colW });
+      requestAnimationFrame(place);
+    });
+    head.append(h);
+    requestAnimationFrame(place);
+  };
+  mk(2, 't', 180); // 标题 | 标签
+  mk(3, 'g', 120); // 标签 | 目录
+  head._placeSplits = () => places.forEach((f) => f());
+}
 let activePane = 'L';
 const newPane = () => ({
   folderId: '', // 本栏下钻的目录
@@ -518,7 +576,10 @@ function render() {
   } else {
     rows.classList.toggle('bm-tree-host', false);
     const outerHead = document.querySelector('.bm-table .bm-head');
-    if (outerHead) outerHead.hidden = false;
+    if (outerHead) {
+      outerHead.hidden = false;
+      if (outerHead._placeSplits) requestAnimationFrame(outerHead._placeSplits);
+    }
     st.hiddenRows = 0;
     for (const row of st.items) rows.append(renderRow(row));
   }
@@ -564,6 +625,7 @@ function buildPane(paneKey) {
     c3.textContent = '目录';
     cols.append(c0, c1, c2, c3);
     el.append(cols);
+    attachColSplit(cols);
   }
   el.append(rowsEl);
   return el;
@@ -1958,6 +2020,11 @@ export async function init() {
   try {
     const o = await chrome.storage.local.get(['bm.dirOpen', 'bm.dirOpen.L', 'bm.dirOpen.R', 'bm.dual', 'bm.paneFolder', 'bm.railFrac']);
     if (o && o['bm.railFrac']) railFrac = Math.min(0.85, Math.max(0.15, Number(o['bm.railFrac']) || 0.5));
+    const saved = (o && o['bm.colW']) || {};
+    colW = { t: Number(saved.t) || null, g: Number(saved.g) || null };
+    applyColW();
+    const outerHead = document.querySelector('.bm-table > .bm-head');
+    if (outerHead && !outerHead._placeSplits) attachColSplit(outerHead);
     dual = !!(o && o['bm.dual']);
     const btn = $('#bmDual');
     if (btn) btn.classList.toggle('on', dual);

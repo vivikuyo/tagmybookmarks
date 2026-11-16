@@ -987,6 +987,19 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(bm.includes("'复制 ➤'") && bm.includes("'⇤ 复制'"), 'T106h 中缝按钮简化');
 }
 
+// T107：表头列分隔线 + 拖拽调列宽
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(css.includes('minmax(180px, var(--bm-colW-t, 1.5fr))') && css.includes('minmax(120px, var(--bm-colW-g, 1.4fr))'), 'T107a 列宽走 CSS 变量（表头与行同一套栅格）');
+  ok(css.includes('.bm-colsplit') && css.includes('cursor: col-resize'), 'T107b 表头分隔线样式与拖拽光标');
+  ok(bm.includes('function attachColSplit') && bm.includes("mk(2, 't', 180)") && bm.includes("mk(3, 'g', 120)"), 'T107c 两条分隔线：标题|标签、标签|目录');
+  ok(bm.includes("'bm.colW'") && bm.includes('applyColW'), 'T107d 列宽存本机 bm.colW');
+  ok(bm.includes("addEventListener('dblclick'") && bm.includes("colW[key] = null"), 'T107e 双击分隔线恢复默认');
+  ok(bm.includes('attachColSplit(cols)') && bm.includes("attachColSplit(outerHead)"), 'T107f 双窗栏内列头与平铺外层表头都有分隔线');
+  ok(css.includes('minmax(130px, 1fr)'), 'T107g 目录列吃剩余空间');
+}
+
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
 const emptyCfg = [
   { id: '0', children: [{ id: '1', title: '书签栏', children: [] }] },
