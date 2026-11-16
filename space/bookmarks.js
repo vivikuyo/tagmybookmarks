@@ -404,6 +404,60 @@ function closeCtx() {
     ctxEl = null;
   }
 }
+/** 复制网址到剪贴板：管理页里可能没有输入焦点，clipboard API 失败就退回 textarea 选中复制 */
+async function copyUrl(url) {
+  try {
+    await navigator.clipboard.writeText(url);
+    toast('已复制网址');
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = url;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.append(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      toast('已复制网址');
+    } catch {
+      toast('复制失败，请手动复制', true);
+    }
+    ta.remove();
+  }
+}
+
+/** 书签行右键菜单：公开项（打开/复制网址/重命名）+ 按目录模式额外的剪切/复制（进剪贴板）+ 删除 */
+function bookmarkCtxItems(line, row, withClip) {
+  const items = [
+    { label: '打开', run: () => chrome.tabs.create({ url: row.url }) },
+    { label: '复制网址', run: () => copyUrl(row.url) },
+    { label: '重命名（标签保留）', run: () => renameRow(line, row) },
+  ];
+  if (withClip) {
+    items.push(
+      '-',
+      {
+        label: '剪切',
+        run: () => {
+          clip = { mode: 'cut', bookmarks: [row.id], folders: [] };
+          renderBulk();
+          toast('已剪切 1 个书签——去目标目录点「粘贴」');
+        },
+      },
+      {
+        label: '复制',
+        run: () => {
+          clip = { mode: 'copy', bookmarks: [row.id], folders: [] };
+          renderBulk();
+          toast('已复制 1 个书签——去目标目录点「粘贴」');
+        },
+      },
+    );
+  }
+  items.push('-', { label: '删除（进回收站）', danger: true, run: () => deleteNodes([row.id]) });
+  return items;
+}
+
 function openCtx(x, y, items) {
   closeCtx();
   ctxEl = document.createElement('div');
@@ -1074,16 +1128,12 @@ function renderRow(row, pane, depth = 0) {
   if (pane) {
     bindRowDrag(line, row.id, sel);
     bindBookmarkDrop(line, row);
-    line.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      openCtx(e.clientX, e.clientY, [
-        { label: '重命名（标签保留）', run: () => renameRow(line, row) },
-        { label: '打开', run: () => chrome.tabs.create({ url: row.url }) },
-        '-',
-        { label: '删除（进回收站）', danger: true, run: () => deleteNodes([row.id]) },
-      ]);
-    });
   }
+  // 右键菜单：按目录模式带「剪切/复制」（进剪贴板后去目标目录粘贴）；平铺模式只有网址/重命名/删除
+  line.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    openCtx(e.clientX, e.clientY, bookmarkCtxItems(line, row, !!pane));
+  });
 
   // 标题 + 网址
   const main = document.createElement('div');

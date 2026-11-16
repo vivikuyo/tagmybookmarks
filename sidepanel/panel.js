@@ -460,6 +460,109 @@ function renderList() {
   for (const item of data.items) listEl.append(renderRow(item));
 }
 
+// ---------------------------------------------------------------- 右键菜单（复制网址 / 重命名）
+let ctxEl = null;
+function closeCtx() {
+  if (ctxEl) {
+    ctxEl.remove();
+    ctxEl = null;
+  }
+}
+function openCtx(x, y, items) {
+  closeCtx();
+  ctxEl = document.createElement('div');
+  ctxEl.className = 'ctx-menu';
+  for (const it of items) {
+    if (it === '-') {
+      const hr = document.createElement('div');
+      hr.className = 'ctx-sep';
+      ctxEl.append(hr);
+      continue;
+    }
+    const b = document.createElement('button');
+    b.textContent = it.label;
+    if (it.danger) b.classList.add('danger');
+    b.addEventListener('click', () => {
+      closeCtx();
+      it.run();
+    });
+    ctxEl.append(b);
+  }
+  document.body.append(ctxEl);
+  const r = ctxEl.getBoundingClientRect();
+  ctxEl.style.left = `${Math.max(4, Math.min(x, innerWidth - r.width - 8))}px`;
+  ctxEl.style.top = `${Math.max(4, Math.min(y, innerHeight - r.height - 8))}px`;
+}
+document.addEventListener('click', closeCtx);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeCtx();
+});
+window.addEventListener('blur', closeCtx);
+
+/** 复制网址：侧边栏可能没有输入焦点，clipboard API 失败就退回 textarea 选中复制 */
+async function copyUrl(url) {
+  try {
+    await navigator.clipboard.writeText(url);
+    toast('已复制网址');
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = url;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.append(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      toast('已复制网址');
+    } catch {
+      toast('复制失败，请手动复制', true);
+    }
+    ta.remove();
+  }
+}
+
+/** 行内重命名：只改干净标题，标签/指令串由后台 node:rename 原样保留 */
+function renameRow(li, item) {
+  const t = li.querySelector('.row-title');
+  if (!t) return;
+  const input = document.createElement('input');
+  input.className = 'row-rename';
+  input.value = item.title || '';
+  t.replaceWith(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const cancel = () => {
+    done = true;
+    input.replaceWith(t);
+  };
+  const commit = async () => {
+    if (done) return;
+    done = true;
+    const v = input.value.trim();
+    input.replaceWith(t);
+    if (!v || v === item.title) return;
+    try {
+      await send({ type: 'node:rename', id: item.nodeIds[0], title: v });
+      await run(); // 重查一遍：标题/标签按新标题重建
+      toast('已重命名（标签保留）');
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commit();
+    } else if (e.key === 'Escape') {
+      cancel();
+    }
+  });
+  input.addEventListener('blur', commit);
+  input.addEventListener('click', (e) => e.stopPropagation());
+}
+
 function renderRow(item) {
   const li = document.createElement('li');
   li.className = 'row' + (app.selected.has(item.key) ? ' selected' : '');
@@ -517,6 +620,14 @@ function renderRow(item) {
 
   main.append(title, url, chips);
   li.append(pick, main);
+  // 右键：复制网址 / 重命名（标签保留）
+  li.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    openCtx(e.clientX, e.clientY, [
+      { label: '复制网址', run: () => copyUrl(item.url) },
+      { label: '重命名（标签保留）', run: () => renameRow(li, item) },
+    ]);
+  });
   return li;
 }
 

@@ -1080,6 +1080,22 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(css.includes('.bm-head > span + span, .bm-row > :nth-child(n + 2) { padding-left: 10px; }'), 'T115c 表头与第 2 列起统一 10px 左内距（分隔线不贴列名）');
 }
 
+// T116：书签右键菜单三处补齐（目录模式 + 平铺模式 + 侧边栏）
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  ok(bm.includes('function bookmarkCtxItems(line, row, withClip)') && bm.includes("label: '复制网址'"), 'T116a 书签菜单含「复制网址」');
+  ok(bm.includes("label: '重命名（标签保留）'") && bm.includes("label: '删除（进回收站）'"), 'T116b 菜单含重命名与删除');
+  ok(bm.includes("from 'cut'") || bm.includes("mode: 'cut', bookmarks: [row.id]"), 'T116c 目录模式菜单含剪切');
+  ok(bm.includes("mode: 'copy', bookmarks: [row.id]"), 'T116d 目录模式菜单含复制');
+  ok(bm.includes('bookmarkCtxItems(line, row, !!pane)'), 'T116e 平铺模式也挂右键菜单（无剪切/复制）');
+  ok(bm.includes('async function copyUrl') && bm.includes("document.execCommand('copy')"), 'T116f 复制网址带 textarea 回退');
+  ok(pn.includes('function openCtx(x, y, items)') && pn.includes("label: '复制网址'"), 'T116g 侧边栏右键含复制网址');
+  ok(pn.includes("type: 'node:rename'") && pn.includes('await run();'), 'T116h 侧边栏重命名走 node:rename 并重查');
+  ok(pc.includes('.ctx-menu') && pc.includes('.row-rename'), 'T116i 侧边栏菜单/行内输入框样式');
+}
+
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
 const emptyCfg = [
   { id: '0', children: [{ id: '1', title: '书签栏', children: [] }] },

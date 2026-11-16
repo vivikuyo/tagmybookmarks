@@ -283,6 +283,24 @@ body[data-density="ultra"] .list { padding-bottom: 10px; }
   background: var(--bg-soft); border-radius: 4px; font-size: 11.5px;
 }
 
+/* 右键菜单（复制网址 / 重命名） */
+.ctx-menu {
+  position: fixed; z-index: 200; min-width: 132px; padding: 4px;
+  background: var(--bg, #fff); border: 1px solid var(--line, #e3e6ec); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16); display: flex; flex-direction: column; gap: 2px;
+}
+.ctx-menu button {
+  text-align: left; padding: 6px 10px; border: 0; border-radius: 6px; background: transparent;
+  color: var(--text, #1c1f26); font-size: 12.5px; cursor: pointer; font-family: inherit;
+}
+.ctx-menu button:hover { background: color-mix(in srgb, var(--accent, #4a8af4) 12%, transparent); }
+.ctx-menu button.danger { color: #c0392b; }
+.ctx-sep { height: 1px; margin: 3px 2px; background: var(--line, #e3e6ec); }
+.row-rename {
+  width: 100%; padding: 2px 6px; border: 1px solid var(--accent, #4a8af4); border-radius: 6px;
+  background: var(--bg, #fff); color: var(--text, #1c1f26); font-size: 13px; font-family: inherit;
+}
+
 .toast {
   position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
   background: #2b2f36; color: #f2f4f8;
