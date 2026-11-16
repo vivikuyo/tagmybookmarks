@@ -1144,6 +1144,8 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(mf.name === 'TagMyBookmarks' && mf.action.default_title === 'TagMyBookmarks', 'T120a 扩展显示名与按钮标题');
   ok(pkg.author === 'vivikuyo', 'T120b package.json 作者 vivikuyo');
   ok(cfg.includes("CONFIG_DIR_NAME = 'TagSpace'") && cfg.includes("CONFIG_FILE_PREFIX = 'TagSpace 配置·'"), 'T120c 磁盘标识仍为 TagSpace（旧配置/同步数据不受影响）');
+  const panel = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
+  ok(panel.includes('Tag<span>MyBookmarks</span>') && !panel.includes('Tag<span>Space</span>'), 'T120d 侧边栏顶栏品牌名 TagMyBookmarks');
 }
 
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
