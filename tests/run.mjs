@@ -960,7 +960,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(bm.includes("cols.className = 'bm-head bm-pane-cols'"), 'T105b 栏内列头与行同栅格');
   ok(sp.includes('id="bmNewFolder"') && sp.indexOf('id="bmDual"') > sp.indexOf('id="bmNewFolder"'), 'T105c 双窗按钮在新建文件夹右侧');
   ok(bm.includes("dualBtn.disabled = !tree"), 'T105d 双窗按钮随模式置灰');
-  ok(bm.includes('function buildRail') && bm.includes("'复制 ➤'") && bm.includes("'⇤ 移动'"), 'T105e 中缝固定方向复制/移动按钮');
+  ok(bm.includes('function buildRail') && bm.includes("'复制 ⇨'") && bm.includes("'⇦ 移动'"), 'T105e 中缝固定方向复制/移动按钮（⇦/⇨ 统一箭头）');
   ok(bm.includes('function railRun') && bm.includes("type: 'bookmarks:paste', targetId, clip: { mode: 'copy'"), 'T105f 跨栏复制走剪贴板通路');
   ok(bm.includes('function bindBookmarkDrop') && bm.includes("above ? n.index : n.index + 1"), 'T105g 书签行投放=插入前/后（上下半行判定）');
   ok(bg.includes('idx != null ? { index: idx } : {}') && bg.includes('if (idx != null) idx++'), 'T105h 后台 move 支持插入位次（多条按序）');
@@ -984,7 +984,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(sp.includes('id="bmCollapse"') && bm.includes("pane.dirOpen.clear()"), 'T106e 收起目录按钮：清活动窗格展开集');
   ok(bm.includes("collapseBtn.disabled = !tree"), 'T106f 收起目录随模式置灰');
   ok(!bm.includes('全选全部（'), 'T106g 全选全部不带数量');
-  ok(bm.includes("'复制 ➤'") && bm.includes("'⇤ 复制'"), 'T106h 中缝按钮简化');
+  ok(bm.includes("'复制 ⇨'") && bm.includes("'⇦ 复制'"), 'T106h 中缝按钮简化');
 }
 
 // T107：表头列分隔线 + 拖拽调列宽
@@ -1038,6 +1038,15 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(bm.includes("const otherNow = key === 'g' ? colW[view].t : colW[view].g;"), 'T111a 上限用另一列实际冻结宽（防上限虚高致行区横向溢出）');
   ok(bm.includes('getComputedStyle(head)'), 'T111b 上限扣真实内边距（含滚动条补偿）');
   ok(!bm.includes('otherMin'), 'T111c 旧的最小宽口径已移除');
+}
+
+// T112：中缝两组按钮之间留足间隔（防误点）+ 箭头统一
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(css.includes('gap: min(300px, 22vh)'), 'T112a 两组方向按钮间隔 300px（窗口矮时按 22vh 收）');
+  ok(bm.includes("'复制 ⇨'") && bm.includes("'移动 ⇨'") && bm.includes("'⇦ 复制'") && bm.includes("'⇦ 移动'"), 'T112b 箭头统一 ⇦/⇨');
+  ok(!bm.includes('➤') && !bm.includes('⇤ 复'), 'T112c 旧箭头已清理');
 }
 
 // 配置缺版本号：空文件不算，有配置组却没 v 才算

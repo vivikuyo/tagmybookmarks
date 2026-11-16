@@ -565,7 +565,7 @@ textarea:focus { border-color: var(--accent); }
 .bm-dual-wrap { display: grid; gap: 8px; }
 .bm-dual-wrap.single { grid-template-columns: 1fr; }
 .bm-dual-wrap.dual { grid-template-columns: 1fr auto 1fr; height: 64vh; }
-.bm-rail { display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 0 1px; cursor: col-resize; }
+.bm-rail { display: flex; flex-direction: column; justify-content: center; gap: min(300px, 22vh); padding: 0 1px; cursor: col-resize; }
 .bm-rail:active { cursor: col-resize; }
 .bm-rail button { cursor: pointer; }
 .bm-rail-group { display: flex; flex-direction: column; gap: 4px; }

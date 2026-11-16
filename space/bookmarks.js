@@ -685,12 +685,12 @@ function buildRail() {
   };
   const g1 = document.createElement('div');
   g1.className = 'bm-rail-group';
-  g1.append(mk('复制 ➤', 'copy', 'toR', '左栏选中 → 复制到右栏当前目录'));
-  g1.append(mk('移动 ➤', 'move', 'toR', '左栏选中 → 移动到右栏当前目录（可撤销）'));
+  g1.append(mk('复制 ⇨', 'copy', 'toR', '左栏选中 → 复制到右栏当前目录'));
+  g1.append(mk('移动 ⇨', 'move', 'toR', '左栏选中 → 移动到右栏当前目录（可撤销）'));
   const g2 = document.createElement('div');
   g2.className = 'bm-rail-group';
-  g2.append(mk('⇤ 复制', 'copy', 'toL', '右栏选中 → 复制到左栏当前目录'));
-  g2.append(mk('⇤ 移动', 'move', 'toL', '右栏选中 → 移动到左栏当前目录（可撤销）'));
+  g2.append(mk('⇦ 复制', 'copy', 'toL', '右栏选中 → 复制到左栏当前目录'));
+  g2.append(mk('⇦ 移动', 'move', 'toL', '右栏选中 → 移动到左栏当前目录（可撤销）'));
   rail.append(g1, g2);
   rail.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-rail]');
