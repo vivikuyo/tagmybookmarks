@@ -426,13 +426,48 @@ async function copyUrl(url) {
   }
 }
 
+/** 粘贴到指定目录（右键专用）：目标 = 右键位置的所在目录；剪切粘贴成功后剪贴板自动清空 */
+async function pasteInto(targetId, targetName) {
+  if (!clip) {
+    toast('剪贴板是空的，先复制或剪切', true);
+    return;
+  }
+  const tid = String(targetId);
+  const targetPath = idToPath.get(tid) || '';
+  const bad = (clip.folders || []).some((id) => {
+    const p = idToPath.get(String(id));
+    // 剪切的文件夹自己或它的上级：粘进去等于把自己搬进自己的子树，直接拒绝
+    return p && targetPath && (targetPath === p || targetPath.startsWith(`${p}/`));
+  });
+  if (bad) {
+    toast('不能把文件夹粘贴到它自己或它的子目录里', true);
+    return;
+  }
+  try {
+    const r = await send({ type: 'bookmarks:paste', targetId: tid, clip });
+    if (clip.mode === 'cut') clip = null; // 剪切是一次性的
+    selected.clear();
+    await refresh();
+    toast(`已粘贴到「${targetName}」：复制 ${r.copied} 项、移动 ${r.moved} 项`);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
 /** 书签行右键菜单：公开项（打开/复制网址/重命名）+ 按目录模式额外的剪切/复制（进剪贴板）+ 删除 */
 function bookmarkCtxItems(line, row, withClip) {
-  const items = [
+  const items = [];
+  if (withClip && clip) {
+    // 右键书签 → 粘贴进它所在的目录（不是当前下钻的目录），标出目录名免得粘错地方
+    const parentId = row.parentId ? String(row.parentId) : curPane().folderId || BOOKMARKS_BAR_ID;
+    const parentName = (idToPath.get(parentId) || '').split('/').slice(-1)[0] || '书签栏';
+    items.push({ label: `粘贴到「${parentName}」`, run: () => pasteInto(parentId, parentName) }, '-');
+  }
+  items.push(
     { label: '打开', run: () => chrome.tabs.create({ url: row.url }) },
     { label: '复制网址', run: () => copyUrl(row.url) },
     { label: '重命名（标签保留）', run: () => renameRow(line, row) },
-  ];
+  );
   if (withClip) {
     items.push(
       '-',
@@ -939,7 +974,13 @@ function renderFolderRow(node, open, isRoot, pane) {
   // 右键菜单：重命名 / 新建子文件夹 / 剪切 / 复制 / 删除
   div.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    openCtx(e.clientX, e.clientY, [
+    const items = [];
+    if (clip) {
+      // 右键文件夹 → 粘贴进这个文件夹本身
+      const name = node.title || '目录';
+      items.push({ label: `粘贴到「${name}」`, run: () => pasteInto(node.id, name) }, '-');
+    }
+    items.push(
       { label: '重命名', run: () => renameFolder(div, node) },
       { label: '新建子文件夹', run: () => createSubFolder(node, pane) },
       '-',
@@ -961,7 +1002,8 @@ function renderFolderRow(node, open, isRoot, pane) {
       },
       '-',
       { label: '删除（进回收站）', danger: true, run: () => deleteNodes([node.id]) },
-    ]);
+    );
+    openCtx(e.clientX, e.clientY, items);
   });
   return div;
 }

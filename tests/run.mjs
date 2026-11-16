@@ -1096,6 +1096,17 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(pc.includes('.ctx-menu') && pc.includes('.row-rename'), 'T116i 侧边栏菜单/行内输入框样式');
 }
 
+// T117：目录模式右键「粘贴到此处目录」——目标由右键位置推出，不是当前下钻目录
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  ok(bm.includes('async function pasteInto(targetId, targetName)'), 'T117a 右键专用 pasteInto（显式目标目录）');
+  ok(bm.includes('const parentId = row.parentId ? String(row.parentId) : curPane().folderId || BOOKMARKS_BAR_ID;'), 'T117b 书签右键 → 粘贴到它所在的父目录');
+  ok(bm.includes('run: () => pasteInto(node.id, name)'), 'T117c 文件夹右键 → 粘贴进该文件夹本身');
+  ok(bm.includes('targetPath.startsWith(`${p}/`)'), 'T117d 防呆：剪切的文件夹不能粘进自己/子树');
+  ok(bm.includes('已粘贴到「${targetName}」'), 'T117e 粘贴结果 toast 标出目标目录');
+  ok(bm.includes("if (clip.mode === 'cut') clip = null; // 剪切是一次性的"), 'T117f 剪切粘贴后清空剪贴板');
+}
+
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
 const emptyCfg = [
   { id: '0', children: [{ id: '1', title: '书签栏', children: [] }] },
