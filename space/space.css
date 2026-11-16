@@ -620,7 +620,8 @@ textarea:focus { border-color: var(--accent); }
 .bm-tags { display: flex; flex-wrap: wrap; gap: 3px; min-height: 20px; align-items: center; }
 /* 按目录模式没有目录列：3 栏栅格（标题/网址 + 标签），标签列吃剩余空间 */
 .bm-head.no-path, .bm-row.no-path {
-  grid-template-columns: 30px minmax(180px, var(--bm-colW-t, 1.5fr)) minmax(120px, var(--bm-colW-g, 1.4fr));
+  /* 标签列恒吃剩余（不接 --bm-colW-g）：树模式只有「标题|标签」一条线，标签列永远撑满右缘，不留空隙 */
+  grid-template-columns: 30px minmax(180px, var(--bm-colW-t, 1.5fr)) minmax(120px, 1fr);
 }
 
 .bm-path { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

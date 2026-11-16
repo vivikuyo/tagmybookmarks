@@ -1008,7 +1008,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(bm.includes('box.className = \'bm-dirrows\'; // 不再整盒缩进') || bm.includes('不再整盒缩进'), 'T108a 树书签行不再整盒缩进（缩进放标题格内）');
   ok(bm.includes('function renderRow(row, pane, depth = 0)') && bm.includes('main.style.paddingLeft = `${depth * 12}px`'), 'T108b 深度缩进在「标题+网址」整格内（两行左缘对齐），行栅格与表头同轨');
   ok(css.includes('background: var(--line);') && css.includes('.bm-colsplit:hover::after, .bm-colsplit.drag::after { background: var(--accent); width: 2px; }'), 'T108c 分隔线默认淡线常显，悬停/拖动橙色加粗');
-  ok(bm.includes('const maxW = Math.max(minW, avail - 30 - otherNow - (noPath ? 0 : 60) - 24);'), 'T108d 列宽拖拽有上限（按另一列实际冻结宽算），目录列不被挤出可视区');
+  ok(bm.includes('const maxW = Math.max(minW, avail - 30 - otherNow - (noPath ? 120 : 60) - 24);'), 'T108d 列宽拖拽有上限（按另一列实际冻结宽算），目录列不被挤出可视区');
 }
 
 // T109：分隔线稳定性（冻结弹性列 / 双线重定位 / 窗口缩放）
@@ -1023,7 +1023,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
 // T110：列宽按视图独立（根治双窗共享列宽互相挤垮）+ 表头滚动条补偿（根治错位）
 {
   const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
-  ok(bm.includes('colW = { flat: { t: null, g: null }, L: { t: null, g: null }, R: { t: null, g: null } }'), 'T110a 列宽 flat/L/R 三视图独立');
+  ok(bm.includes("colW = { flat: { t: null, g: null }, tree: { t: null, g: null }, L: { t: null, g: null }, R: { t: null, g: null } }"), 'T110a 列宽 flat/tree/L/R 四视图独立');
   ok(bm.includes("function applyColW(host, view)"), 'T110b 列宽变量落到宿主（pane 或 bm-table）');
   ok(bm.includes('applyColW(el, paneKey); // pane 每次渲染重建，列宽变量重打'), 'T110c 双窗 pane 渲染时重打本栏列宽');
   ok(bm.includes('attachColSplit(cols, paneKey)') && bm.includes("attachColSplit(outerHead, 'flat')"), 'T110d 分隔线带视图键');
@@ -1053,12 +1053,23 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
 {
   const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
-  ok(bm.includes('function setHeadPath(head, withPath)'), 'T113a 表头列数随模式切换');
-  ok(bm.includes('setHeadPath(outerHead, false)') && bm.includes('setHeadPath(outerHead, true)'), 'T113b 树模式去目录列、平铺模式恢复');
+  ok(bm.includes('function setHeadPath(head, mode)'), 'T113a 表头列数随模式切换（同时切列宽视图）');
+  ok(bm.includes("setHeadPath(outerHead, 'tree')") && bm.includes("setHeadPath(outerHead, 'flat')"), 'T113b 树模式去目录列、平铺模式恢复');
   ok(bm.includes("line.classList.add('no-path')") && bm.includes('line.append(cb, main, tags);'), 'T113c 树模式行不渲染目录格');
-  ok(css.includes('.bm-head.no-path, .bm-row.no-path') && css.includes('minmax(120px, var(--bm-colW-g, 1.4fr));\n}'), 'T113d 无目录列 3 栏栅格（标签列吃剩余）');
+  ok(css.includes('.bm-head.no-path, .bm-row.no-path') && css.includes('minmax(120px, 1fr);'), 'T113d 无目录列 3 栏栅格（标签列恒吃剩余）');
   ok(bm.includes('if (kids.length >= 4) mk(3'), 'T113e 无目录列时只挂「标题|标签」一条分隔线');
   ok(bm.includes("Math.min(node.depth, 6) * 12"), 'T113f 文件夹行缩进级距与书签行统一 12px');
+}
+
+// T114：平铺/按目录列宽彻底分开（栅格结构不同，共用会互相污染）+ 树模式标签列恒吃剩余
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(!/no-path[^}]*var\(--bm-colW-g/.test(css), 'T114a 树模式标签列不接像素列宽（右侧不留空）');
+  ok(bm.includes("head.dataset.colview = mode"), 'T114b 模式切换时改列宽视图键');
+  ok(bm.includes("const view = head.dataset.colview || 'flat'"), 'T114c 分隔线运行时读视图键（切换后写对的那份）');
+  ok(bm.includes('if (!noPathMode) {'), 'T114d 树模式不冻结标签列为像素宽');
+  ok(bm.includes("tree: { t: Number(saved.tree && saved.tree.t) || null"), 'T114e tree 视图独立持久化');
 }
 
 // 配置缺版本号：空文件不算，有配置组却没 v 才算

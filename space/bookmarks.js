@@ -25,7 +25,9 @@ const PANE_LIST = ['L', 'R'];
 let dual = false; // 双窗开关（存本机 bm.dual）
 let railFrac = 0.5; // 双窗左右宽度比（0.15–0.85，存本机 bm.railFrac）
 // 列宽按视图独立存（flat/L/R 各一份）：双窗两栏宽度不同，共享一份必然互相挤垮——在宽栏拖出的列宽套到窄栏会栅格溢出
-let colW = { flat: { t: null, g: null }, L: { t: null, g: null }, R: { t: null, g: null } }; // px，存本机 bm.colW；t=标题/网址列 g=标签列，目录列吃剩余
+// 列宽按视图独立（flat/tree/L/R 各一份）：平铺是 4 列（含目录），按目录是 3 列且标签列永远吃剩余——
+// 两种栅格结构不同，共用一份会把平铺的像素宽套进树模式（标签列变定宽、右侧留大空）并互相污染分隔线位置
+let colW = { flat: { t: null, g: null }, tree: { t: null, g: null }, L: { t: null, g: null }, R: { t: null, g: null } }; // px，存本机 bm.colW；t=标题/网址列 g=标签列
 const splitHeads = new Set(); // 挂了分隔线的表头，窗口缩放时统一重定位
 
 /** 列宽变量落到宿主：双窗=各自窗格（pane 每次渲染重建，需重打），平铺=.bm-table（常驻） */
@@ -58,12 +60,16 @@ function compensateScrollbar() {
   }
 }
 
-/** 表头列数随模式：按目录（树）模式不显示「目录」列——层级已表达位置，平铺模式才需要标目录 */
-function setHeadPath(head, withPath) {
+/** 表头列数随模式：按目录（树）模式不显示「目录」列——层级已表达位置，平铺模式才需要标目录
+ *  mode='flat'|'tree'，同时切换列宽视图（两模式栅格结构不同，列宽不共用） */
+function setHeadPath(head, mode) {
   if (!head) return;
+  const withPath = mode === 'flat';
   head.classList.toggle('no-path', !withPath);
   const c3 = head.children[3];
   if (c3) c3.hidden = !withPath;
+  head.dataset.colview = mode;
+  applyColW(head.closest('.bm-table') || document.querySelector('.bm-table'), mode);
   if (head._placeSplits) requestAnimationFrame(head._placeSplits);
 }
 
@@ -71,6 +77,7 @@ function setHeadPath(head, withPath) {
 function attachColSplit(head, view) {
   const kids = [...head.children].filter((el) => el.tagName === 'SPAN');
   if (kids.length < 3) return; // ≥3：按目录模式没有目录列，只有「标题|标签」一条线
+  head.dataset.colview = view;
   splitHeads.add(head);
   const places = [];
   const mk = (targetIdx, key, minW) => {
@@ -88,21 +95,28 @@ function attachColSplit(head, view) {
     h.addEventListener('mousedown', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      const view = head.dataset.colview || 'flat'; // 运行时读：模式切换后仍写对的那一份
+      if (!colW[view]) colW[view] = { t: null, g: null };
       const startX = e.clientX;
       const startW = kids[targetIdx - 1].getBoundingClientRect().width; // 分隔线左侧列的当前宽
       h.classList.add('drag');
       const move = (ev) => {
         // 冻结还没拖过的弹性列成当前像素宽：否则它按 fr 重新分配，拖一条线另一列会跟着缩放（错位/乱跑的根源）
-        if (key === 'g' && !colW[view].t) colW[view].t = Math.round(kids[1].getBoundingClientRect().width);
-        if (key === 't' && !colW[view].g) colW[view].g = Math.round(kids[2].getBoundingClientRect().width);
+        // 按目录模式不冻：标签列本就固定吃剩余（3 列栅格里没有第二条线），冻成像素反而会留出右侧空隙
+        const noPathMode = head.classList.contains('no-path');
+        if (!noPathMode) {
+          if (key === 'g' && !colW[view].t) colW[view].t = Math.round(kids[1].getBoundingClientRect().width);
+          if (key === 't' && !colW[view].g) colW[view].g = Math.round(kids[2].getBoundingClientRect().width);
+        }
         // 上限：按本视图（本窗格）实际宽度算——用另一列的真实冻结宽（不是它的最小宽），
         // 否则上限虚高、标签列超出可用空间、行区出现横向滚动条，拖拽靠边时浏览器自动横滚（表现为标签列往左滑）
         const cs = getComputedStyle(head);
         const avail = head.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
         const noPath = head.classList.contains('no-path');
         const otherIdx = key === 'g' ? 1 : 2;
-        const otherNow = (key === 'g' ? colW[view].t : colW[view].g) || Math.round(kids[otherIdx].getBoundingClientRect().width);
-        const maxW = Math.max(minW, avail - 30 - otherNow - (noPath ? 0 : 60) - 24); // 30=复选框列 60=目录列保底 24=栅格间隙
+        // 树模式：另一位是「标签列」（恒吃剩余，留 120px 可读即可）；平铺：另一位是像素列 + 目录列 60px 保底
+        const otherNow = noPath ? 0 : ((key === 'g' ? colW[view].t : colW[view].g) || Math.round(kids[otherIdx].getBoundingClientRect().width));
+        const maxW = Math.max(minW, avail - 30 - otherNow - (noPath ? 120 : 60) - 24); // 30=复选框列 24=栅格间隙
         colW[view][key] = Math.max(minW, Math.min(maxW, Math.round(startW + ev.clientX - startX)));
         applyColW(head.closest('.bm-pane') || document.querySelector('.bm-table'), view);
         head._placeSplits(); // 两条分隔线都跟着栅格走，不残留旧位置
@@ -118,6 +132,7 @@ function attachColSplit(head, view) {
       document.addEventListener('mouseup', up);
     });
     h.addEventListener('dblclick', () => {
+      const view = head.dataset.colview || 'flat';
       colW[view][key] = null;
       applyColW(head.closest('.bm-pane') || document.querySelector('.bm-table'), view);
       chrome.storage.local.set({ 'bm.colW': colW });
@@ -616,7 +631,7 @@ function render() {
     rows.classList.toggle('bm-tree-host', true);
     const outerHead = document.querySelector('.bm-table .bm-head');
     if (outerHead) outerHead.hidden = dual; // 双窗：外层表头退役，每栏有自己的列头+面包屑
-    setHeadPath(outerHead, false); // 树模式：不要目录列
+    setHeadPath(outerHead, 'tree'); // 树模式：不要目录列，列宽走 tree 视图
     const wrap = document.createElement('div');
     wrap.className = 'bm-dual-wrap' + (dual ? ' dual' : ' single');
     if (dual) {
@@ -631,7 +646,7 @@ function render() {
     const outerHead = document.querySelector('.bm-table .bm-head');
     if (outerHead) {
       outerHead.hidden = false;
-      setHeadPath(outerHead, true); // 平铺模式：目录列回来（标位置）
+      setHeadPath(outerHead, 'flat'); // 平铺模式：目录列回来，列宽走 flat 视图
     }
     st.hiddenRows = 0;
     for (const row of st.items) rows.append(renderRow(row));
@@ -2087,10 +2102,11 @@ export async function init() {
     const saved = (o && o['bm.colW']) || {};
     if (saved && (saved.t != null || saved.g != null) && !saved.flat) {
       // 旧版全局列宽：归给平铺视图，双窗两栏从默认开始
-      colW = { flat: { t: Number(saved.t) || null, g: Number(saved.g) || null }, L: { t: null, g: null }, R: { t: null, g: null } };
+      colW = { flat: { t: Number(saved.t) || null, g: Number(saved.g) || null }, tree: { t: null, g: null }, L: { t: null, g: null }, R: { t: null, g: null } };
     } else {
       colW = {
         flat: { t: Number(saved.flat && saved.flat.t) || null, g: Number(saved.flat && saved.flat.g) || null },
+        tree: { t: Number(saved.tree && saved.tree.t) || null, g: Number(saved.tree && saved.tree.g) || null },
         L: { t: Number(saved.L && saved.L.t) || null, g: Number(saved.L && saved.L.g) || null },
         R: { t: Number(saved.R && saved.R.t) || null, g: Number(saved.R && saved.R.g) || null },
       };
