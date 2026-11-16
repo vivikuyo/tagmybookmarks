@@ -23,6 +23,7 @@ let st = {
 // 「操作带作用于活动窗格」：selected 全局引用指向活动窗格的选中集，激活时切换绑定。
 const PANE_LIST = ['L', 'R'];
 let dual = false; // 双窗开关（存本机 bm.dual）
+let railFrac = 0.5; // 双窗左右宽度比（0.15–0.85，存本机 bm.railFrac）
 let activePane = 'L';
 const newPane = () => ({
   folderId: '', // 本栏下钻的目录
@@ -508,6 +509,7 @@ function render() {
     const wrap = document.createElement('div');
     wrap.className = 'bm-dual-wrap' + (dual ? ' dual' : ' single');
     if (dual) {
+      wrap.style.gridTemplateColumns = `${railFrac}fr auto ${1 - railFrac}fr`;
       wrap.append(buildPane('L'), buildRail(), buildPane('R'));
     } else {
       wrap.append(buildPane('L'));
@@ -553,13 +555,14 @@ function buildPane(paneKey) {
     // 栏内列头：与栏内行同一套栅格，对得齐
     const cols = document.createElement('div');
     cols.className = 'bm-head bm-pane-cols';
+    const c0 = document.createElement('span'); // 复选框占位，与行对齐
     const c1 = document.createElement('span');
     c1.textContent = '标题 / 网址';
     const c2 = document.createElement('span');
     c2.textContent = '标签';
     const c3 = document.createElement('span');
     c3.textContent = '目录';
-    cols.append(c1, c2, c3);
+    cols.append(c0, c1, c2, c3);
     el.append(cols);
   }
   el.append(rowsEl);
@@ -581,17 +584,37 @@ function buildRail() {
   };
   const g1 = document.createElement('div');
   g1.className = 'bm-rail-group';
-  g1.append(mk('复制到右栏 →', 'copy', 'toR', '把左栏选中的书签/文件夹复制到右栏当前目录'));
-  g1.append(mk('移动到右栏 →', 'move', 'toR', '把左栏选中的书签/文件夹移动到右栏当前目录（可撤销）'));
+  g1.append(mk('复制 ➤', 'copy', 'toR', '左栏选中 → 复制到右栏当前目录'));
+  g1.append(mk('移动 ➤', 'move', 'toR', '左栏选中 → 移动到右栏当前目录（可撤销）'));
   const g2 = document.createElement('div');
   g2.className = 'bm-rail-group';
-  g2.append(mk('← 复制到左栏', 'copy', 'toL', '把右栏选中的书签/文件夹复制到左栏当前目录'));
-  g2.append(mk('← 移动到左栏', 'move', 'toL', '把右栏选中的书签/文件夹移动到左栏当前目录（可撤销）'));
+  g2.append(mk('⇤ 复制', 'copy', 'toL', '右栏选中 → 复制到左栏当前目录'));
+  g2.append(mk('⇤ 移动', 'move', 'toL', '右栏选中 → 移动到左栏当前目录（可撤销）'));
   rail.append(g1, g2);
   rail.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-rail]');
     if (!btn || btn.disabled) return;
     railRun(btn.dataset.rail, btn.dataset.side);
+  });
+  // 中缝兼做拖拽把手：按空白处左右拖，调两栏宽度（0.15–0.85，存本机）
+  rail.addEventListener('mousedown', (e) => {
+    if (e.target.closest('[data-rail]')) return;
+    e.preventDefault();
+    const wrap = rail.closest('.bm-dual-wrap');
+    if (!wrap) return;
+    const move = (ev) => {
+      const r = wrap.getBoundingClientRect();
+      const frac = Math.min(0.85, Math.max(0.15, (ev.clientX - r.left) / r.width));
+      wrap.style.gridTemplateColumns = `${frac}fr auto ${1 - frac}fr`;
+      railFrac = frac;
+    };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      chrome.storage.local.set({ 'bm.railFrac': railFrac });
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
   });
   return rail;
 }
@@ -1142,7 +1165,6 @@ function renderBulk() {
 
   const allBtn = $('#bmAllMatch');
   if (allBtn) {
-    allBtn.textContent = `全选全部（${st.total} 条）`;
     allBtn.title = '选中当前筛选下的全部书签（跨页）';
     allBtn.disabled = st.total === 0;
   }
@@ -1165,6 +1187,8 @@ function renderBulk() {
   if (nf) nf.disabled = !tree;
   const dualBtn = $('#bmDual');
   if (dualBtn) dualBtn.disabled = !tree;
+  const collapseBtn = $('#bmCollapse');
+  if (collapseBtn) collapseBtn.disabled = !tree;
   const paste = $('#bmPaste');
   if (paste) paste.disabled = !(tree && clip);
   // 中缝按钮：来源栏没选中就置灰
@@ -1474,6 +1498,16 @@ function bind() {
   });
 
   // 双窗开关（存本机）：只在按目录模式下生效
+  // 收起目录：清空活动窗格的展开集（自动展开的也一起收），存本机后重渲染
+  $('#bmCollapse').addEventListener('click', () => {
+    if (st.sort !== 'tree') return;
+    const pane = curPane();
+    pane.dirOpen.clear();
+    saveDirOpen(pane);
+    render();
+    toast(dual ? '活动窗格目录已全部收起' : '目录已全部收起');
+  });
+
   $('#bmDual').addEventListener('click', () => {
     dual = !dual;
     $('#bmDual').classList.toggle('on', dual);
@@ -1922,7 +1956,8 @@ export async function init() {
   } catch {}
   // 目录折叠状态（下拉树 + 按目录分组共用，存本机）
   try {
-    const o = await chrome.storage.local.get(['bm.dirOpen', 'bm.dirOpen.L', 'bm.dirOpen.R', 'bm.dual', 'bm.paneFolder']);
+    const o = await chrome.storage.local.get(['bm.dirOpen', 'bm.dirOpen.L', 'bm.dirOpen.R', 'bm.dual', 'bm.paneFolder', 'bm.railFrac']);
+    if (o && o['bm.railFrac']) railFrac = Math.min(0.85, Math.max(0.15, Number(o['bm.railFrac']) || 0.5));
     dual = !!(o && o['bm.dual']);
     const btn = $('#bmDual');
     if (btn) btn.classList.toggle('on', dual);
