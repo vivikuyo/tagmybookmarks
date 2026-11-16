@@ -55,7 +55,11 @@ function attachColSplit(head) {
       const startW = kids[targetIdx - 1].getBoundingClientRect().width; // 分隔线左侧列的当前宽
       h.classList.add('drag');
       const move = (ev) => {
-        colW[key] = Math.max(minW, Math.round(startW + ev.clientX - startX));
+        // 上限：给其他列和目录列(≥130px)留足空间，拖到头也不把目录挤出可视区
+        const content = head.clientWidth - 20; // 减去表头左右内边距
+        const otherMin = key === 't' ? 120 : 180;
+        const maxW = Math.max(minW, content - 30 - otherMin - 130 - 24);
+        colW[key] = Math.max(minW, Math.min(maxW, Math.round(startW + ev.clientX - startX)));
         applyColW();
         place();
       };
@@ -854,21 +858,22 @@ function appendDirRows(container, node, depth, pane) {
     return;
   }
   const box = document.createElement('div');
-  box.className = 'bm-dirrows';
-  box.style.paddingLeft = `${(depth + 1) * 12}px`;
+  box.className = 'bm-dirrows'; // 不再整盒缩进——缩进放进行内标题格，行栅格与表头逐列对齐
   for (const row of hit.rows) {
-    box.append(renderRow(row, pane));
+    box.append(renderRow(row, pane, depth + 1));
     pane.visible.add(row.id);
   }
   if (!hit.rows.length) {
     const p = document.createElement('span');
     p.className = 'hint';
+    p.style.paddingLeft = `${(depth + 1) * 12}px`;
     p.textContent = node.count ? '（直属书签都不匹配当前查询/搜索）' : '（没有直属书签）';
     box.append(p);
   } else if (hit.total > hit.rows.length) {
     // 后台单次最多取 500 条：极少数直属书签过多的目录会截断，明说而不是悄悄少
     const p = document.createElement('span');
     p.className = 'hint';
+    p.style.paddingLeft = `${(depth + 1) * 12}px`;
     p.textContent = `直属书签共 ${hit.total} 条，超过 ${DIR_FETCH_LIMIT}，仅显示前 ${hit.rows.length} 条。`;
     box.append(p);
   }
@@ -978,7 +983,7 @@ function setSelected(id, on, line, cb, sel = selected) {
   renderBulk();
 }
 
-function renderRow(row, pane) {
+function renderRow(row, pane, depth = 0) {
   const sel = pane ? pane.selected : selected; // 平铺模式没有窗格概念，用活动窗格的选中集
   const line = document.createElement('div');
   line.className = 'bm-row' + (sel.has(row.id) ? ' on' : '');
@@ -1018,6 +1023,7 @@ function renderRow(row, pane) {
   main.className = 'bm-main';
   const t = document.createElement('a');
   t.className = 'bm-title';
+  if (depth > 0) t.style.paddingLeft = `${depth * 12}px`; // 树深度缩进放标题格内，行栅格与表头逐列对齐
   t.href = '#';
   t.textContent = row.title || row.url;
   t.title = row.title || row.url;

@@ -1001,6 +1001,16 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(!css.includes('grid-template-columns: 30px minmax(220px, 1.5fr)'), 'T107h 覆盖规则不得回退为固定栅格（曾导致拖拽失效）');
 }
 
+// T108：列对齐修复 + 分隔线可见性 + 拖拽上限
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(bm.includes('box.className = \'bm-dirrows\'; // 不再整盒缩进') || bm.includes('不再整盒缩进'), 'T108a 树书签行不再整盒缩进（缩进放标题格内）');
+  ok(bm.includes('function renderRow(row, pane, depth = 0)') && bm.includes('t.style.paddingLeft = `${depth * 12}px`'), 'T108b 深度缩进在标题格内，行栅格与表头同轨');
+  ok(css.includes('background: var(--line);') && css.includes('.bm-colsplit:hover::after, .bm-colsplit.drag::after { background: var(--accent); width: 2px; }'), 'T108c 分隔线默认淡线常显，悬停/拖动橙色加粗');
+  ok(bm.includes('const maxW = Math.max(minW, content - 30 - otherMin - 130 - 24);'), 'T108d 列宽拖拽有上限，目录列不被挤出可视区');
+}
+
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
 const emptyCfg = [
   { id: '0', children: [{ id: '1', title: '书签栏', children: [] }] },
