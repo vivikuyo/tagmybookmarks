@@ -950,6 +950,28 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(bm.includes("for (const k of PANE_LIST) paneState[k].selected.clear();\n  selected = curPane().selected;"), 'T104o 筛选变化清空两栏选择');
 }
 
+// T105：双窗打磨（栏内列头/中缝按钮/插入拖拽/右键菜单/双窗按钮搬家）
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  ok(bm.includes("outerHead.hidden = dual"), 'T105a 双窗隐藏外层表头（每栏自己的列头）');
+  ok(bm.includes("cols.className = 'bm-head bm-pane-cols'"), 'T105b 栏内列头与行同栅格');
+  ok(sp.includes('id="bmNewFolder"') && sp.indexOf('id="bmDual"') > sp.indexOf('id="bmNewFolder"'), 'T105c 双窗按钮在新建文件夹右侧');
+  ok(bm.includes("dualBtn.disabled = !tree"), 'T105d 双窗按钮随模式置灰');
+  ok(bm.includes('function buildRail') && bm.includes("'复制到右栏 →'") && bm.includes("'← 移动到左栏'"), 'T105e 中缝固定方向复制/移动按钮');
+  ok(bm.includes('function railRun') && bm.includes("type: 'bookmarks:paste', targetId, clip: { mode: 'copy'"), 'T105f 跨栏复制走剪贴板通路');
+  ok(bm.includes('function bindBookmarkDrop') && bm.includes("above ? n.index : n.index + 1"), 'T105g 书签行投放=插入前/后（上下半行判定）');
+  ok(bg.includes('idx != null ? { index: idx } : {}') && bg.includes('if (idx != null) idx++'), 'T105h 后台 move 支持插入位次（多条按序）');
+  ok(css.includes('.bm-row.drop-above') && css.includes('.bm-row.drop-below'), 'T105i 插入指示线样式');
+  ok(bm.includes('function openCtx') && bm.includes("addEventListener('contextmenu'"), 'T105j 右键菜单（文件夹+书签行）');
+  ok(bm.includes('function renameFolder') && bm.includes('function renameRow'), 'T105k 行内重命名');
+  ok(bg.includes("type === 'node:rename'") && bg.includes('buildTitle(title, p.tags, p.conf)'), 'T105l node:rename：书签改名保留标签后缀与指令串');
+  ok(bm.includes('async function deleteNodes') && bm.includes('function createSubFolder'), 'T105m 右键删除/新建子文件夹复用现有流程');
+  ok(bm.includes("for (const b of rail.querySelectorAll('[data-rail]')"), 'T105n 中缝按钮随来源栏选中置灰');
+}
+
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
 const emptyCfg = [
   { id: '0', children: [{ id: '1', title: '书签栏', children: [] }] },
@@ -1070,7 +1092,8 @@ eq(splitTagInput('a\nb\tc'), ['a', 'b', 'c'], 'T63 换行/制表符也算分隔'
 const bmSrc = readFileSync('space/bookmarks.js', 'utf8');
 const spHtml = readFileSync('space/space.html', 'utf8');
 const bmIds = [...new Set([...bmSrc.matchAll(/\$\('#([A-Za-z0-9_-]+)'/g)].map((m) => m[1]))];
-const bmMissing = bmIds.filter((id) => !spHtml.includes(`id="${id}"`));
+// bmRail 是双窗模式下动态创建的中缝操作条，不在静态 HTML 里
+const bmMissing = bmIds.filter((id) => id !== 'bmRail' && !spHtml.includes(`id="${id}"`));
 ok(bmMissing.length === 0, `T64 书签视图引用的 id 都存在（缺 ${bmMissing.join(',')}）`);
 
 const popSrc = readFileSync('popup/popup.js', 'utf8');

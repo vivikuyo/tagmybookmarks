@@ -210,6 +210,47 @@ function bindDropTarget(el, getTargetId) {
   });
 }
 
+/** 书签行投放：上半=插到它前面，下半=插到它后面（位置取自节点的实时父子位次） */
+function bindBookmarkDrop(el, row) {
+  el.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = el.getBoundingClientRect();
+    const above = e.clientY < rect.top + rect.height / 2;
+    el.classList.toggle('drop-above', above);
+    el.classList.toggle('drop-below', !above);
+  });
+  el.addEventListener('dragleave', () => el.classList.remove('drop-above', 'drop-below'));
+  el.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const above = el.classList.contains('drop-above');
+    el.classList.remove('drop-above', 'drop-below');
+    await dropMoveAt(e, row.id, above);
+  });
+}
+
+async function dropMoveAt(e, targetRowId, above) {
+  let ids = [];
+  try {
+    ids = JSON.parse(e.dataTransfer.getData('text/plain') || '{}').ids || [];
+  } catch {}
+  ids = ids.filter((id) => id !== targetRowId);
+  if (!ids.length) return;
+  try {
+    // 过滤视图里的顺序不代表真实子位次，取节点的实时 parentId/index
+    const [n] = await chrome.bookmarks.get(targetRowId);
+    if (!n) return;
+    const r = await send({ type: 'bookmarks:move', ids, parentId: n.parentId, index: above ? n.index : n.index + 1 });
+    for (const k of PANE_LIST) paneState[k].selected.clear();
+    selected = curPane().selected;
+    await refresh();
+    toast(`已移动 ${r.moved} 项（插入到书签${above ? '前' : '后'}）· 可撤销`);
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
 /** 松手=移动（复用 bookmarks:move，后台记撤销栈） */
 async function dropMove(e, targetId) {
   let ids = [];
@@ -226,6 +267,160 @@ async function dropMove(e, targetId) {
     toast(`已移动 ${r.moved} 项 → ${r.path} · 可撤销`);
   } catch (err) {
     toast(err.message, true);
+  }
+}
+
+// ---------------------------------------------------------------- 右键菜单（树模式）
+let ctxEl = null;
+function closeCtx() {
+  if (ctxEl) {
+    ctxEl.remove();
+    ctxEl = null;
+  }
+}
+function openCtx(x, y, items) {
+  closeCtx();
+  ctxEl = document.createElement('div');
+  ctxEl.className = 'bm-ctx';
+  for (const it of items) {
+    if (it === '-') {
+      const hr = document.createElement('div');
+      hr.className = 'bm-ctx-sep';
+      ctxEl.append(hr);
+      continue;
+    }
+    const b = document.createElement('button');
+    b.textContent = it.label;
+    if (it.danger) b.classList.add('danger');
+    b.addEventListener('click', () => {
+      closeCtx();
+      it.run();
+    });
+    ctxEl.append(b);
+  }
+  document.body.append(ctxEl);
+  const r = ctxEl.getBoundingClientRect();
+  ctxEl.style.left = `${Math.max(4, Math.min(x, innerWidth - r.width - 8))}px`;
+  ctxEl.style.top = `${Math.max(4, Math.min(y, innerHeight - r.height - 8))}px`;
+}
+document.addEventListener('click', closeCtx);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeCtx();
+});
+window.addEventListener('blur', closeCtx);
+
+/** 行内重命名（文件夹）：Enter 提交，Esc 取消 */
+function renameFolder(rowEl, node) {
+  const nameBtn = rowEl.querySelector('.bm-group-name');
+  if (!nameBtn) return;
+  const input = document.createElement('input');
+  input.className = 'bm-rename';
+  input.value = node.title || '';
+  nameBtn.replaceWith(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const cancel = () => {
+    done = true;
+    input.replaceWith(nameBtn);
+  };
+  const commit = async () => {
+    if (done) return;
+    done = true;
+    const v = input.value.trim();
+    input.replaceWith(nameBtn);
+    if (!v || v === node.title) return;
+    try {
+      await send({ type: 'node:rename', id: node.id, title: v });
+      await refresh();
+      toast('已重命名');
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commit();
+    } else if (e.key === 'Escape') {
+      cancel();
+    }
+  });
+  input.addEventListener('blur', commit);
+  input.addEventListener('click', (e) => e.stopPropagation());
+}
+
+function renameRow(lineEl, row) {
+  const t = lineEl.querySelector('.bm-title');
+  if (!t) return;
+  const input = document.createElement('input');
+  input.className = 'bm-rename';
+  input.value = row.title || '';
+  t.replaceWith(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const cancel = () => {
+    done = true;
+    input.replaceWith(t);
+  };
+  const commit = async () => {
+    if (done) return;
+    done = true;
+    const v = input.value.trim();
+    input.replaceWith(t);
+    if (!v || v === row.title) return;
+    try {
+      await send({ type: 'node:rename', id: row.id, title: v });
+      await refresh();
+      toast('已重命名（标签保留）');
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commit();
+    } else if (e.key === 'Escape') {
+      cancel();
+    }
+  });
+  input.addEventListener('blur', commit);
+  input.addEventListener('click', (e) => e.stopPropagation());
+}
+
+async function deleteNodes(ids) {
+  try {
+    const r = await send({ type: 'delete', ids });
+    if (r.needTrash) {
+      pendingDelete = ids;
+      trashOpen = true;
+      $('#trashPanel').hidden = false;
+      if (!foldersFlat.length) await loadFolders();
+      await loadTrash();
+      toast('先设置回收站，设置后自动完成这次删除');
+      return;
+    }
+    finishDelete(r);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function createSubFolder(node, pane) {
+  const name = window.prompt('子文件夹名称：');
+  if (!name || !name.trim()) return;
+  try {
+    const r = await send({ type: 'folder:create', parentId: node.id, title: name.trim() });
+    pane.dirOpen.add(node.id);
+    saveDirOpen(pane);
+    await refresh();
+    toast(`已在「${node.title || '目录'}」下创建「${r.title}」`);
+  } catch (e) {
+    toast(e.message, true);
   }
 }
 
@@ -308,12 +503,20 @@ function render() {
     st.hiddenRows = 0;
     $('#bmCrumb').hidden = dual;
     rows.classList.toggle('bm-tree-host', true);
+    const outerHead = document.querySelector('.bm-table .bm-head');
+    if (outerHead) outerHead.hidden = dual; // 双窗：外层表头退役，每栏有自己的列头+面包屑
     const wrap = document.createElement('div');
     wrap.className = 'bm-dual-wrap' + (dual ? ' dual' : ' single');
-    for (const k of dual ? PANE_LIST : ['L']) wrap.append(buildPane(k));
+    if (dual) {
+      wrap.append(buildPane('L'), buildRail(), buildPane('R'));
+    } else {
+      wrap.append(buildPane('L'));
+    }
     rows.append(wrap);
   } else {
     rows.classList.toggle('bm-tree-host', false);
+    const outerHead = document.querySelector('.bm-table .bm-head');
+    if (outerHead) outerHead.hidden = false;
     st.hiddenRows = 0;
     for (const row of st.items) rows.append(renderRow(row));
   }
@@ -347,9 +550,82 @@ function buildPane(paneKey) {
     renderCrumbInto(crumbEl, pane);
     head.append(tag, crumbEl);
     el.append(head);
+    // 栏内列头：与栏内行同一套栅格，对得齐
+    const cols = document.createElement('div');
+    cols.className = 'bm-head bm-pane-cols';
+    const c1 = document.createElement('span');
+    c1.textContent = '标题 / 网址';
+    const c2 = document.createElement('span');
+    c2.textContent = '标签';
+    const c3 = document.createElement('span');
+    c3.textContent = '目录';
+    cols.append(c1, c2, c3);
+    el.append(cols);
   }
   el.append(rowsEl);
   return el;
+}
+
+// ---------------------------------------------------------------- 中缝操作条（固定方向：跨栏复制/移动）
+function buildRail() {
+  const rail = document.createElement('div');
+  rail.className = 'bm-rail';
+  rail.id = 'bmRail';
+  const mk = (label, act, side, title) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.dataset.rail = act;
+    b.dataset.side = side;
+    b.title = title;
+    return b;
+  };
+  const g1 = document.createElement('div');
+  g1.className = 'bm-rail-group';
+  g1.append(mk('复制到右栏 →', 'copy', 'toR', '把左栏选中的书签/文件夹复制到右栏当前目录'));
+  g1.append(mk('移动到右栏 →', 'move', 'toR', '把左栏选中的书签/文件夹移动到右栏当前目录（可撤销）'));
+  const g2 = document.createElement('div');
+  g2.className = 'bm-rail-group';
+  g2.append(mk('← 复制到左栏', 'copy', 'toL', '把右栏选中的书签/文件夹复制到左栏当前目录'));
+  g2.append(mk('← 移动到左栏', 'move', 'toL', '把右栏选中的书签/文件夹移动到左栏当前目录（可撤销）'));
+  rail.append(g1, g2);
+  rail.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-rail]');
+    if (!btn || btn.disabled) return;
+    railRun(btn.dataset.rail, btn.dataset.side);
+  });
+  return rail;
+}
+
+let railLock = false;
+async function railRun(act, side) {
+  if (railLock) return;
+  const toR = side === 'toR';
+  const src = toR ? 'L' : 'R';
+  const dst = toR ? 'R' : 'L';
+  const sel = paneState[src].selected;
+  if (!sel.size) return;
+  const targetId = paneState[dst].folderId || BOOKMARKS_BAR_ID;
+  const targetPath = (paneState[dst].folderId && idToPath.get(paneState[dst].folderId)) || '书签栏';
+  railLock = true;
+  try {
+    if (act === 'move') {
+      const ids = [...sel];
+      const r = await send({ type: 'bookmarks:move', ids, parentId: targetId });
+      sel.clear();
+      await refresh();
+      toast(`已移动 ${r.moved} 项 → ${targetPath} · 可撤销`);
+    } else {
+      const { bmIds, dirIds } = splitSel(sel);
+      if (!bmIds.length && !dirIds.length) return;
+      const r = await send({ type: 'bookmarks:paste', targetId, clip: { mode: 'copy', bookmarks: bmIds, folders: dirIds } });
+      await refresh();
+      toast(`已复制到 ${targetPath}：新增 ${r.copied} 项`);
+    }
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    railLock = false;
+  }
 }
 
 /** 树模式：根常展开，其余按 pane.dirOpen；下钻时只渲染那棵子树 */
@@ -450,6 +726,33 @@ function renderFolderRow(node, open, isRoot, pane) {
   div.append(cnt);
   // 拖拽：根目录不可拖（也拖不动），任何文件夹行都是投放目标
   bindFolderDnD(div, node, open, pane, isRoot);
+  // 右键菜单：重命名 / 新建子文件夹 / 剪切 / 复制 / 删除
+  div.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    openCtx(e.clientX, e.clientY, [
+      { label: '重命名', run: () => renameFolder(div, node) },
+      { label: '新建子文件夹', run: () => createSubFolder(node, pane) },
+      '-',
+      {
+        label: '剪切',
+        run: () => {
+          clip = { mode: 'cut', bookmarks: [], folders: [node.id] };
+          renderBulk();
+          toast('已剪切 1 个文件夹——去目标目录点「粘贴」');
+        },
+      },
+      {
+        label: '复制',
+        run: () => {
+          clip = { mode: 'copy', bookmarks: [], folders: [node.id] };
+          renderBulk();
+          toast('已复制 1 个文件夹——去目标目录点「粘贴」');
+        },
+      },
+      '-',
+      { label: '删除（进回收站）', danger: true, run: () => deleteNodes([node.id]) },
+    ]);
+  });
   return div;
 }
 
@@ -610,8 +913,20 @@ function renderRow(row, pane) {
     setSelected(row.id, !sel.has(row.id), line, cb, sel);
   });
 
-  // 树模式下行可拖拽（拖的是选中集或本行），平铺模式不启用
-  if (pane) bindRowDrag(line, row.id, sel);
+  // 树模式下行可拖拽（拖的是选中集或本行），也可作为投放目标插到书签前/后；平铺模式不启用
+  if (pane) {
+    bindRowDrag(line, row.id, sel);
+    bindBookmarkDrop(line, row);
+    line.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      openCtx(e.clientX, e.clientY, [
+        { label: '重命名（标签保留）', run: () => renameRow(line, row) },
+        { label: '打开', run: () => chrome.tabs.create({ url: row.url }) },
+        '-',
+        { label: '删除（进回收站）', danger: true, run: () => deleteNodes([row.id]) },
+      ]);
+    });
+  }
 
   // 标题 + 网址
   const main = document.createElement('div');
@@ -789,12 +1104,16 @@ function clearSelectionOnFilterChange() {
 const BOOKMARKS_BAR_ID = '1';
 
 /** 选中集合拆成书签/文件夹两类（foldersFlat 里有的是文件夹） */
-function splitSelection() {
+function splitSel(set) {
   const dirSet = new Set(foldersFlat.map((f) => f.id));
   const bmIds = [];
   const dirIds = [];
-  for (const id of selected) (dirSet.has(id) ? dirIds : bmIds).push(id);
+  for (const id of set) (dirSet.has(id) ? dirIds : bmIds).push(id);
   return { bmIds, dirIds };
+}
+
+function splitSelection() {
+  return splitSel(selected);
 }
 
 // 统计放在右端（右对齐，只向左生长），不会把左侧按钮横向推走
@@ -844,8 +1163,18 @@ function renderBulk() {
   const tree = st.sort === 'tree';
   const nf = $('#bmNewFolder');
   if (nf) nf.disabled = !tree;
+  const dualBtn = $('#bmDual');
+  if (dualBtn) dualBtn.disabled = !tree;
   const paste = $('#bmPaste');
   if (paste) paste.disabled = !(tree && clip);
+  // 中缝按钮：来源栏没选中就置灰
+  const rail = $('#bmRail');
+  if (rail) {
+    for (const b of rail.querySelectorAll('[data-rail]')) {
+      const src = b.dataset.side === 'toR' ? 'L' : 'R';
+      b.disabled = paneState[src].selected.size === 0;
+    }
+  }
 }
 
 async function bulkTag(kind) {
@@ -1150,7 +1479,6 @@ function bind() {
     $('#bmDual').classList.toggle('on', dual);
     chrome.storage.local.set({ 'bm.dual': dual });
     if (st.sort === 'tree') render();
-    else toast('双窗在「按目录」显示下生效——切过去就能用');
   });
 
   // 标签云：默认展开，记住选择（存本机）

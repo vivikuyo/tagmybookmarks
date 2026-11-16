@@ -1823,12 +1823,15 @@ async function handle(msg) {
     if (!parentId) return { error: '缺少目标目录' };
     const undoEntries = [];
     let moved = 0;
+    // index：插入到目标目录的第 index 位（拖拽到书签之间用）；多条按序依次下移一位
+    let idx = msg.index == null ? null : Number(msg.index);
     for (const raw of msg.ids || []) {
       const id = String(raw);
       try {
         const node = await getNode(id);
         if (node) undoEntries.push({ id, parentId: node.parentId, index: node.index });
-        await chrome.bookmarks.move(id, { parentId });
+        await chrome.bookmarks.move(id, { parentId, ...(idx != null ? { index: idx } : {}) });
+        if (idx != null) idx++;
         moved++;
       } catch {
         undoEntries.pop(); // 没动成就别记
@@ -1838,6 +1841,25 @@ async function handle(msg) {
     if (undoEntries.length) await pushUndo(`移动 ${undoEntries.length} 条 → ${path}`, undoEntries, 'move');
     await rebuild();
     return { ok: true, moved, path };
+  }
+
+  // 重命名：文件夹直接改标题；书签只换干净标题（标签后缀与 [**指令串] 原样保留）
+  if (type === 'node:rename') {
+    await ready;
+    const id = String(msg.id || '');
+    const title = String(msg.title || '').trim();
+    if (!id) return { error: '缺少节点' };
+    if (!title) return { error: '名称不能为空' };
+    const [node] = await chrome.bookmarks.get(id).catch(() => [null]);
+    if (!node) return { error: '节点不存在' };
+    let next = title;
+    if (node.url) {
+      const p = parseTitle(node.title);
+      next = buildTitle(title, p.tags, p.conf);
+    }
+    await chrome.bookmarks.update(id, { title: next });
+    await rebuild();
+    return { ok: true, title: next };
   }
 
   if (type === 'page:info') {
