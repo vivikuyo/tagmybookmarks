@@ -1136,6 +1136,16 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
     'T119b 两处分隔符：双窗之后、新建文件夹之后');
 }
 
+// T120：品牌名 TagMyBookmarks / 作者 vivikuyo，且磁盘数据标识（TagSpace 配置目录）保持不变
+{
+  const mf = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const cfg = readFileSync(new URL('../lib/config.js', import.meta.url), 'utf8');
+  ok(mf.name === 'TagMyBookmarks' && mf.action.default_title === 'TagMyBookmarks', 'T120a 扩展显示名与按钮标题');
+  ok(pkg.author === 'vivikuyo', 'T120b package.json 作者 vivikuyo');
+  ok(cfg.includes("CONFIG_DIR_NAME = 'TagSpace'") && cfg.includes("CONFIG_FILE_PREFIX = 'TagSpace 配置·'"), 'T120c 磁盘标识仍为 TagSpace（旧配置/同步数据不受影响）');
+}
+
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
 const emptyCfg = [
   { id: '0', children: [{ id: '1', title: '书签栏', children: [] }] },

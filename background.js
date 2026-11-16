@@ -1,4 +1,4 @@
-// TagSpace 后台：标题是唯一真实来源，内存索引是派生品。
+// TagMyBookmarks 后台：标题是唯一真实来源，内存索引是派生品。
 // 所有写操作都走 writeTitle（幂等 + 回声抑制），事件只用来触发重建。
 
 import {
@@ -86,7 +86,7 @@ async function doBoot() {
     await ensureConfigFiles();
     await rebuild();
   } catch (e) {
-    console.error('[TagSpace] 启动失败', e);
+    console.error('[TagMyBookmarks] 启动失败', e);
   } finally {
     readyResolve();
     setPanelBehavior();
@@ -594,7 +594,7 @@ function scheduleRebuild(delay = 250) {
     try {
       await rebuild();
     } catch (e) {
-      console.error('[TagSpace] 重建索引失败', e);
+      console.error('[TagMyBookmarks] 重建索引失败', e);
     }
   }, delay);
 }
@@ -1918,7 +1918,7 @@ chrome.commands.onCommand.addListener(async (cmd) => {
       await chrome.tabs.create({ url: chrome.runtime.getURL(SPACE_PAGE) });
     }
   } catch (e) {
-    console.error('[TagSpace] 命令失败', e);
+    console.error('[TagMyBookmarks] 命令失败', e);
   }
 });
 
@@ -1950,7 +1950,7 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
   }
 
   suggest([
-    ...starts.map((t) => ({ content: t, description: `在 TagSpace 中查 #${t}` })),
+    ...starts.map((t) => ({ content: t, description: `在 TagMyBookmarks 中查 #${t}` })),
     ...contains.map((t) => ({ content: t, description: `包含 #${t}` })),
     ...dirSugg,
   ]);

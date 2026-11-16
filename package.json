@@ -1,5 +1,6 @@
 {
-  "name": "tagspace-extension",
+  "name": "tagmybookmarks-extension",
+  "author": "vivikuyo",
   "private": true,
   "type": "module",
   "scripts": {
