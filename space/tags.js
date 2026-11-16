@@ -441,18 +441,25 @@ function stopPolling() {
 
 // ------------------------------------------------------------ 撤销 / 日志
 
+// 与书签页同口径：默认折叠显示最近 5 条，点「更多」展开到 10 条，再点「收起」
+const UNDO_SHOW = 5;
+const UNDO_MAX = 10;
+let undoExpanded = false;
+
 async function renderUndo() {
   const box = $('#undoBox');
   const ul = $('#undoList');
   try {
     const r = await send({ type: 'undo:list' });
+    const more = $('#undoMore');
     ul.textContent = '';
     if (!r.items || !r.items.length) {
       box.hidden = true;
       return;
     }
     box.hidden = false;
-    for (const it of r.items.slice().reverse()) {
+    const show = undoExpanded ? UNDO_MAX : UNDO_SHOW;
+    for (const it of r.items.slice().reverse().slice(0, show)) {
       const li = document.createElement('li');
       const time = new Date(it.at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
       const txt = document.createElement('span');
@@ -476,6 +483,10 @@ async function renderUndo() {
       });
       li.append(txt, btn);
       ul.append(li);
+    }
+    if (more) {
+      more.hidden = r.items.length <= UNDO_SHOW;
+      more.textContent = undoExpanded ? '收起' : `更多（${Math.min(r.items.length, UNDO_MAX)}）`;
     }
   } catch {
     box.hidden = true;
@@ -831,6 +842,13 @@ chrome.runtime.onMessage.addListener((m) => {
 
 export function init() {
   bindAlias();
+  const undoMore = $('#undoMore');
+  if (undoMore) {
+    undoMore.addEventListener('click', () => {
+      undoExpanded = !undoExpanded;
+      renderUndo().catch(() => {});
+    });
+  }
   const allPage = $('#tagAllPage');
   if (allPage) allPage.addEventListener('click', () => toggleVisible(true));
   $('#tagSearch').addEventListener('input', (e) => {

@@ -1148,6 +1148,17 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(panel.includes('Tag<span>MyBookmarks</span>') && !panel.includes('Tag<span>Space</span>'), 'T120d 侧边栏顶栏品牌名 TagMyBookmarks');
 }
 
+// T121：标签页「最近操作」与书签页同口径折叠（默认 5 条，更多→10 条，再点收起）
+{
+  const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  const tg = readFileSync(new URL('../space/tags.js', import.meta.url), 'utf8');
+  ok(sp.includes('id="undoMore"'), 'T121a 标签页最近操作有「更多/收起」按钮');
+  ok(tg.includes('const UNDO_SHOW = 5;') && tg.includes('const UNDO_MAX = 10;'), 'T121b 折叠阈值与书签页一致（5 → 10）');
+  ok(tg.includes('const show = undoExpanded ? UNDO_MAX : UNDO_SHOW;'), 'T121c 列表按折叠状态截断');
+  ok(tg.includes("more.textContent = undoExpanded ? '收起' : `更多（${Math.min(r.items.length, UNDO_MAX)}）`;"), 'T121d 按钮文案：更多（N）/收起');
+  ok(tg.includes("undoMore.addEventListener('click'"), 'T121e 点击切换展开状态并重渲染');
+}
+
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
 const emptyCfg = [
   { id: '0', children: [{ id: '1', title: '书签栏', children: [] }] },
