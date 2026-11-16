@@ -82,10 +82,12 @@ function attachColSplit(head, view) {
         // 冻结还没拖过的弹性列成当前像素宽：否则它按 fr 重新分配，拖一条线另一列会跟着缩放（错位/乱跑的根源）
         if (key === 'g' && !colW[view].t) colW[view].t = Math.round(kids[1].getBoundingClientRect().width);
         if (key === 't' && !colW[view].g) colW[view].g = Math.round(kids[2].getBoundingClientRect().width);
-        // 上限：按本视图（本窗格）宽度算，给其他列和目录列(≥130px)留足空间
-        const content = head.clientWidth - 20; // 减去表头左右内边距
-        const otherMin = key === 't' ? 120 : 180;
-        const maxW = Math.max(minW, content - 30 - otherMin - 130 - 24);
+        // 上限：按本视图（本窗格）实际宽度算——用另一列的真实冻结宽（不是它的最小宽），
+        // 否则上限虚高、标签列超出可用空间、行区出现横向滚动条，拖拽靠边时浏览器自动横滚（表现为标签列往左滑）
+        const cs = getComputedStyle(head);
+        const avail = head.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+        const otherNow = key === 'g' ? colW[view].t : colW[view].g; // 冻结在上方已完成，必有值
+        const maxW = Math.max(minW, avail - 30 - otherNow - 60 - 24); // 30=复选框列 60=目录列保底 24=三段栅格间隙
         colW[view][key] = Math.max(minW, Math.min(maxW, Math.round(startW + ev.clientX - startX)));
         applyColW(head.closest('.bm-pane') || document.querySelector('.bm-table'), view);
         head._placeSplits(); // 两条分隔线都跟着栅格走，不残留旧位置

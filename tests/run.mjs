@@ -997,7 +997,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(bm.includes("'bm.colW'") && bm.includes('applyColW'), 'T107d 列宽存本机 bm.colW');
   ok(bm.includes("addEventListener('dblclick'") && bm.includes("colW[view][key] = null"), 'T107e 双击分隔线恢复默认');
   ok(bm.includes('attachColSplit(cols') && bm.includes("attachColSplit(outerHead"), 'T107f 双窗栏内列头与平铺外层表头都有分隔线');
-  ok(css.includes('minmax(130px, 1fr)'), 'T107g 目录列吃剩余空间');
+  ok(css.includes('minmax(60px, 1fr)'), 'T107g 目录列吃剩余空间（保底 60px）');
   ok(!css.includes('grid-template-columns: 30px minmax(220px, 1.5fr)'), 'T107h 覆盖规则不得回退为固定栅格（曾导致拖拽失效）');
 }
 
@@ -1008,7 +1008,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(bm.includes('box.className = \'bm-dirrows\'; // 不再整盒缩进') || bm.includes('不再整盒缩进'), 'T108a 树书签行不再整盒缩进（缩进放标题格内）');
   ok(bm.includes('function renderRow(row, pane, depth = 0)') && bm.includes('t.style.paddingLeft = `${depth * 12}px`'), 'T108b 深度缩进在标题格内，行栅格与表头同轨');
   ok(css.includes('background: var(--line);') && css.includes('.bm-colsplit:hover::after, .bm-colsplit.drag::after { background: var(--accent); width: 2px; }'), 'T108c 分隔线默认淡线常显，悬停/拖动橙色加粗');
-  ok(bm.includes('const maxW = Math.max(minW, content - 30 - otherMin - 130 - 24);'), 'T108d 列宽拖拽有上限，目录列不被挤出可视区');
+  ok(bm.includes('const maxW = Math.max(minW, avail - 30 - otherNow - 60 - 24);'), 'T108d 列宽拖拽有上限（按另一列实际冻结宽算），目录列不被挤出可视区');
 }
 
 // T109：分隔线稳定性（冻结弹性列 / 双线重定位 / 窗口缩放）
@@ -1030,6 +1030,14 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(bm.includes('function compensateScrollbar') && bm.includes('flatRows.offsetWidth - flatRows.clientWidth'), 'T110e 表头补偿滚动条宽度');
   ok(bm.includes('requestAnimationFrame(compensateScrollbar)'), 'T110f render 后补滚动条（含懒加载重渲染）');
   ok(bm.includes('saved.t != null') && bm.includes('!saved.flat'), 'T110g 旧全局列宽迁移给平铺视图');
+}
+
+// T111：拖拽上限按另一列实际宽算 + 目录列保底降到 60px
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  ok(bm.includes("const otherNow = key === 'g' ? colW[view].t : colW[view].g;"), 'T111a 上限用另一列实际冻结宽（防上限虚高致行区横向溢出）');
+  ok(bm.includes('getComputedStyle(head)'), 'T111b 上限扣真实内边距（含滚动条补偿）');
+  ok(!bm.includes('otherMin'), 'T111c 旧的最小宽口径已移除');
 }
 
 // 配置缺版本号：空文件不算，有配置组却没 v 才算

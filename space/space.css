@@ -544,7 +544,7 @@ textarea:focus { border-color: var(--accent); }
 .bm-table { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .bm-head, .bm-row {
   display: grid;
-  grid-template-columns: 30px minmax(180px, var(--bm-colW-t, 1.5fr)) minmax(120px, var(--bm-colW-g, 1.4fr)) minmax(130px, 1fr);
+  grid-template-columns: 30px minmax(180px, var(--bm-colW-t, 1.5fr)) minmax(120px, var(--bm-colW-g, 1.4fr)) minmax(60px, 1fr);
   gap: 8px; align-items: start;
   padding: 4px 12px;
 }
@@ -694,7 +694,7 @@ input.input, select.input { min-height: 28px; border-radius: 8px; box-sizing: bo
 /* 表格首列（复选框）总宽 30px、左内边距 10px——与书签表的第一列同宽同距 */
 .tagtable thead th.ck, .tagtable td.ck { width: 14px; padding: 8px 6px 8px 10px; }
 .bm-head, .bm-row {
-  grid-template-columns: 30px minmax(180px, var(--bm-colW-t, 1.5fr)) minmax(120px, var(--bm-colW-g, 1.4fr)) minmax(130px, 1fr);
+  grid-template-columns: 30px minmax(180px, var(--bm-colW-t, 1.5fr)) minmax(120px, var(--bm-colW-g, 1.4fr)) minmax(60px, 1fr);
   padding: 4px 10px;
 }
 
