@@ -689,7 +689,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(!sp.includes('bmFolderBtn') && !sp.includes('bmFolderPop'), 'T88a 「所有目录」筛选下拉已移除（用目录 chip + 组头下钻）');
   ok(!sp.includes('bmMoveToBtn') && !sp.includes('bmMoveToPop'), 'T88b 移到目录按钮+浮层已移除（剪贴板粘贴替代）');
   ok(!sp.includes('<select id="bmFolder"') && !sp.includes('<select id="bmMoveTo"'), 'T88c 原生下拉已移除（不可折叠）');
-  ok(bm.includes('let dirOpen = new Set()'), 'T88d 公共折叠状态 dirOpen');
+  ok(bm.includes('const paneState = { L: newPane(), R: newPane() }'), 'T88d 每栏独立折叠/选中状态（双窗）');
   ok(bm.includes("'bm.dirOpen'"), 'T88e 折叠状态存本机');
   ok(!bm.includes('function openTreePop') && !bm.includes('function renderTreeInto'), 'T88f 浮层树渲染已随移到目录移除');
   ok(bm.includes('function renderTreeMode'), 'T88g 树模式整棵树渲染');
@@ -725,7 +725,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
   const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
   ok(bm.includes('DIR_FETCH_LIMIT'), 'T90a 直属书签一次出全（500 截断有提示）');
-  ok(bm.includes('visibleRowIds'), 'T90b 全选可见=当前渲染的书签');
+  ok(bm.includes('curPane().visible'), 'T90b 全选可见=活动窗格当前渲染的书签');
   ok(bm.includes("tree ? '全选可见' : '全选本页'"), 'T90c 按钮文案按模式切换');
   ok(bm.includes('subtree: st.sort'), 'T90d 全选全部在树模式按子树');
   ok(bm.includes('invalidateTree'), 'T90e 条件变化作废懒加载缓存');
@@ -750,7 +750,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(bg.includes('matchPaths'), 'T92a bookmarks:page 返回全部命中目录路径');
   ok(bm.includes('function updateAutoOpen'), 'T92b 自动展开集合计算');
   ok(bm.includes('autoCollapsed'), 'T92c 手动收起优先于自动展开');
-  ok(/return dirOpen\.has\(id\) \|\| autoOpen\.has\(id\)/.test(bm), 'T92d dirIsOpen 融合自动展开');
+  ok(/return pane\.dirOpen\.has\(id\) \|\| pane\.autoOpen\.has\(id\)/.test(bm), 'T92d dirIsOpen 融合自动展开（按窗格）');
 }
 
 // T93：操作带书签搜索框 + 返回上级 + 切换按钮搬家
@@ -764,7 +764,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(sp.indexOf('id="bmSort"') > sp.indexOf('id="bmBulk"'), 'T93e 排序切换已搬进操作带');
   ok(!sp.includes('bmUpBtn'), 'T93f 返回上级按钮已删（面包屑是唯一回退入口）');
   ok(!bm.includes('bmUpBtn'), 'T93g 返回上级逻辑已删');
-  ok(bm.includes('function renderCrumb') && bm.includes("st.folderId = targetPath ? pathToId.get(targetPath)"), 'T93h 面包屑承担回退');
+  ok(bm.includes('function renderCrumb') && bm.includes("pane.folderId = targetPath ? pathToId.get(targetPath)"), 'T93h 面包屑承担回退（双窗按栏跳转）');
   ok(bm.includes("st.text = e.target.value.trim()"), 'T93i 书签搜索写 st.text');
   ok(!/st\.query = e\.target\.value\.trim\(\);\s*\n\s*st\.text = ''/.test(bm), 'T93j 标签查询框不清书签搜索词');
   ok(bm.includes('text: st.text'), 'T93k 懒加载带书签搜索词');
@@ -784,7 +784,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(!sp.includes('bmMoveTo') && !sp.includes('id="bmMove"'), 'T94f 移到目录/移动按钮已删');
   ok(bm.includes('function splitSelection'), 'T94g 选中拆书签/文件夹');
   ok(bm.includes('clip = { mode'), 'T94h 剪贴板状态');
-  ok(bm.includes("selected.has(node.id) ? ' on' : ''"), 'T94i 文件夹行复选框选中态');
+  ok(bm.includes("sel.has(node.id) ? ' on' : ''"), 'T94i 文件夹行复选框选中态（按窗格选中集）');
   ok(bm.includes("cb.addEventListener('change', () => setSelected(node.id"), 'T94j 文件夹复选框可点');
   ok(css.includes('.bm-folder-row.on'), 'T94k 文件夹行选中高亮');
   ok(/\.bm-group-arrow\s*{[^}]*font-size:\s*14px/.test(css), 'T94l 箭头加大到 14px');
@@ -802,7 +802,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(!/<div id="bmCrumb"/.test(sp), 'T95b 顶部独立面包屑行已移除');
   const seps = [...sp.matchAll(/bulk-sep/g)].map((m) => m.index);
   ok(seps.length >= 2 && seps[seps.length - 1] > sp.indexOf('bmRemove') && seps[seps.length - 1] < sp.indexOf('bmNewFolder'), 'T95c 新建文件夹左侧分隔符');
-  ok(bm.includes('const isCur = dirIsOpen(node.id)'), 'T95d 橙色=展开状态（手动+自动都算）');
+  ok(bm.includes('const isCur = dirIsOpen(pane, node.id)'), 'T95d 橙色=展开状态（手动+自动都算，按窗格）');
   ok(css.includes('.bm-folder-row.cur') && css.includes('#f59e0b'), 'T95e 展开行橙色样式');
   ok(css.includes('.bm-crumb-head'), 'T95f 表头内嵌面包屑样式');
 }
@@ -823,7 +823,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
 {
   const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
   ok(/async function refresh\(\) \{[\s\S]*?await loadFolders\(\)/.test(bm), 'T97a refresh 时重拉 folders:list');
-  ok(bm.includes('!idToPath.get(st.folderId)'), 'T97b 下钻目录被删后自动退回全部目录');
+  ok(bm.includes('!idToPath.get(p.folderId)'), 'T97b 下钻目录被删后自动退回全部目录（逐栏守卫）');
   ok(/invalidateTree\(\);[\s\S]{0,120}dirtyTree\(\);/.test(bm), 'T97c refresh 时打脏树行缓存（删除书签立即消失）');
 }
 
@@ -927,6 +927,27 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(pj.includes('let fullDirs = []'), 'T103f 全量目录缓存');
   ok(pj.includes('terms.some((t) => n.includes(t))'), 'T103g 目录名含查询词即补齐（blog→blogbus）');
   ok(pj.includes('function queryTerms'), 'T103h 查询纯词提取');
+}
+
+// T104：双窗管理模式（双树实例 + 拖拽移动）
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(bm.includes("const paneState = { L: newPane(), R: newPane() }") && bm.includes('let activePane'), 'T104a 双窗状态：两栏独立 cwd/展开/选中');
+  ok(bm.includes('function activatePane') && bm.includes('selected = paneState[paneKey].selected'), 'T104b 活动窗格切换（操作带跟随）');
+  ok(bm.includes("wrap.className = 'bm-dual-wrap' + (dual ? ' dual' : ' single')"), 'T104c 双窗/单窗布局切换');
+  ok(bm.includes('function buildPane') && bm.includes('renderCrumbInto(crumbEl, pane)'), 'T104d 每栏独立面包屑');
+  ok(sp.includes('id="bmDual"'), 'T104e 双窗开关按钮');
+  ok(bm.includes("chrome.storage.local.set({ 'bm.dual': dual })"), 'T104f 双窗开关存本机');
+  ok(bm.includes('bm.dirOpen.L') && bm.includes("bm.dirOpen.R'") && bm.includes('bm.paneFolder'), 'T104g 每栏展开/下钻位置持久化（含旧版迁移）');
+  ok(bm.includes('function bindRowDrag') && bm.includes("e.dataTransfer.effectAllowed = 'move'"), 'T104h 行可拖拽');
+  ok(bm.includes('function bindFolderDnD') && bm.includes('toggleDir(pane, node.id), 600'), 'T104i 文件夹行投放+悬停自动展开');
+  ok(bm.includes('function bindDropTarget') && bm.includes('async function dropMove'), 'T104j 栏级投放=移到本栏下钻目录');
+  ok(bm.includes("type: 'bookmarks:move', ids, parentId: targetId"), 'T104k 拖拽复用 bookmarks:move（后台撤销栈）');
+  ok(bm.includes('for (const k of PANE_LIST) paneState[k].selected.clear()'), 'T104l 拖拽后清空两栏选择');
+  ok(css.includes('.bm-dual-wrap.dual') && css.includes('.bm-folder-row.drop'), 'T104n 双窗布局与投放高亮样式');
+  ok(bm.includes("for (const k of PANE_LIST) paneState[k].selected.clear();\n  selected = curPane().selected;"), 'T104o 筛选变化清空两栏选择');
 }
 
 // 配置缺版本号：空文件不算，有配置组却没 v 才算

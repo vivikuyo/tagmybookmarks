@@ -18,22 +18,36 @@ let st = {
   counts: { all: 0, untagged: 0, tagged: 0 },
   hiddenRows: 0, // 按目录显示时被折叠隐藏的书签数（只影响显示，不影响筛选/全选）
 };
-let selected = new Set();
+// ---------------------------------------------------------------- 双窗模式
+// 两栏各自导航（当前目录/展开集/选中集），共享查询、操作带、剪贴板与标签云。
+// 「操作带作用于活动窗格」：selected 全局引用指向活动窗格的选中集，激活时切换绑定。
+const PANE_LIST = ['L', 'R'];
+let dual = false; // 双窗开关（存本机 bm.dual）
+let activePane = 'L';
+const newPane = () => ({
+  folderId: '', // 本栏下钻的目录
+  dirOpen: new Set(), // 本栏手动展开（存本机 bm.dirOpen.L / .R）
+  autoOpen: new Set(), // 查询命中自动展开（不持久化）
+  autoCollapsed: new Set(), // 自动展开后被手动收起
+  selected: new Set(),
+  visible: new Set(), // 本栏当前渲染出的书签（「全选可见」用）
+  scroll: 0, // 渲染后恢复滚动位置
+});
+const paneState = { L: newPane(), R: newPane() };
+const curPane = () => paneState[activePane];
+
+let selected = paneState.L.selected; // 活动窗格的选中集
 let colors = {};
 let foldersFlat = [];
 let folderTree = []; // folders:list 的原始树（下拉浮层用）
 let idToPath = new Map(); // 目录 id → 路径
 let pathToId = new Map(); // 路径 → 目录 id（分组折叠定位用）
 let rootIds = new Set(); // 三个根：永远视为展开
-let dirOpen = new Set(); // 已展开的目录 id（存本机，按目录树用）
-// 树模式（按目录）：整棵树 + 每个展开目录的直属书签懒加载
+// 树模式（按目录）：整棵树 + 每个展开目录的直属书签懒加载（展开/选中状态按窗格各存一份）
 const DIR_FETCH_LIMIT = 500; // 后台单目录取书签的上限（超过会截断并提示）
 let treeCache = { query: '', filter: 'all', text: '', rows: new Map() }; // folderId -> {rows, total}
 let dirLoading = new Set();
-let visibleRowIds = new Set(); // 树模式当前实际渲染出来的书签（「全选可见」用）
 let clip = null; // 剪贴板 {mode:'copy'|'cut', bookmarks:[id], folders:[id]}
-let autoOpen = new Set(); // 查询期间自动展开的目录 id（筛中书签所在目录+祖先），不持久化
-let autoCollapsed = new Set(); // 用户在自动展开后手动收起的目录（本次查询内保持收起）
 let trashOpen = false;
 let cloudTags = []; // [{tag,count}] 全量标签
 let cloudDirs = []; // [{tag,count}] 目录标签（文件夹投影）
@@ -93,20 +107,18 @@ async function loadFolders() {
 
 // ---------------------------------------------------------------- 目录折叠（下拉树 + 按目录分组共用）
 
-/** 根永远展开；查询期间筛中书签所在目录自动展开；手动收起优先于自动展开 */
-function dirIsOpen(id) {
+/** 根永远展开；查询期间筛中书签所在目录自动展开；手动收起优先于自动展开（按窗格） */
+function dirIsOpen(pane, id) {
   if (!id || rootIds.has(id)) return true;
-  if (autoCollapsed.has(id)) return false;
-  return dirOpen.has(id) || autoOpen.has(id);
+  if (pane.autoCollapsed.has(id)) return false;
+  return pane.dirOpen.has(id) || pane.autoOpen.has(id);
 }
 
-/** 有查询时：筛中书签所在目录（及其祖先链）自动展开；查询变了重算 */
-function updateAutoOpen(matchPaths) {
-  if (!st.query) {
-    autoOpen = new Set();
-    autoCollapsed = new Set();
-    return;
-  }
+/** 有查询时：筛中书签所在目录（及其祖先链）自动展开；查询变了重算（每个窗格各一份） */
+function updateAutoOpen(pane, matchPaths) {
+  pane.autoOpen = new Set();
+  pane.autoCollapsed = new Set();
+  if (!st.query) return;
   const next = new Set();
   for (const path of matchPaths) {
     const segs = path.split('/').filter(Boolean);
@@ -115,23 +127,111 @@ function updateAutoOpen(matchPaths) {
       if (id && !rootIds.has(id)) next.add(id);
     }
   }
-  autoOpen = next;
-  autoCollapsed = new Set();
+  pane.autoOpen = next;
 }
 
-/** 展开状态变了：存本机 + 两个出口都重画（浮层由调用方重画，这里管列表） */
-function toggleDir(id) {
-  if (dirOpen.has(id)) {
-    dirOpen.delete(id);
-  } else if (autoOpen.has(id) && !autoCollapsed.has(id)) {
-    autoCollapsed.add(id); // 自动展开的目录被手动收起：本次查询内保持收起
-  } else if (autoCollapsed.has(id)) {
-    autoCollapsed.delete(id); // 再点一次 = 恢复自动展开
+/** 展开状态变了：按窗格存本机 + 重画 */
+function toggleDir(pane, id) {
+  if (pane.dirOpen.has(id)) {
+    pane.dirOpen.delete(id);
+  } else if (pane.autoOpen.has(id) && !pane.autoCollapsed.has(id)) {
+    pane.autoCollapsed.add(id); // 自动展开的目录被手动收起：本次查询内保持收起
+  } else if (pane.autoCollapsed.has(id)) {
+    pane.autoCollapsed.delete(id); // 再点一次 = 恢复自动展开
   } else {
-    dirOpen.add(id);
+    pane.dirOpen.add(id);
   }
-  chrome.storage.local.set({ 'bm.dirOpen': [...dirOpen] });
+  saveDirOpen(pane);
   if (st.sort === 'tree') render();
+}
+
+/** 点击某栏：激活它，操作带/剪贴板目标随之切换 */
+function activatePane(paneKey) {
+  if (activePane === paneKey) return;
+  activePane = paneKey;
+  selected = paneState[paneKey].selected;
+  st.folderId = paneState[paneKey].folderId; // 粘贴/新建文件夹目标跟随活动窗格
+  renderBulk();
+  for (const el of document.querySelectorAll('.bm-pane')) el.classList.toggle('active', el.dataset.pane === paneKey);
+}
+
+// ---------------------------------------------------------------- 双窗拖拽（只移动，不复制）
+let dndTimer = null;
+
+/** 行可拖：在选中集里=拖整批，不在=拖本行 */
+function bindRowDrag(el, rowId, sel) {
+  el.draggable = true;
+  el.addEventListener('dragstart', (e) => {
+    const ids = sel.has(rowId) ? [...sel] : [rowId];
+    e.dataTransfer.setData('text/plain', JSON.stringify({ ids }));
+    e.dataTransfer.effectAllowed = 'move';
+  });
+}
+
+/** 文件夹行：可拖（整枝移动），也是投放目标；悬停自动展开 */
+function bindFolderDnD(el, node, open, pane, isRoot) {
+  if (!isRoot) bindRowDrag(el, node.id, pane.selected);
+  el.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    el.classList.add('drop');
+    clearTimeout(dndTimer);
+    if (!isRoot && !open) dndTimer = setTimeout(() => toggleDir(pane, node.id), 600);
+  });
+  el.addEventListener('dragleave', () => {
+    el.classList.remove('drop');
+    clearTimeout(dndTimer);
+  });
+  el.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation(); // 别让栏级投放再处理一遍
+    el.classList.remove('drop');
+    clearTimeout(dndTimer);
+    await dropMove(e, node.id);
+  });
+}
+
+/** 栏级投放目标：空白处投放 = 移到本栏下钻的目录（没下钻就不接） */
+function bindDropTarget(el, getTargetId) {
+  el.addEventListener('dragover', (e) => {
+    if (e.target.closest('.bm-folder-row')) return; // 文件夹行自己高亮
+    if (!getTargetId()) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    el.classList.add('drop');
+  });
+  el.addEventListener('dragleave', () => el.classList.remove('drop'));
+  el.addEventListener('drop', async (e) => {
+    const target = getTargetId();
+    el.classList.remove('drop');
+    if (!target) return;
+    e.preventDefault();
+    await dropMove(e, target);
+  });
+}
+
+/** 松手=移动（复用 bookmarks:move，后台记撤销栈） */
+async function dropMove(e, targetId) {
+  let ids = [];
+  try {
+    ids = JSON.parse(e.dataTransfer.getData('text/plain') || '{}').ids || [];
+  } catch {}
+  ids = ids.filter((id) => id !== targetId);
+  if (!ids.length) return;
+  try {
+    const r = await send({ type: 'bookmarks:move', ids, parentId: targetId });
+    for (const k of PANE_LIST) paneState[k].selected.clear();
+    selected = curPane().selected;
+    await refresh();
+    toast(`已移动 ${r.moved} 项 → ${r.path} · 可撤销`);
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+/** 每栏下钻位置存本机 */
+function savePaneFolder() {
+  chrome.storage.local.set({ 'bm.paneFolder': { L: paneState.L.folderId, R: paneState.R.folderId } });
 }
 
 // ---------------------------------------------------------------- 数据
@@ -143,11 +243,12 @@ async function refresh() {
     dirtyTree(); // 书签/文件夹增删改后立即生效（查询词没变时 invalidateTree 不会清行缓存）
     // 目录树可能刚被删/剪/新建过，重拉 folders:list，别用内存里的旧树
     await loadFolders();
-    // 正在下钻的目录若已被删掉，退回全部目录
-    if (st.folderId && !idToPath.get(st.folderId)) {
-      st.folderId = '';
-      st.offset = 0;
+    // 各栏下钻的目录若已被删掉，退回全部目录
+    for (const k of PANE_LIST) {
+      const p = paneState[k];
+      if (p.folderId && !idToPath.get(p.folderId)) p.folderId = '';
     }
+    st.folderId = curPane().folderId;
   }
   const r = await send({
     type: 'bookmarks:page',
@@ -156,7 +257,7 @@ async function refresh() {
     filter: st.filter,
     text: st.text,
     query: st.query,
-    folderId: st.folderId,
+    folderId: st.sort === 'tree' ? '' : st.folderId, // 树模式行数据按目录懒加载，主查询不按下钻收窄
     sort: st.sort,
   });
   st.items = r.items || [];
@@ -164,7 +265,7 @@ async function refresh() {
   st.counts = r.counts || st.counts;
   st.related = r.related || [];
   st.relatedDirs = r.relatedDirs || [];
-  if (st.sort === 'tree') updateAutoOpen(r.matchPaths || []);
+  if (st.sort === 'tree') for (const k of PANE_LIST) updateAutoOpen(paneState[k], r.matchPaths || []);
   render();
   refreshUndo().catch(() => {});
   loadCloud().catch(() => {});
@@ -202,21 +303,60 @@ function render() {
 
   if (st.sort === 'tree') {
     // 真目录树（方案 B）：整棵树渲染，文件夹行可展开；
-    // 展开的目录懒加载直属书签（受查询/快筛约束）；无分页，每目录「显示更多」。
+    // 展开的目录懒加载直属书签（受查询/快筛约束）；无分页。
+    // 双窗：两栏各自导航；单窗：一栏占满（面包屑仍内嵌表头）
     st.hiddenRows = 0;
-    renderTreeMode(rows);
+    $('#bmCrumb').hidden = dual;
+    rows.classList.toggle('bm-tree-host', true);
+    const wrap = document.createElement('div');
+    wrap.className = 'bm-dual-wrap' + (dual ? ' dual' : ' single');
+    for (const k of dual ? PANE_LIST : ['L']) wrap.append(buildPane(k));
+    rows.append(wrap);
   } else {
+    rows.classList.toggle('bm-tree-host', false);
     st.hiddenRows = 0;
     for (const row of st.items) rows.append(renderRow(row));
   }
   renderBulk();
 }
 
-/** 树模式：根常展开，其余按 dirOpen；下钻时只渲染那棵子树 */
-function renderTreeMode(container) {
-  visibleRowIds = new Set();
-  const drillNode = st.folderId ? findFolderNode(folderTree, st.folderId) : null;
-  if (st.folderId && !drillNode) {
+/** 双窗里的一栏：头部（来源/目标 + 面包屑）+ 可滚动行区 */
+function buildPane(paneKey) {
+  const pane = paneState[paneKey];
+  const el = document.createElement('div');
+  el.className = 'bm-pane' + (paneKey === activePane ? ' active' : '');
+  el.dataset.pane = paneKey;
+  // 点进哪栏，操作带/剪贴板目标就切到哪栏（mousedown 比 click 早，拖拽前也能激活）
+  el.addEventListener('mousedown', () => activatePane(paneKey));
+  const rowsEl = document.createElement('div');
+  rowsEl.className = 'bm-pane-rows';
+  renderTreeMode(rowsEl, pane);
+  // 恢复滚动位置：渲染会整块重画，别让用户每次操作都跳回顶部
+  rowsEl.scrollTop = pane.scroll;
+  rowsEl.addEventListener('scroll', () => (pane.scroll = rowsEl.scrollTop));
+  // 栏内空白投放 = 移到本栏下钻的目录（没下钻则提示拖到具体文件夹）
+  bindDropTarget(rowsEl, () => pane.folderId);
+  if (dual) {
+    const head = document.createElement('div');
+    head.className = 'bm-pane-head';
+    const tag = document.createElement('span');
+    tag.className = 'bm-pane-tag';
+    tag.textContent = paneKey === 'L' ? '左栏' : '右栏';
+    const crumbEl = document.createElement('div');
+    crumbEl.className = 'bm-crumb';
+    renderCrumbInto(crumbEl, pane);
+    head.append(tag, crumbEl);
+    el.append(head);
+  }
+  el.append(rowsEl);
+  return el;
+}
+
+/** 树模式：根常展开，其余按 pane.dirOpen；下钻时只渲染那棵子树 */
+function renderTreeMode(container, pane) {
+  pane.visible = new Set();
+  const drillNode = pane.folderId ? findFolderNode(folderTree, pane.folderId) : null;
+  if (pane.folderId && !drillNode) {
     const p = document.createElement('p');
     p.className = 'hint';
     p.textContent = '目录不存在或已被排除，点面包屑「所有目录」返回。';
@@ -226,26 +366,32 @@ function renderTreeMode(container) {
   const walk = (nodes, parentOpen, depth) => {
     for (const n of nodes || []) {
       if (!parentOpen) continue; // 上级收起：整枝不渲染（书签管理器语义）
-      const open = dirIsOpen(n.id);
-      container.append(renderFolderRow(n, open, depth === 0));
+      const open = dirIsOpen(pane, n.id);
+      container.append(renderFolderRow(n, open, depth === 0, pane));
       if (open) {
         walk(n.children, true, depth + 1); // 文件夹靠前
-        appendDirRows(container, n, depth); // 直属书签在后
+        appendDirRows(container, n, depth, pane); // 直属书签在后
       }
     }
   };
   if (drillNode) {
     // 下钻 = 只看这棵子树；自身视为展开
-    if (!dirOpen.has(drillNode.id)) {
-      dirOpen.add(drillNode.id);
-      chrome.storage.local.set({ 'bm.dirOpen': [...dirOpen] });
+    if (!pane.dirOpen.has(drillNode.id)) {
+      pane.dirOpen.add(drillNode.id);
+      saveDirOpen(pane);
     }
-    container.append(renderFolderRow(drillNode, true, 0));
+    container.append(renderFolderRow(drillNode, true, 0, pane));
     walk(drillNode.children, true, 1);
-    appendDirRows(container, drillNode, 0);
+    appendDirRows(container, drillNode, 0, pane);
   } else {
     walk(folderTree, true, 0);
   }
+}
+
+/** 展开集按窗格持久化 */
+function saveDirOpen(pane) {
+  const key = PANE_LIST.find((k) => paneState[k] === pane) || 'L';
+  chrome.storage.local.set({ [`bm.dirOpen.${key}`]: [...pane.dirOpen] });
 }
 
 function findFolderNode(nodes, id) {
@@ -257,19 +403,20 @@ function findFolderNode(nodes, id) {
   return null;
 }
 
-/** 文件夹行：箭头=展开/收起，名字=下钻只看这棵子树 */
-function renderFolderRow(node, open, isRoot) {
+/** 文件夹行：箭头=展开/收起，名字=下钻只看这棵子树；可拖拽移动整枝（只移动不复制） */
+function renderFolderRow(node, open, isRoot, pane) {
   const div = document.createElement('div');
   // 展开状态（▾）整行橙色标出：手动展开和查询自动展开都算
-  const isCur = dirIsOpen(node.id);
-  div.className = 'bm-group bm-folder-row' + (isCur ? ' cur' : '') + (selected.has(node.id) ? ' on' : '');
+  const isCur = dirIsOpen(pane, node.id);
+  const sel = pane.selected;
+  div.className = 'bm-group bm-folder-row' + (isCur ? ' cur' : '') + (sel.has(node.id) ? ' on' : '');
   // 文件夹也有复选框：复制/剪切/粘贴的对象可以是文件夹
   const cb = document.createElement('input');
   cb.type = 'checkbox';
   cb.className = 'bm-cb';
-  cb.checked = selected.has(node.id);
+  cb.checked = sel.has(node.id);
   cb.addEventListener('click', (e) => e.stopPropagation());
-  cb.addEventListener('change', () => setSelected(node.id, cb.checked, div, cb));
+  cb.addEventListener('change', () => setSelected(node.id, cb.checked, div, cb, sel));
   div.append(cb);
   if (!isRoot) {
     const arrow = document.createElement('button');
@@ -279,7 +426,7 @@ function renderFolderRow(node, open, isRoot) {
       // 叶子文件夹（没有子文件夹但有直属书签）也能展开/收起——不能只看 children
       arrow.textContent = open ? '▾' : '▸';
       arrow.title = open ? '收起' : '展开';
-      arrow.addEventListener('click', () => toggleDir(node.id));
+      arrow.addEventListener('click', () => toggleDir(pane, node.id));
     }
     div.append(arrow);
   }
@@ -289,7 +436,9 @@ function renderFolderRow(node, open, isRoot) {
   name.textContent = node.title || '(无标题)';
   name.title = `${node.path} · 直属 ${node.count} · 全部 ${node.total} · 点击只看这个目录`;
   name.addEventListener('click', () => {
-    st.folderId = node.id;
+    pane.folderId = node.id;
+    st.folderId = node.id; // mousedown 已激活本栏，这里同步给粘贴/新建文件夹用
+    savePaneFolder();
     st.offset = 0;
     clearSelectionOnFilterChange();
     refresh().catch((x) => toast(x.message, true));
@@ -299,11 +448,13 @@ function renderFolderRow(node, open, isRoot) {
   cnt.className = 'bm-group-count';
   cnt.textContent = open ? `${node.count} 直属 · ${node.total} 全部` : `${node.total} 条（已折叠）`;
   div.append(cnt);
+  // 拖拽：根目录不可拖（也拖不动），任何文件夹行都是投放目标
+  bindFolderDnD(div, node, open, pane, isRoot);
   return div;
 }
 
 /** 展开目录的直属书签：懒加载 + 每目录分批显示 */
-function appendDirRows(container, node, depth) {
+function appendDirRows(container, node, depth, pane) {
   const hit = treeCache.rows.get(String(node.id));
   if (!hit) {
     loadDirRows(node.id);
@@ -318,8 +469,8 @@ function appendDirRows(container, node, depth) {
   box.className = 'bm-dirrows';
   box.style.paddingLeft = `${(depth + 1) * 12}px`;
   for (const row of hit.rows) {
-    box.append(renderRow(row));
-    visibleRowIds.add(row.id);
+    box.append(renderRow(row, pane));
+    pane.visible.add(row.id);
   }
   if (!hit.rows.length) {
     const p = document.createElement('span');
@@ -373,21 +524,34 @@ function invalidateTree() {
   dirLoading.clear();
 }
 
-/** 下钻后的面包屑：所有目录 / 书签栏 / AI ✕，点任何一级跳回 */
+/** 下钻后的面包屑：所有目录 / 书签栏 / AI ✕，点任何一级跳回（单窗：内嵌表头） */
 function renderCrumb() {
   const el = $('#bmCrumb');
   if (!el) return;
-  if (!st.folderId) {
+  if (!st.folderId || st.sort !== 'tree') {
     el.hidden = true;
     return;
   }
   el.hidden = false;
   el.textContent = '';
-  const path = idToPath.get(st.folderId) || '';
+  renderCrumbInto(el, curPane());
+}
+
+/** 双窗：每栏自己的面包屑（跳转只影响本栏） */
+function renderCrumbInto(el, pane) {
+  if (!pane.folderId) {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  el.textContent = '';
+  const path = idToPath.get(pane.folderId) || '';
   const segs = path.split('/').filter(Boolean);
 
   const jump = (targetPath) => {
-    st.folderId = targetPath ? pathToId.get(targetPath) || '' : '';
+    pane.folderId = targetPath ? pathToId.get(targetPath) || '' : '';
+    if (paneState[activePane] === pane) st.folderId = pane.folderId;
+    savePaneFolder();
     st.offset = 0;
     clearSelectionOnFilterChange();
     refresh().catch((x) => toast(x.message, true));
@@ -418,32 +582,36 @@ function renderCrumb() {
   el.append(x);
 }
 
-function setSelected(id, on, line, cb) {
-  if (on) selected.add(id);
-  else selected.delete(id);
+function setSelected(id, on, line, cb, sel = selected) {
+  if (on) sel.add(id);
+  else sel.delete(id);
   if (cb) cb.checked = on;
   if (line) line.classList.toggle('on', on);
   renderBulk();
 }
 
-function renderRow(row) {
+function renderRow(row, pane) {
+  const sel = pane ? pane.selected : selected; // 平铺模式没有窗格概念，用活动窗格的选中集
   const line = document.createElement('div');
-  line.className = 'bm-row' + (selected.has(row.id) ? ' on' : '');
+  line.className = 'bm-row' + (sel.has(row.id) ? ' on' : '');
   line.dataset.id = row.id;
 
   const cb = document.createElement('input');
   cb.type = 'checkbox';
   cb.className = 'bm-cb';
-  cb.checked = selected.has(row.id);
-  cb.addEventListener('change', () => setSelected(row.id, cb.checked, line, cb));
+  cb.checked = sel.has(row.id);
+  cb.addEventListener('change', () => setSelected(row.id, cb.checked, line, cb, sel));
 
   // 整行可点：只挡真正的交互件（复选框、标题链接、chip、推荐、徽标），
   // 标题右侧、标签行缝隙等空白区都能勾选（与侧边栏一致）
   line.addEventListener('click', (e) => {
     if (e.target.closest('input, button, a, .chip, .x, .bm-badge, .bm-sug')) return;
     if (String(window.getSelection())) return; // 选文字时不误触
-    setSelected(row.id, !selected.has(row.id), line, cb);
+    setSelected(row.id, !sel.has(row.id), line, cb, sel);
   });
+
+  // 树模式下行可拖拽（拖的是选中集或本行），平铺模式不启用
+  if (pane) bindRowDrag(line, row.id, sel);
 
   // 标题 + 网址
   const main = document.createElement('div');
@@ -611,8 +779,10 @@ async function fillSuggest(row, text) {
 
 // 条件变了就清空：两个页面统一的策略
 function clearSelectionOnFilterChange() {
-  if (!selected.size) return;
-  selected.clear();
+  const dirty = PANE_LIST.some((k) => paneState[k].selected.size);
+  if (!dirty) return;
+  for (const k of PANE_LIST) paneState[k].selected.clear();
+  selected = curPane().selected;
   toast('筛选条件已变，已清空选择');
 }
 
@@ -636,7 +806,8 @@ function renderSummary() {
   const to = Math.min(st.offset + PAGE, st.total);
   let text;
   if (st.sort === 'tree') {
-    text = `全部 ${c.all} · 未打标签 ${c.untagged} · 已打标签 ${c.tagged} ｜ 已显示 ${visibleRowIds.size} 条`;
+    const shown = PANE_LIST.reduce((n, k) => n + paneState[k].visible.size, 0);
+    text = `全部 ${c.all} · 未打标签 ${c.untagged} · 已打标签 ${c.tagged} ｜ 已显示 ${shown} 条${dual ? '（双窗两栏合计）' : ''}`;
   } else {
     text = `${st.total} 条 · 显示 ${from}–${to} ｜ 全部 ${c.all} · 未打标签 ${c.untagged} · 已打标签 ${c.tagged}`;
   }
@@ -660,8 +831,8 @@ function renderBulk() {
   if (pageBtn) {
     const tree = st.sort === 'tree';
     pageBtn.textContent = tree ? '全选可见' : '全选本页';
-    pageBtn.disabled = tree ? visibleRowIds.size === 0 : st.items.length === 0;
-    pageBtn.title = tree ? `选中当前显示的 ${visibleRowIds.size} 条（展开着的目录里的）` : `选中本页 ${st.items.length} 条`;
+    pageBtn.disabled = tree ? curPane().visible.size === 0 : st.items.length === 0;
+    pageBtn.title = tree ? `选中当前显示的 ${curPane().visible.size} 条（活动窗格里展开着的目录）` : `选中本页 ${st.items.length} 条`;
   }
 
   // 未选中时按钮变灰而不是消失：位置固定，鼠标不用追着按钮跑
@@ -857,7 +1028,7 @@ function bind() {
   });
 
   $('#bmAllPage').addEventListener('click', () => {
-    const ids = st.sort === 'tree' ? [...visibleRowIds] : st.items.map((x) => x.id);
+    const ids = st.sort === 'tree' ? [...curPane().visible] : st.items.map((x) => x.id);
     for (const id of ids) selected.add(id);
     render();
   });
@@ -927,9 +1098,9 @@ function bind() {
     const parent = st.folderId || BOOKMARKS_BAR_ID;
     try {
       const r = await send({ type: 'folder:create', parentId: parent, title: name.trim() });
-      // 自动展开目标目录，立刻看到新文件夹
-      dirOpen.add(parent);
-      chrome.storage.local.set({ 'bm.dirOpen': [...dirOpen] });
+      // 自动展开目标目录，立刻看到新文件夹（活动窗格）
+      curPane().dirOpen.add(parent);
+      saveDirOpen(curPane());
       await refresh();
       toast(`已创建文件夹「${r.title}」`);
     } catch (e) {
@@ -968,9 +1139,18 @@ function bind() {
     if (!btn || btn.dataset.s === st.sort) return;
     st.sort = btn.dataset.s;
     st.offset = 0;
-    autoCollapsed = new Set();
+    for (const k of PANE_LIST) paneState[k].autoCollapsed = new Set();
     $('#bmSort').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === btn));
     refresh().catch((x) => toast(x.message, true));
+  });
+
+  // 双窗开关（存本机）：只在按目录模式下生效
+  $('#bmDual').addEventListener('click', () => {
+    dual = !dual;
+    $('#bmDual').classList.toggle('on', dual);
+    chrome.storage.local.set({ 'bm.dual': dual });
+    if (st.sort === 'tree') render();
+    else toast('双窗在「按目录」显示下生效——切过去就能用');
   });
 
   // 标签云：默认展开，记住选择（存本机）
@@ -1414,8 +1594,18 @@ export async function init() {
   } catch {}
   // 目录折叠状态（下拉树 + 按目录分组共用，存本机）
   try {
-    const o = await chrome.storage.local.get('bm.dirOpen');
-    dirOpen = new Set((o && o['bm.dirOpen']) || []);
+    const o = await chrome.storage.local.get(['bm.dirOpen', 'bm.dirOpen.L', 'bm.dirOpen.R', 'bm.dual', 'bm.paneFolder']);
+    dual = !!(o && o['bm.dual']);
+    const btn = $('#bmDual');
+    if (btn) btn.classList.toggle('on', dual);
+    // 旧版单窗的展开集迁移给左栏
+    const legacy = (o && o['bm.dirOpen']) || [];
+    paneState.L.dirOpen = new Set(o && o['bm.dirOpen.L'] ? o['bm.dirOpen.L'] : legacy);
+    paneState.R.dirOpen = new Set((o && o['bm.dirOpen.R']) || []);
+    const pf = (o && o['bm.paneFolder']) || {};
+    paneState.L.folderId = pf.L || '';
+    paneState.R.folderId = pf.R || '';
+    st.folderId = paneState.L.folderId;
   } catch {}
 
   // 标签云默认展开；用户关过就记住（存本机）
