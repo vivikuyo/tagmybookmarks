@@ -99,7 +99,7 @@ function chipActions(t) {
   return acts;
 }
 
-/** 标签墙：字号按书签数分三档（≥10 大、2-9 中、1 小），chip 内就地放勾选框/颜色点/名字/计数/重命名/删除 */
+/** 标签墙：所有 chip 统一尺寸，chip 内就地放勾选框/颜色点/名字/计数/重命名/删除 */
 export function render() {
   const wall = $('#tagWall');
   if (!wall) return;
@@ -110,7 +110,7 @@ export function render() {
 
   for (const t of list) {
     const chip = document.createElement('div');
-    chip.className = `chip ${t.count >= 10 ? 'big' : t.count >= 2 ? 'mid' : 'sm'}`;
+    chip.className = 'chip';
     if (selected.has(t.tag)) chip.classList.add('on');
     chip.title = `${t.tag}：${t.count} 条书签`;
 

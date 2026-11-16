@@ -240,28 +240,26 @@ textarea:focus { border-color: var(--accent); }
 
 /* ---------------- 标签墙（标签页主列表） ----------------
    一个 chip = 勾选框 + 颜色点 + 名字 + 书签数 + 就地「重命名 / 删除」。
-   字号与内边距按书签数分三档，大标签自己浮出来，不再靠某一列的长短比大小。 */
+   所有 chip 同一尺寸（原「中等」档），靠数量胶囊读数值，不靠字号比大小。 */
 .tagwall-panel { border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
 .tagwall { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
 .tagwall.busy { opacity: .6; pointer-events: none; }
 
 .chip {
-  display: inline-flex; align-items: center; gap: 7px;
-  padding: 4px 7px 4px 8px;
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 5px 8px 5px 9px;
   border: 1px solid var(--line); border-radius: 999px;
-  background: var(--bg); font-size: 12.5px; line-height: 1.4;
+  background: var(--bg); font-size: 13px; line-height: 1.4;
   max-width: 100%;
 }
-.chip.mid { font-size: 13px; padding: 5px 8px 5px 9px; }
-.chip.big { font-size: 14px; font-weight: 600; padding: 7px 10px 7px 11px; }
+/* 尺寸统一：不再有 big/mid/sm 三档 */
 .chip:hover { border-color: var(--accent); }
 .chip.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
 
 .chip .chip-ck { width: 13px; height: 13px; margin: 0; flex: 0 0 auto; cursor: pointer; }
 .chip .dot {
-  width: 9px; height: 9px; border-radius: 50%; border: 0; padding: 0; flex: 0 0 auto;
+  width: 11px; height: 11px; border-radius: 50%; border: 0; padding: 0; flex: 0 0 auto;
 }
-.chip.big .dot { width: 10px; height: 10px; }
 .chip .chip-name {
   border: 0; background: none; padding: 0; font: inherit; color: var(--text);
   cursor: pointer; text-align: left;

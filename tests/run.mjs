@@ -1168,7 +1168,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
     && tg.includes('doReplace([t.tag])') && tg.includes('doPurge([t.tag])');
   ok(usesStop, 'T122c 点击动作不透传到 chip，避免同时触发查询');
   ok(tg.includes("chip.append(ck, dot, name, n, chipActions(t));"), 'T122d chip 结构：勾选 + 颜色点 + 名字 + 计数 + 就地操作');
-  ok(tg.includes("t.count >= 10 ? 'big' : t.count >= 2 ? 'mid' : 'sm'"), 'T122e 字号三档按书签数分级');
+  ok(!tg.includes("'big'") && !tg.includes("'mid'") && tg.includes("chip.className = 'chip';"), 'T122e chip 统一尺寸（不再按书签数分档）');
 }
 
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
