@@ -58,16 +58,29 @@ function compensateScrollbar() {
   }
 }
 
+/** 表头列数随模式：按目录（树）模式不显示「目录」列——层级已表达位置，平铺模式才需要标目录 */
+function setHeadPath(head, withPath) {
+  if (!head) return;
+  head.classList.toggle('no-path', !withPath);
+  const c3 = head.children[3];
+  if (c3) c3.hidden = !withPath;
+  if (head._placeSplits) requestAnimationFrame(head._placeSplits);
+}
+
 /** 表头列分隔线：可拖拽调列宽（标题≥180px 标签≥120px），双击恢复默认；view=flat/L/R，各视图独立记忆 */
 function attachColSplit(head, view) {
   const kids = [...head.children].filter((el) => el.tagName === 'SPAN');
-  if (kids.length < 4) return;
+  if (kids.length < 3) return; // ≥3：按目录模式没有目录列，只有「标题|标签」一条线
   splitHeads.add(head);
   const places = [];
   const mk = (targetIdx, key, minW) => {
     const h = document.createElement('div');
     h.className = 'bm-colsplit';
+    h.dataset.key = key;
     const place = () => {
+      // 无目录列时第二条线（标签|目录）不存在，直接藏起来
+      if (key === 'g' && head.classList.contains('no-path')) { h.hidden = true; return; }
+      h.hidden = false;
       const t = kids[targetIdx];
       if (t) h.style.left = `${t.offsetLeft}px`;
     };
@@ -86,8 +99,10 @@ function attachColSplit(head, view) {
         // 否则上限虚高、标签列超出可用空间、行区出现横向滚动条，拖拽靠边时浏览器自动横滚（表现为标签列往左滑）
         const cs = getComputedStyle(head);
         const avail = head.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-        const otherNow = key === 'g' ? colW[view].t : colW[view].g; // 冻结在上方已完成，必有值
-        const maxW = Math.max(minW, avail - 30 - otherNow - 60 - 24); // 30=复选框列 60=目录列保底 24=三段栅格间隙
+        const noPath = head.classList.contains('no-path');
+        const otherIdx = key === 'g' ? 1 : 2;
+        const otherNow = (key === 'g' ? colW[view].t : colW[view].g) || Math.round(kids[otherIdx].getBoundingClientRect().width);
+        const maxW = Math.max(minW, avail - 30 - otherNow - (noPath ? 0 : 60) - 24); // 30=复选框列 60=目录列保底 24=栅格间隙
         colW[view][key] = Math.max(minW, Math.min(maxW, Math.round(startW + ev.clientX - startX)));
         applyColW(head.closest('.bm-pane') || document.querySelector('.bm-table'), view);
         head._placeSplits(); // 两条分隔线都跟着栅格走，不残留旧位置
@@ -112,7 +127,7 @@ function attachColSplit(head, view) {
     requestAnimationFrame(place);
   };
   mk(2, 't', 180); // 标题 | 标签
-  mk(3, 'g', 120); // 标签 | 目录
+  if (kids.length >= 4) mk(3, 'g', 120); // 标签 | 目录（仅平铺模式有）
   head._placeSplits = () => places.forEach((f) => f());
 }
 window.addEventListener('resize', () => {
@@ -601,6 +616,7 @@ function render() {
     rows.classList.toggle('bm-tree-host', true);
     const outerHead = document.querySelector('.bm-table .bm-head');
     if (outerHead) outerHead.hidden = dual; // 双窗：外层表头退役，每栏有自己的列头+面包屑
+    setHeadPath(outerHead, false); // 树模式：不要目录列
     const wrap = document.createElement('div');
     wrap.className = 'bm-dual-wrap' + (dual ? ' dual' : ' single');
     if (dual) {
@@ -615,7 +631,7 @@ function render() {
     const outerHead = document.querySelector('.bm-table .bm-head');
     if (outerHead) {
       outerHead.hidden = false;
-      if (outerHead._placeSplits) requestAnimationFrame(outerHead._placeSplits);
+      setHeadPath(outerHead, true); // 平铺模式：目录列回来（标位置）
     }
     st.hiddenRows = 0;
     for (const row of st.items) rows.append(renderRow(row));
@@ -659,9 +675,8 @@ function buildPane(paneKey) {
     c1.textContent = '标题 / 网址';
     const c2 = document.createElement('span');
     c2.textContent = '标签';
-    const c3 = document.createElement('span');
-    c3.textContent = '目录';
-    cols.append(c0, c1, c2, c3);
+    cols.append(c0, c1, c2); // 按目录模式没有目录列（层级已表达位置），标签列吃剩余空间
+    cols.classList.add('no-path');
     el.append(cols);
     applyColW(el, paneKey); // pane 每次渲染重建，列宽变量重打
     attachColSplit(cols, paneKey);
@@ -834,7 +849,7 @@ function renderFolderRow(node, open, isRoot, pane) {
   }
   const name = document.createElement('button');
   name.className = 'bm-group-name';
-  name.style.paddingLeft = `${Math.min(node.depth, 6) * 14}px`;
+  name.style.paddingLeft = `${Math.min(node.depth, 6) * 12}px`; // 与书签行同 12px/级
   name.textContent = node.title || '(无标题)';
   name.title = `${node.path} · 直属 ${node.count} · 全部 ${node.total} · 点击只看这个目录`;
   name.addEventListener('click', () => {
@@ -1060,7 +1075,7 @@ function renderRow(row, pane, depth = 0) {
   main.className = 'bm-main';
   const t = document.createElement('a');
   t.className = 'bm-title';
-  if (depth > 0) t.style.paddingLeft = `${depth * 12}px`; // 树深度缩进放标题格内，行栅格与表头逐列对齐
+  if (depth > 0) main.style.paddingLeft = `${depth * 12}px`; // 缩进放在整个「标题+网址」格：两行左缘对齐，级距 12px
   t.href = '#';
   t.textContent = row.title || row.url;
   t.title = row.title || row.url;
@@ -1091,7 +1106,13 @@ function renderRow(row, pane, depth = 0) {
   path.textContent = (row.path || '').split('/').slice(-1)[0] || '';
   path.title = row.path || '';
 
-  line.append(cb, main, tags, path);
+  if (pane) {
+    // 树模式（含双窗两栏）：不渲染目录格——所在目录由层级/面包屑表达
+    line.classList.add('no-path');
+    line.append(cb, main, tags);
+  } else {
+    line.append(cb, main, tags, path);
+  }
   return line;
 }
 

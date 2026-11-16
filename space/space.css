@@ -618,6 +618,11 @@ textarea:focus { border-color: var(--accent); }
 .bm-url { font-size: 11.5px; line-height: 1.3; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bm-badge { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 999px; border: 1px solid var(--line); font-size: 11px; color: var(--text-dim); }
 .bm-tags { display: flex; flex-wrap: wrap; gap: 3px; min-height: 20px; align-items: center; }
+/* 按目录模式没有目录列：3 栏栅格（标题/网址 + 标签），标签列吃剩余空间 */
+.bm-head.no-path, .bm-row.no-path {
+  grid-template-columns: 30px minmax(180px, var(--bm-colW-t, 1.5fr)) minmax(120px, var(--bm-colW-g, 1.4fr));
+}
+
 .bm-path { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .chip {

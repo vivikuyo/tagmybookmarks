@@ -977,7 +977,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
   const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
-  ok(bm.includes("cols.append(c0, c1, c2, c3)"), 'T106a 栏内列头含复选框占位（与行对齐）');
+  ok(bm.includes("cols.append(c0, c1, c2)") && bm.includes("cols.classList.add('no-path')"), 'T106a 栏内列头含复选框占位（与行对齐），树模式无目录列');
   ok(css.includes('.bm-pane-cols span { white-space: nowrap; }'), 'T106b 列头文字不换行');
   ok(bm.includes('railFrac') && bm.includes("'bm.railFrac'") && bm.includes('gridTemplateColumns'), 'T106c 中缝拖拽调两栏宽度（存本机）');
   ok(css.includes('cursor: col-resize'), 'T106d 中缝拖拽光标');
@@ -1006,9 +1006,9 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
   ok(bm.includes('box.className = \'bm-dirrows\'; // 不再整盒缩进') || bm.includes('不再整盒缩进'), 'T108a 树书签行不再整盒缩进（缩进放标题格内）');
-  ok(bm.includes('function renderRow(row, pane, depth = 0)') && bm.includes('t.style.paddingLeft = `${depth * 12}px`'), 'T108b 深度缩进在标题格内，行栅格与表头同轨');
+  ok(bm.includes('function renderRow(row, pane, depth = 0)') && bm.includes('main.style.paddingLeft = `${depth * 12}px`'), 'T108b 深度缩进在「标题+网址」整格内（两行左缘对齐），行栅格与表头同轨');
   ok(css.includes('background: var(--line);') && css.includes('.bm-colsplit:hover::after, .bm-colsplit.drag::after { background: var(--accent); width: 2px; }'), 'T108c 分隔线默认淡线常显，悬停/拖动橙色加粗');
-  ok(bm.includes('const maxW = Math.max(minW, avail - 30 - otherNow - 60 - 24);'), 'T108d 列宽拖拽有上限（按另一列实际冻结宽算），目录列不被挤出可视区');
+  ok(bm.includes('const maxW = Math.max(minW, avail - 30 - otherNow - (noPath ? 0 : 60) - 24);'), 'T108d 列宽拖拽有上限（按另一列实际冻结宽算），目录列不被挤出可视区');
 }
 
 // T109：分隔线稳定性（冻结弹性列 / 双线重定位 / 窗口缩放）
@@ -1035,7 +1035,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
 // T111：拖拽上限按另一列实际宽算 + 目录列保底降到 60px
 {
   const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
-  ok(bm.includes("const otherNow = key === 'g' ? colW[view].t : colW[view].g;"), 'T111a 上限用另一列实际冻结宽（防上限虚高致行区横向溢出）');
+  ok(bm.includes("(key === 'g' ? colW[view].t : colW[view].g) || Math.round(kids[otherIdx].getBoundingClientRect().width)"), 'T111a 上限用另一列实际冻结宽（无值时回退实测宽，防上限虚高致行区横向溢出）');
   ok(bm.includes('getComputedStyle(head)'), 'T111b 上限扣真实内边距（含滚动条补偿）');
   ok(!bm.includes('otherMin'), 'T111c 旧的最小宽口径已移除');
 }
@@ -1047,6 +1047,18 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(css.includes('gap: min(300px, 22vh)'), 'T112a 两组方向按钮间隔 300px（窗口矮时按 22vh 收）');
   ok(bm.includes("'复制 ⇨'") && bm.includes("'移动 ⇨'") && bm.includes("'⇦ 复制'") && bm.includes("'⇦ 移动'"), 'T112b 箭头统一 ⇦/⇨');
   ok(!bm.includes('➤') && !bm.includes('⇤ 复'), 'T112c 旧箭头已清理');
+}
+
+// T113：按目录模式不显示目录列（3 列）+ 缩进整格上提（标题/网址左缘对齐）
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(bm.includes('function setHeadPath(head, withPath)'), 'T113a 表头列数随模式切换');
+  ok(bm.includes('setHeadPath(outerHead, false)') && bm.includes('setHeadPath(outerHead, true)'), 'T113b 树模式去目录列、平铺模式恢复');
+  ok(bm.includes("line.classList.add('no-path')") && bm.includes('line.append(cb, main, tags);'), 'T113c 树模式行不渲染目录格');
+  ok(css.includes('.bm-head.no-path, .bm-row.no-path') && css.includes('minmax(120px, var(--bm-colW-g, 1.4fr));\n}'), 'T113d 无目录列 3 栏栅格（标签列吃剩余）');
+  ok(bm.includes('if (kids.length >= 4) mk(3'), 'T113e 无目录列时只挂「标题|标签」一条分隔线');
+  ok(bm.includes("Math.min(node.depth, 6) * 12"), 'T113f 文件夹行缩进级距与书签行统一 12px');
 }
 
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
