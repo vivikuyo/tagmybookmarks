@@ -995,8 +995,8 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(css.includes('.bm-colsplit') && css.includes('cursor: col-resize'), 'T107b 表头分隔线样式与拖拽光标');
   ok(bm.includes('function attachColSplit') && bm.includes("mk(2, 't', 180)") && bm.includes("mk(3, 'g', 120)"), 'T107c 两条分隔线：标题|标签、标签|目录');
   ok(bm.includes("'bm.colW'") && bm.includes('applyColW'), 'T107d 列宽存本机 bm.colW');
-  ok(bm.includes("addEventListener('dblclick'") && bm.includes("colW[key] = null"), 'T107e 双击分隔线恢复默认');
-  ok(bm.includes('attachColSplit(cols)') && bm.includes("attachColSplit(outerHead)"), 'T107f 双窗栏内列头与平铺外层表头都有分隔线');
+  ok(bm.includes("addEventListener('dblclick'") && bm.includes("colW[view][key] = null"), 'T107e 双击分隔线恢复默认');
+  ok(bm.includes('attachColSplit(cols') && bm.includes("attachColSplit(outerHead"), 'T107f 双窗栏内列头与平铺外层表头都有分隔线');
   ok(css.includes('minmax(130px, 1fr)'), 'T107g 目录列吃剩余空间');
   ok(!css.includes('grid-template-columns: 30px minmax(220px, 1.5fr)'), 'T107h 覆盖规则不得回退为固定栅格（曾导致拖拽失效）');
 }
@@ -1014,10 +1014,22 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
 // T109：分隔线稳定性（冻结弹性列 / 双线重定位 / 窗口缩放）
 {
   const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
-  ok(bm.includes("if (key === 'g' && !colW.t) colW.t = Math.round(kids[1].getBoundingClientRect().width);"), 'T109a 拖拽时冻结未拖的弹性列成像素宽（防 fr 重分配挤动）');
+  ok(bm.includes("if (key === 'g' && !colW[view].t) colW[view].t = Math.round(kids[1].getBoundingClientRect().width);"), 'T109a 拖拽时冻结未拖的弹性列成像素宽（防 fr 重分配挤动）');
   ok(bm.includes('head._placeSplits(); // 两条分隔线都跟着栅格走'), 'T109b 拖动中两条分隔线实时重定位');
   ok(bm.includes("window.addEventListener('resize'") && bm.includes('for (const head of splitHeads)'), 'T109c 窗口缩放后分隔线重定位');
   ok(bm.includes('requestAnimationFrame(() => head._placeSplits())'), 'T109d 双击恢复默认后双线重定位');
+}
+
+// T110：列宽按视图独立（根治双窗共享列宽互相挤垮）+ 表头滚动条补偿（根治错位）
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  ok(bm.includes('colW = { flat: { t: null, g: null }, L: { t: null, g: null }, R: { t: null, g: null } }'), 'T110a 列宽 flat/L/R 三视图独立');
+  ok(bm.includes("function applyColW(host, view)"), 'T110b 列宽变量落到宿主（pane 或 bm-table）');
+  ok(bm.includes('applyColW(el, paneKey); // pane 每次渲染重建，列宽变量重打'), 'T110c 双窗 pane 渲染时重打本栏列宽');
+  ok(bm.includes('attachColSplit(cols, paneKey)') && bm.includes("attachColSplit(outerHead, 'flat')"), 'T110d 分隔线带视图键');
+  ok(bm.includes('function compensateScrollbar') && bm.includes('flatRows.offsetWidth - flatRows.clientWidth'), 'T110e 表头补偿滚动条宽度');
+  ok(bm.includes('requestAnimationFrame(compensateScrollbar)'), 'T110f render 后补滚动条（含懒加载重渲染）');
+  ok(bm.includes('saved.t != null') && bm.includes('!saved.flat'), 'T110g 旧全局列宽迁移给平铺视图');
 }
 
 // 配置缺版本号：空文件不算，有配置组却没 v 才算

@@ -24,20 +24,42 @@ let st = {
 const PANE_LIST = ['L', 'R'];
 let dual = false; // 双窗开关（存本机 bm.dual）
 let railFrac = 0.5; // 双窗左右宽度比（0.15–0.85，存本机 bm.railFrac）
-let colW = { t: null, g: null }; // 表头列宽（px，存本机 bm.colW）：t=标题/网址列，g=标签列，目录列吃剩余
+// 列宽按视图独立存（flat/L/R 各一份）：双窗两栏宽度不同，共享一份必然互相挤垮——在宽栏拖出的列宽套到窄栏会栅格溢出
+let colW = { flat: { t: null, g: null }, L: { t: null, g: null }, R: { t: null, g: null } }; // px，存本机 bm.colW；t=标题/网址列 g=标签列，目录列吃剩余
 const splitHeads = new Set(); // 挂了分隔线的表头，窗口缩放时统一重定位
 
-function applyColW() {
-  const table = document.querySelector('.bm-table');
-  if (!table) return;
-  if (colW.t) table.style.setProperty('--bm-colW-t', `${colW.t}px`);
-  else table.style.removeProperty('--bm-colW-t');
-  if (colW.g) table.style.setProperty('--bm-colW-g', `${colW.g}px`);
-  else table.style.removeProperty('--bm-colW-g');
+/** 列宽变量落到宿主：双窗=各自窗格（pane 每次渲染重建，需重打），平铺=.bm-table（常驻） */
+function applyColW(host, view) {
+  if (!host) return;
+  const w = colW[view];
+  if (!w) return;
+  if (w.t) host.style.setProperty('--bm-colW-t', `${w.t}px`);
+  else host.style.removeProperty('--bm-colW-t');
+  if (w.g) host.style.setProperty('--bm-colW-g', `${w.g}px`);
+  else host.style.removeProperty('--bm-colW-g');
 }
 
-/** 表头列分隔线：可拖拽调列宽（标题≥180px 标签≥120px），双击恢复默认 */
-function attachColSplit(head) {
+/** 行区滚动条补偿：表头在滚动容器外，比行少一条滚动条宽度，目录列(吃剩余空间)因此错位——给表头右内边距补同样宽度 */
+function compensateScrollbar() {
+  const table = document.querySelector('.bm-table');
+  if (!table) return;
+  const flatRows = $('#bmRows');
+  const flatHead = table.querySelector(':scope > .bm-head');
+  if (flatRows && flatHead && !flatHead.hidden) {
+    const sbw = flatRows.offsetWidth - flatRows.clientWidth;
+    flatHead.style.paddingRight = sbw ? `${10 + sbw}px` : '';
+  }
+  for (const pane of table.querySelectorAll('.bm-pane')) {
+    const rows = pane.querySelector('.bm-pane-rows');
+    const head = pane.querySelector('.bm-pane-cols');
+    if (!rows || !head) continue;
+    const sbw = rows.offsetWidth - rows.clientWidth;
+    head.style.paddingRight = sbw ? `${10 + sbw}px` : '';
+  }
+}
+
+/** 表头列分隔线：可拖拽调列宽（标题≥180px 标签≥120px），双击恢复默认；view=flat/L/R，各视图独立记忆 */
+function attachColSplit(head, view) {
   const kids = [...head.children].filter((el) => el.tagName === 'SPAN');
   if (kids.length < 4) return;
   splitHeads.add(head);
@@ -58,14 +80,14 @@ function attachColSplit(head) {
       h.classList.add('drag');
       const move = (ev) => {
         // 冻结还没拖过的弹性列成当前像素宽：否则它按 fr 重新分配，拖一条线另一列会跟着缩放（错位/乱跑的根源）
-        if (key === 'g' && !colW.t) colW.t = Math.round(kids[1].getBoundingClientRect().width);
-        if (key === 't' && !colW.g) colW.g = Math.round(kids[2].getBoundingClientRect().width);
-        // 上限：给其他列和目录列(≥130px)留足空间，拖到头也不把目录挤出可视区
+        if (key === 'g' && !colW[view].t) colW[view].t = Math.round(kids[1].getBoundingClientRect().width);
+        if (key === 't' && !colW[view].g) colW[view].g = Math.round(kids[2].getBoundingClientRect().width);
+        // 上限：按本视图（本窗格）宽度算，给其他列和目录列(≥130px)留足空间
         const content = head.clientWidth - 20; // 减去表头左右内边距
         const otherMin = key === 't' ? 120 : 180;
         const maxW = Math.max(minW, content - 30 - otherMin - 130 - 24);
-        colW[key] = Math.max(minW, Math.min(maxW, Math.round(startW + ev.clientX - startX)));
-        applyColW();
+        colW[view][key] = Math.max(minW, Math.min(maxW, Math.round(startW + ev.clientX - startX)));
+        applyColW(head.closest('.bm-pane') || document.querySelector('.bm-table'), view);
         head._placeSplits(); // 两条分隔线都跟着栅格走，不残留旧位置
       };
       const up = () => {
@@ -79,8 +101,8 @@ function attachColSplit(head) {
       document.addEventListener('mouseup', up);
     });
     h.addEventListener('dblclick', () => {
-      colW[key] = null;
-      applyColW();
+      colW[view][key] = null;
+      applyColW(head.closest('.bm-pane') || document.querySelector('.bm-table'), view);
       chrome.storage.local.set({ 'bm.colW': colW });
       requestAnimationFrame(() => head._placeSplits());
     });
@@ -93,6 +115,7 @@ function attachColSplit(head) {
 }
 window.addEventListener('resize', () => {
   for (const head of splitHeads) if (head.isConnected) head._placeSplits();
+  compensateScrollbar();
 });
 let activePane = 'L';
 const newPane = () => ({
@@ -596,6 +619,7 @@ function render() {
     for (const row of st.items) rows.append(renderRow(row));
   }
   renderBulk();
+  requestAnimationFrame(compensateScrollbar); // 表头补滚动条宽度，逐列对齐
 }
 
 /** 双窗里的一栏：头部（来源/目标 + 面包屑）+ 可滚动行区 */
@@ -637,7 +661,8 @@ function buildPane(paneKey) {
     c3.textContent = '目录';
     cols.append(c0, c1, c2, c3);
     el.append(cols);
-    attachColSplit(cols);
+    applyColW(el, paneKey); // pane 每次渲染重建，列宽变量重打
+    attachColSplit(cols, paneKey);
   }
   el.append(rowsEl);
   return el;
@@ -686,6 +711,8 @@ function buildRail() {
       document.removeEventListener('mousemove', move);
       document.removeEventListener('mouseup', up);
       chrome.storage.local.set({ 'bm.railFrac': railFrac });
+      for (const head of splitHeads) if (head.isConnected) head._placeSplits();
+      compensateScrollbar();
     };
     document.addEventListener('mousemove', move);
     document.addEventListener('mouseup', up);
@@ -2035,10 +2062,19 @@ export async function init() {
     const o = await chrome.storage.local.get(['bm.dirOpen', 'bm.dirOpen.L', 'bm.dirOpen.R', 'bm.dual', 'bm.paneFolder', 'bm.railFrac']);
     if (o && o['bm.railFrac']) railFrac = Math.min(0.85, Math.max(0.15, Number(o['bm.railFrac']) || 0.5));
     const saved = (o && o['bm.colW']) || {};
-    colW = { t: Number(saved.t) || null, g: Number(saved.g) || null };
-    applyColW();
+    if (saved && (saved.t != null || saved.g != null) && !saved.flat) {
+      // 旧版全局列宽：归给平铺视图，双窗两栏从默认开始
+      colW = { flat: { t: Number(saved.t) || null, g: Number(saved.g) || null }, L: { t: null, g: null }, R: { t: null, g: null } };
+    } else {
+      colW = {
+        flat: { t: Number(saved.flat && saved.flat.t) || null, g: Number(saved.flat && saved.flat.g) || null },
+        L: { t: Number(saved.L && saved.L.t) || null, g: Number(saved.L && saved.L.g) || null },
+        R: { t: Number(saved.R && saved.R.t) || null, g: Number(saved.R && saved.R.g) || null },
+      };
+    }
+    applyColW(document.querySelector('.bm-table'), 'flat');
     const outerHead = document.querySelector('.bm-table > .bm-head');
-    if (outerHead && !outerHead._placeSplits) attachColSplit(outerHead);
+    if (outerHead && !outerHead._placeSplits) attachColSplit(outerHead, 'flat');
     dual = !!(o && o['bm.dual']);
     const btn = $('#bmDual');
     if (btn) btn.classList.toggle('on', dual);
