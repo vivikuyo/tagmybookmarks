@@ -1159,6 +1159,18 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(tg.includes("undoMore.addEventListener('click'"), 'T121e 点击切换展开状态并重渲染');
 }
 
+// T122：标签墙每个 chip 常驻「重命名 / 删除」，且不触发外层点击
+{
+  const tg = readFileSync(new URL('../space/tags.js', import.meta.url), 'utf8');
+  ok(tg.includes('function chipActions(t)'), 'T122a chip 操作组构造器');
+  ok(tg.includes("renameBtn.textContent = '重命名'") && tg.includes("purgeBtn.textContent = '删除'"), 'T122b 两个动作常驻（不靠 hover）');
+  const usesStop = (tg.match(/e\.stopPropagation\(\);/g) || []).length >= 2
+    && tg.includes('doReplace([t.tag])') && tg.includes('doPurge([t.tag])');
+  ok(usesStop, 'T122c 点击动作不透传到 chip，避免同时触发查询');
+  ok(tg.includes("chip.append(ck, dot, name, n, chipActions(t));"), 'T122d chip 结构：勾选 + 颜色点 + 名字 + 计数 + 就地操作');
+  ok(tg.includes("t.count >= 10 ? 'big' : t.count >= 2 ? 'mid' : 'sm'"), 'T122e 字号三档按书签数分级');
+}
+
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
 const emptyCfg = [
   { id: '0', children: [{ id: '1', title: '书签栏', children: [] }] },
@@ -1303,20 +1315,17 @@ ok(spHtml.includes('全选本页</button>\n      <button class="btn ghost" data-
    'T72 「取消选择」紧挨着全选，不再单独推到右边');
 ok(cssSrc.includes('.bm-row.on'), 'T73 书签行选中也有整行高亮');
 
-// 列表面板：两个表格必须共用同一个外框样式
-ok(spHtml.includes('class="table-panel"'), 'T74 标签表也有列表面板外框');
-ok(cssSrc.includes('.table-panel, .bm-table'), 'T75 两个表格的外框来自同一条规则');
+// 标签页主列表已改成「标签墙」：表格整体退场
+ok(spHtml.includes('id="tagWall"') && spHtml.includes('class="tagwall-panel"') && !spHtml.includes('id="tagRows"'),
+   'T74 标签页主列表是标签墙（旧表格已移除）');
+ok(!cssSrc.includes('.tagtable'), 'T75 旧的表格样式已清干净');
 
-// 行内复选框必须和表头同款，否则 UA 默认 margin 会把行往右推
-ok(readFileSync('space/tags.js', 'utf8').includes("ck.className = 'bm-cb'"), 'T76 标签行内复选框与表头同款');
+// chip 内部件与兜底样式
+ok(readFileSync('space/tags.js', 'utf8').includes("ck.className = 'bm-cb chip-ck'"), 'T76 chip 内复选框与表头同款');
 ok(readFileSync('space/bookmarks.js', 'utf8').includes("cb.className = 'bm-cb'"), 'T77 书签行内复选框与表头同款');
-
-// 首列单元格必须挂 .ck，否则 td 的 10px 内边距会把行内复选框推右
-ok(readFileSync('space/tags.js', 'utf8').includes("tdCk.className = 'ck'"), 'T78 标签首列单元格带 ck 类');
-ok(cssSrc.includes('.tagtable input[type="checkbox"]'), 'T79 表格复选框有兜底样式');
-
-// 首列复选框离面板左边 10px（与书签表一致），总宽 30px，所以第 2 列从 40px 起
-ok(cssSrc.includes('padding: 8px 6px 8px 10px'), 'T80 标签表首列与书签表同边距（10px）');
+ok(cssSrc.includes('.chip .chip-acts button.danger-text'), 'T78 chip 内危险操作有独立配色');
+ok(cssSrc.includes('.chip input[type="checkbox"]'), 'T79 标签 chip 复选框有兜底样式');
+ok(cssSrc.includes('.chip .chip-name') && cssSrc.includes('max-width: 220px'), 'T80 长标签名省略号截断，不撑破 chip');
 
 // ---------------------------------------------------------------- 汇总
 

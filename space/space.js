@@ -279,7 +279,7 @@ async function handleHash() {
 
 async function boot() {
   bind();
-  if (document.querySelector('#tagRows')) initTags();
+  if (document.querySelector('#tagWall')) initTags();
   if (document.querySelector('#bmRows')) await initBookmarks();
   try {
     await loadState();

@@ -74,94 +74,89 @@ function matches(tag, count) {
   return true;
 }
 
+// 图标：标签墙每个 chip 内就地带「重命名 / 删除」，不用把鼠标挪到右侧操作列
+function chipActions(t) {
+  const acts = document.createElement('span');
+  acts.className = 'chip-acts';
+  const renameBtn = document.createElement('button');
+  renameBtn.type = 'button';
+  renameBtn.textContent = '重命名';
+  renameBtn.title = '把这个标签改名（所有书签标题里一起改）';
+  renameBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    doReplace([t.tag]);
+  });
+  const purgeBtn = document.createElement('button');
+  purgeBtn.type = 'button';
+  purgeBtn.className = 'danger-text';
+  purgeBtn.textContent = '删除';
+  purgeBtn.title = '把这个标签从所有书签标题里摘掉';
+  purgeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    doPurge([t.tag]);
+  });
+  acts.append(renameBtn, purgeBtn);
+  return acts;
+}
+
+/** 标签墙：字号按书签数分三档（≥10 大、2-9 中、1 小），chip 内就地放勾选框/颜色点/名字/计数/重命名/删除 */
 export function render() {
-  const rows = $('#tagRows');
-  if (!rows) return;
-  rows.textContent = '';
+  const wall = $('#tagWall');
+  if (!wall) return;
+  wall.textContent = '';
 
-  const max = state.tags.reduce((m, t) => Math.max(m, t.count), 1);
   const list = state.tags.filter((t) => matches(t.tag, t.count));
-
   $('#tagSummary').textContent = `${state.tags.length} 个标签 · 显示 ${list.length} 个 · 已选 ${selected.size} 个`;
 
   for (const t of list) {
-    const tr = document.createElement('tr');
-    if (selected.has(t.tag)) tr.classList.add('on');
+    const chip = document.createElement('div');
+    chip.className = `chip ${t.count >= 10 ? 'big' : t.count >= 2 ? 'mid' : 'sm'}`;
+    if (selected.has(t.tag)) chip.classList.add('on');
+    chip.title = `${t.tag}：${t.count} 条书签`;
 
-    const tdCk = document.createElement('td');
-    tdCk.className = 'ck';
     const ck = document.createElement('input');
     ck.type = 'checkbox';
-    ck.className = 'bm-cb';
+    ck.className = 'bm-cb chip-ck';
     ck.checked = selected.has(t.tag);
+    ck.title = '勾选后可用上方批量操作（重命名 / 合并到 / 删除标签）';
     ck.addEventListener('change', () => {
       if (ck.checked) selected.add(t.tag);
       else selected.delete(t.tag);
-      tr.classList.toggle('on', ck.checked);
+      chip.classList.toggle('on', ck.checked);
       refreshSelectionMeta();
     });
-    tdCk.append(ck);
 
-    const tdName = document.createElement('td');
-    const name = document.createElement('button');
-    name.className = 'taglink';
-    name.textContent = t.tag;
-    name.title = '查看这个标签下的书签';
-    name.addEventListener('click', () => openDrawer(t.tag));
-    tdName.append(name);
-
-    const tdCount = document.createElement('td');
-    tdCount.className = 'num';
-    tdCount.textContent = String(t.count);
-
-    const tdBar = document.createElement('td');
-    tdBar.className = 'bar';
-    const track = document.createElement('div');
-    track.className = 'mini-track';
-    const fill = document.createElement('div');
-    fill.className = 'mini-fill';
-    fill.style.width = Math.max(2, Math.round((t.count / max) * 100)) + '%';
-    fill.style.background = colorFor(t.tag, state.colors);
-    track.append(fill);
-    tdBar.append(track);
-
-    const tdColor = document.createElement('td');
-    tdColor.className = 'clr';
+    // 颜色点：点开调色板（原表格里的「颜色」列）
     const dot = document.createElement('button');
+    dot.type = 'button';
     dot.className = 'dot';
     dot.style.background = colorFor(t.tag, state.colors);
-    dot.title = isExplicitColor(t.tag, state.colors) ? '已手动设色' : '按标签名取色';
+    dot.title = isExplicitColor(t.tag, state.colors) ? '已手动设色（点开改色）' : '按标签名取色（点开可改色）';
     dot.addEventListener('click', (e) => {
       e.stopPropagation();
       openPalette(t.tag, dot);
     });
-    tdColor.append(dot);
 
-    const tdOps = document.createElement('td');
-    tdOps.className = 'ops';
-    const renameBtn = document.createElement('button');
-    renameBtn.className = 'btn ghost small';
-    renameBtn.textContent = '重命名';
-    renameBtn.addEventListener('click', () => doReplace([t.tag]));
-    const purgeBtn = document.createElement('button');
-    purgeBtn.className = 'btn ghost small danger-text';
-    purgeBtn.textContent = '删除';
-    purgeBtn.addEventListener('click', () => doPurge([t.tag]));
-    tdOps.append(renameBtn, purgeBtn);
+    const name = document.createElement('button');
+    name.type = 'button';
+    name.className = 'chip-name';
+    name.textContent = t.tag;
+    name.title = '查看这个标签下的书签';
+    name.addEventListener('click', () => openDrawer(t.tag));
 
-    tr.append(tdCk, tdName, tdCount, tdBar, tdColor, tdOps);
-    tr.addEventListener('mouseenter', () => (tr.dataset.hover = '1'));
-    rows.append(tr);
+    const n = document.createElement('span');
+    n.className = 'chip-n';
+    n.textContent = String(t.count);
+
+    chip.append(ck, dot, name, n, chipActions(t));
+    wall.append(chip);
   }
 
   if (!list.length) {
-    const tr = document.createElement('tr');
-    const td = document.createElement('td');
-    td.colSpan = 6;
-    td.className = 'empty';
-    td.textContent = state.tags.length ? '没有符合筛选条件的标签' : '还没有任何标签。去侧边栏给书签打几个标签吧。';
-    tr.append(td);
-    rows.append(tr);
+    const p = document.createElement('p');
+    p.className = 'empty chipwall-empty';
+    p.textContent = state.tags.length ? '没有符合筛选条件的标签' : '还没有任何标签。去侧边栏给书签打几个标签吧。';
+    wall.append(p);
   }
 
   updateBulkBar();
@@ -417,7 +412,8 @@ async function runOp(msg, hint) {
 
 function setBusyUI(on) {
   document.querySelectorAll('[data-bulk]').forEach((b) => (b.disabled = on));
-  $('#tagRows').classList.toggle('busy', on);
+  const wall = $('#tagWall');
+  if (wall) wall.classList.toggle('busy', on);
 }
 
 function startPolling() {
