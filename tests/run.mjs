@@ -801,7 +801,14 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(head.includes('id="bmCrumb"') && !head.includes('bmUpBtn'), 'T95a 面包屑内嵌表头（返回上级已删）');
   ok(!/<div id="bmCrumb"/.test(sp), 'T95b 顶部独立面包屑行已移除');
   const seps = [...sp.matchAll(/bulk-sep/g)].map((m) => m.index);
-  ok(seps.length >= 2 && seps[seps.length - 1] > sp.indexOf('bmRemove') && seps[seps.length - 1] < sp.indexOf('bmNewFolder'), 'T95c 新建文件夹左侧分隔符');
+  // 操作带新分区：视图切换 | 打标签与目录操作 | 选择与剪贴板，两处分隔符夹住中间组
+  const iTags = sp.indexOf('id="bmTags"');
+  const iSort = sp.indexOf('id="bmSort"');
+  const iDual = sp.indexOf('id="bmDual"');
+  const iAllPage = sp.indexOf('id="bmAllPage"');
+  const sepBetween = (a, b) => seps.some((i) => i > a && i < b);
+  ok(sepBetween(iSort, iTags), 'T95c 标签输入组左侧分隔符（视图切换组之后）');
+  ok(sepBetween(iDual, iAllPage), 'T95c2 选择与剪贴板组左侧分隔符（双窗之后）');
   ok(bm.includes('const isCur = dirIsOpen(pane, node.id)'), 'T95d 橙色=展开状态（手动+自动都算，按窗格）');
   ok(css.includes('.bm-folder-row.cur') && css.includes('#f59e0b'), 'T95e 展开行橙色样式');
   ok(css.includes('.bm-crumb-head'), 'T95f 表头内嵌面包屑样式');
@@ -1114,6 +1121,20 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(bm.includes('const ids = selected.size ? [...selected] : [fallbackId];'), 'T118b 有勾选走勾选集，否则只右键的这一项');
   ok(bm.includes("ctxClip('cut', node.id)") && bm.includes("ctxClip('copy', node.id)"), 'T118c 文件夹右键同样走 ctxClip');
   ok(bm.includes('const { bmIds, dirIds } = splitSel(new Set(ids));'), 'T118d 书签/文件夹分开归类进剪贴板');
+}
+
+// T119：操作带三段分区（视图切换 | 打标签与目录操作 | 选择与剪贴板），中间组两侧有分隔符
+{
+  const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  const ids = ['bmTextSearch', 'bmSort', 'bmTags', 'bmAdd', 'bmRemove', 'bmNewFolder', 'bmCollapse', 'bmDual',
+    'bmAllPage', 'bmAllMatch', 'bmClearSel', 'bmCopy', 'bmCut', 'bmPaste', 'bmDelete'];
+  const pos = ids.map((id) => sp.indexOf(`id="${id}"`));
+  ok(pos.every((v, i) => v > 0 && (i === 0 || v > pos[i - 1])), 'T119a 操作带顺序：搜索/切换 → 标签与目录 → 选择与剪贴板');
+  const seps = [...sp.matchAll(/bulk-sep/g)].map((m) => m.index);
+  const iTags = sp.indexOf('id="bmTags"');
+  const iAllPage = sp.indexOf('id="bmAllPage"');
+  ok(seps.some((i) => i < iTags && i > sp.indexOf('id="bmSort"')) && seps.some((i) => i > sp.indexOf('id="bmDual"') && i < iAllPage),
+    'T119b 中间组左右两侧各一处分隔符');
 }
 
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
