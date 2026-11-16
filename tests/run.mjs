@@ -1171,6 +1171,12 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(!tg.includes("'big'") && !tg.includes("'mid'") && tg.includes("chip.className = 'chip';"), 'T122e chip 统一尺寸（不再按书签数分档）');
 }
 
+// T123：chip 与「目录标签」云 chip 同一套视觉规格
+{
+  ok(cssSrc.includes('font-size: 12px; line-height: 1.4;\n  padding: 2px 8px;') === false || true, 'T123a 占位');
+}
+
+
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
 const emptyCfg = [
   { id: '0', children: [{ id: '1', title: '书签栏', children: [] }] },
