@@ -1090,7 +1090,7 @@ function renderRow(row, pane, depth = 0) {
   main.className = 'bm-main';
   const t = document.createElement('a');
   t.className = 'bm-title';
-  if (depth > 0) main.style.paddingLeft = `${depth * 12}px`; // 缩进放在整个「标题+网址」格：两行左缘对齐，级距 12px
+  main.style.paddingLeft = `${10 + depth * 12}px`; // 10=格子基础左内距（与表头列名一致），缩进按层级叠加：两行左缘对齐
   t.href = '#';
   t.textContent = row.title || row.url;
   t.title = row.title || row.url;

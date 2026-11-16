@@ -554,10 +554,12 @@ textarea:focus { border-color: var(--accent); }
   cursor: col-resize; z-index: 5;
 }
 .bm-colsplit::after {
-  content: ''; position: absolute; top: 5px; bottom: 5px; left: 6px; width: 1px;
-  background: var(--line);
+  content: ''; position: absolute; top: 4px; bottom: 4px; left: 5px; width: 2px;
+  background: var(--line); border-radius: 1px;
 }
-.bm-colsplit:hover::after, .bm-colsplit.drag::after { background: var(--accent); width: 2px; }
+.bm-colsplit:hover::after, .bm-colsplit.drag::after { background: var(--accent); width: 3px; }
+/* 分隔线不与右侧列名贴脸：表头与行的第 2 列起统一左内距（两者同步，逐列仍对齐） */
+.bm-head > span + span, .bm-row > :nth-child(n + 2) { padding-left: 10px; }
 .bm-rows { max-height: 62vh; overflow-y: auto; }
 
 /* ---------------------------------------------------------------- 双窗模式 */

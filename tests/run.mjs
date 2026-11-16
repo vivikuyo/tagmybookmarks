@@ -1006,8 +1006,8 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
   ok(bm.includes('box.className = \'bm-dirrows\'; // 不再整盒缩进') || bm.includes('不再整盒缩进'), 'T108a 树书签行不再整盒缩进（缩进放标题格内）');
-  ok(bm.includes('function renderRow(row, pane, depth = 0)') && bm.includes('main.style.paddingLeft = `${depth * 12}px`'), 'T108b 深度缩进在「标题+网址」整格内（两行左缘对齐），行栅格与表头同轨');
-  ok(css.includes('background: var(--line);') && css.includes('.bm-colsplit:hover::after, .bm-colsplit.drag::after { background: var(--accent); width: 2px; }'), 'T108c 分隔线默认淡线常显，悬停/拖动橙色加粗');
+  ok(bm.includes('function renderRow(row, pane, depth = 0)') && bm.includes('main.style.paddingLeft = `${10 + depth * 12}px`'), 'T108b 深度缩进在「标题+网址」整格内（两行左缘对齐），行栅格与表头同轨');
+  ok(css.includes('background: var(--line);') && css.includes('.bm-colsplit:hover::after, .bm-colsplit.drag::after { background: var(--accent); width: 3px; }'), 'T108c 分隔线默认常显，悬停/拖动橙色加粗');
   ok(bm.includes('const maxW = Math.max(minW, avail - 30 - otherNow - (noPath ? 120 : 60) - 24);'), 'T108d 列宽拖拽有上限（按另一列实际冻结宽算），目录列不被挤出可视区');
 }
 
@@ -1070,6 +1070,14 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(bm.includes("const view = head.dataset.colview || 'flat'"), 'T114c 分隔线运行时读视图键（切换后写对的那份）');
   ok(bm.includes('if (!noPathMode) {'), 'T114d 树模式不冻结标签列为像素宽');
   ok(bm.includes("tree: { t: Number(saved.tree && saved.tree.t) || null"), 'T114e tree 视图独立持久化');
+}
+
+// T115：分隔线加粗 + 与右侧列名留空隙（表头与行同步左内距，不破坏逐列对齐）
+{
+  const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(css.includes('left: 5px; width: 2px;'), 'T115a 分隔线默认 2px 加粗');
+  ok(css.includes('width: 3px; }') && css.includes('var(--accent); width: 3px'), 'T115b 悬停/拖动 3px 橙色');
+  ok(css.includes('.bm-head > span + span, .bm-row > :nth-child(n + 2) { padding-left: 10px; }'), 'T115c 表头与第 2 列起统一 10px 左内距（分隔线不贴列名）');
 }
 
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
