@@ -25,6 +25,7 @@ const PANE_LIST = ['L', 'R'];
 let dual = false; // 双窗开关（存本机 bm.dual）
 let railFrac = 0.5; // 双窗左右宽度比（0.15–0.85，存本机 bm.railFrac）
 let colW = { t: null, g: null }; // 表头列宽（px，存本机 bm.colW）：t=标题/网址列，g=标签列，目录列吃剩余
+const splitHeads = new Set(); // 挂了分隔线的表头，窗口缩放时统一重定位
 
 function applyColW() {
   const table = document.querySelector('.bm-table');
@@ -39,6 +40,7 @@ function applyColW() {
 function attachColSplit(head) {
   const kids = [...head.children].filter((el) => el.tagName === 'SPAN');
   if (kids.length < 4) return;
+  splitHeads.add(head);
   const places = [];
   const mk = (targetIdx, key, minW) => {
     const h = document.createElement('div');
@@ -55,20 +57,23 @@ function attachColSplit(head) {
       const startW = kids[targetIdx - 1].getBoundingClientRect().width; // 分隔线左侧列的当前宽
       h.classList.add('drag');
       const move = (ev) => {
+        // 冻结还没拖过的弹性列成当前像素宽：否则它按 fr 重新分配，拖一条线另一列会跟着缩放（错位/乱跑的根源）
+        if (key === 'g' && !colW.t) colW.t = Math.round(kids[1].getBoundingClientRect().width);
+        if (key === 't' && !colW.g) colW.g = Math.round(kids[2].getBoundingClientRect().width);
         // 上限：给其他列和目录列(≥130px)留足空间，拖到头也不把目录挤出可视区
         const content = head.clientWidth - 20; // 减去表头左右内边距
         const otherMin = key === 't' ? 120 : 180;
         const maxW = Math.max(minW, content - 30 - otherMin - 130 - 24);
         colW[key] = Math.max(minW, Math.min(maxW, Math.round(startW + ev.clientX - startX)));
         applyColW();
-        place();
+        head._placeSplits(); // 两条分隔线都跟着栅格走，不残留旧位置
       };
       const up = () => {
         document.removeEventListener('mousemove', move);
         document.removeEventListener('mouseup', up);
         h.classList.remove('drag');
         chrome.storage.local.set({ 'bm.colW': colW });
-        place();
+        head._placeSplits();
       };
       document.addEventListener('mousemove', move);
       document.addEventListener('mouseup', up);
@@ -77,7 +82,7 @@ function attachColSplit(head) {
       colW[key] = null;
       applyColW();
       chrome.storage.local.set({ 'bm.colW': colW });
-      requestAnimationFrame(place);
+      requestAnimationFrame(() => head._placeSplits());
     });
     head.append(h);
     requestAnimationFrame(place);
@@ -86,6 +91,9 @@ function attachColSplit(head) {
   mk(3, 'g', 120); // 标签 | 目录
   head._placeSplits = () => places.forEach((f) => f());
 }
+window.addEventListener('resize', () => {
+  for (const head of splitHeads) if (head.isConnected) head._placeSplits();
+});
 let activePane = 'L';
 const newPane = () => ({
   folderId: '', // 本栏下钻的目录

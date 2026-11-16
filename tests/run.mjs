@@ -1011,6 +1011,15 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(bm.includes('const maxW = Math.max(minW, content - 30 - otherMin - 130 - 24);'), 'T108d 列宽拖拽有上限，目录列不被挤出可视区');
 }
 
+// T109：分隔线稳定性（冻结弹性列 / 双线重定位 / 窗口缩放）
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  ok(bm.includes("if (key === 'g' && !colW.t) colW.t = Math.round(kids[1].getBoundingClientRect().width);"), 'T109a 拖拽时冻结未拖的弹性列成像素宽（防 fr 重分配挤动）');
+  ok(bm.includes('head._placeSplits(); // 两条分隔线都跟着栅格走'), 'T109b 拖动中两条分隔线实时重定位');
+  ok(bm.includes("window.addEventListener('resize'") && bm.includes('for (const head of splitHeads)'), 'T109c 窗口缩放后分隔线重定位');
+  ok(bm.includes('requestAnimationFrame(() => head._placeSplits())'), 'T109d 双击恢复默认后双线重定位');
+}
+
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
 const emptyCfg = [
   { id: '0', children: [{ id: '1', title: '书签栏', children: [] }] },
