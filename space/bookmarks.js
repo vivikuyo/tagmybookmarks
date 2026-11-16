@@ -454,6 +454,18 @@ async function pasteInto(targetId, targetName) {
   }
 }
 
+/** 右键复制/剪切：勾选框有内容就操作勾选集（与操作带同口径），没勾选就只操作右键的这一个 */
+function ctxClip(mode, fallbackId) {
+  const ids = selected.size ? [...selected] : [fallbackId];
+  const { bmIds, dirIds } = splitSel(new Set(ids));
+  clip = { mode, bookmarks: bmIds, folders: dirIds };
+  renderBulk();
+  const parts = [];
+  if (bmIds.length) parts.push(`${bmIds.length} 条书签`);
+  if (dirIds.length) parts.push(`${dirIds.length} 个文件夹`);
+  toast(`已${mode === 'cut' ? '剪切' : '复制'} ${parts.join('、')}——去目标目录点「粘贴」`);
+}
+
 /** 书签行右键菜单：公开项（打开/复制网址/重命名）+ 按目录模式额外的剪切/复制（进剪贴板）+ 删除 */
 function bookmarkCtxItems(line, row, withClip) {
   const items = [];
@@ -471,22 +483,8 @@ function bookmarkCtxItems(line, row, withClip) {
   if (withClip) {
     items.push(
       '-',
-      {
-        label: '剪切',
-        run: () => {
-          clip = { mode: 'cut', bookmarks: [row.id], folders: [] };
-          renderBulk();
-          toast('已剪切 1 个书签——去目标目录点「粘贴」');
-        },
-      },
-      {
-        label: '复制',
-        run: () => {
-          clip = { mode: 'copy', bookmarks: [row.id], folders: [] };
-          renderBulk();
-          toast('已复制 1 个书签——去目标目录点「粘贴」');
-        },
-      },
+      { label: '剪切', run: () => ctxClip('cut', row.id) },
+      { label: '复制', run: () => ctxClip('copy', row.id) },
     );
   }
   items.push('-', { label: '删除（进回收站）', danger: true, run: () => deleteNodes([row.id]) });
@@ -984,22 +982,8 @@ function renderFolderRow(node, open, isRoot, pane) {
       { label: '重命名', run: () => renameFolder(div, node) },
       { label: '新建子文件夹', run: () => createSubFolder(node, pane) },
       '-',
-      {
-        label: '剪切',
-        run: () => {
-          clip = { mode: 'cut', bookmarks: [], folders: [node.id] };
-          renderBulk();
-          toast('已剪切 1 个文件夹——去目标目录点「粘贴」');
-        },
-      },
-      {
-        label: '复制',
-        run: () => {
-          clip = { mode: 'copy', bookmarks: [], folders: [node.id] };
-          renderBulk();
-          toast('已复制 1 个文件夹——去目标目录点「粘贴」');
-        },
-      },
+      { label: '剪切', run: () => ctxClip('cut', node.id) },
+      { label: '复制', run: () => ctxClip('copy', node.id) },
       '-',
       { label: '删除（进回收站）', danger: true, run: () => deleteNodes([node.id]) },
     );

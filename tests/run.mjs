@@ -1087,8 +1087,8 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
   ok(bm.includes('function bookmarkCtxItems(line, row, withClip)') && bm.includes("label: '复制网址'"), 'T116a 书签菜单含「复制网址」');
   ok(bm.includes("label: '重命名（标签保留）'") && bm.includes("label: '删除（进回收站）'"), 'T116b 菜单含重命名与删除');
-  ok(bm.includes("from 'cut'") || bm.includes("mode: 'cut', bookmarks: [row.id]"), 'T116c 目录模式菜单含剪切');
-  ok(bm.includes("mode: 'copy', bookmarks: [row.id]"), 'T116d 目录模式菜单含复制');
+  ok(bm.includes("ctxClip('cut', row.id)"), 'T116c 目录模式菜单含剪切（勾选集优先）');
+  ok(bm.includes("ctxClip('copy', row.id)"), 'T116d 目录模式菜单含复制（勾选集优先）');
   ok(bm.includes('bookmarkCtxItems(line, row, !!pane)'), 'T116e 平铺模式也挂右键菜单（无剪切/复制）');
   ok(bm.includes('async function copyUrl') && bm.includes("document.execCommand('copy')"), 'T116f 复制网址带 textarea 回退');
   ok(pn.includes('function openCtx(x, y, items)') && pn.includes("label: '复制网址'"), 'T116g 侧边栏右键含复制网址');
@@ -1105,6 +1105,15 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(bm.includes('targetPath.startsWith(`${p}/`)'), 'T117d 防呆：剪切的文件夹不能粘进自己/子树');
   ok(bm.includes('已粘贴到「${targetName}」'), 'T117e 粘贴结果 toast 标出目标目录');
   ok(bm.includes("if (clip.mode === 'cut') clip = null; // 剪切是一次性的"), 'T117f 剪切粘贴后清空剪贴板');
+}
+
+// T118：右键复制/剪切的作用域（无勾选=右键这一项，有勾选=勾选集）
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  ok(bm.includes('function ctxClip(mode, fallbackId)'), 'T118a ctxClip 统一入口');
+  ok(bm.includes('const ids = selected.size ? [...selected] : [fallbackId];'), 'T118b 有勾选走勾选集，否则只右键的这一项');
+  ok(bm.includes("ctxClip('cut', node.id)") && bm.includes("ctxClip('copy', node.id)"), 'T118c 文件夹右键同样走 ctxClip');
+  ok(bm.includes('const { bmIds, dirIds } = splitSel(new Set(ids));'), 'T118d 书签/文件夹分开归类进剪贴板');
 }
 
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
