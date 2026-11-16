@@ -1,0 +1,1104 @@
+// 单元测试：node tests/run.mjs
+// 只测纯逻辑（title / index / query / config），不碰 chrome API。
+
+import {
+  parseTitle,
+  buildTitle,
+  normalizeTag,
+  normalizeTags,
+  tagKey,
+  serializeConfig,
+  parseConfig,
+  setCI,
+  lookupCI,
+  splitTagInput,
+} from '../lib/title.js';
+import { buildIndex, canonicalUrl, globalTagCounts, sortDirTagsByTree, dirRelatedKeys, resolveDirEntries, pruneNestedPaths, collectFolderPaths } from '../lib/index.js';
+import {
+  parse as parseQuery,
+  evaluate,
+  relatedTags,
+  collectQueryTags,
+  insertTag,
+  removeTag,
+} from '../lib/query.js';
+import {
+  categoryOf,
+  configFileTitle,
+  DEFAULT_PREFS,
+  sanitizeConfFor,
+  canonicalOrder,
+  pickCanonical,
+  mergeConfs,
+  joinList,
+  splitList,
+} from '../lib/config.js';
+import { colorFor, resolveColorValue, hashIndex } from '../lib/palette.js';
+import { planReplaceTags, summarizePlan, validateTagTarget } from '../lib/ops.js';
+import { scan as diagScan, planFix, issueMeta } from '../lib/diagnose.js';
+import { readFileSync } from 'node:fs';
+
+let pass = 0;
+const failures = [];
+
+function eq(actual, expected, label) {
+  const a = JSON.stringify(actual);
+  const b = JSON.stringify(expected);
+  if (a === b) {
+    pass++;
+  } else {
+    failures.push(`${label}\n  期望 ${b}\n  实际 ${a}`);
+  }
+}
+
+function ok(cond, label) {
+  if (cond) pass++;
+  else failures.push(label);
+}
+
+function setEq(set, expected, label) {
+  eq([...set].sort(), [...expected].sort(), label);
+}
+
+// ------------------------------------------------------------ 1. 标签校验
+
+eq(normalizeTag('前端'), { ok: true, tag: '前端' }, 'T1 普通标签');
+eq(normalizeTag('  设计   规范  '), { ok: true, tag: '设计 规范' }, 'T2 空白折叠');
+eq(normalizeTag('C++').ok, true, 'T3 允许 +');
+eq(normalizeTag('C#').ok, true, 'T4 允许 #');
+eq(normalizeTag('').ok, false, 'T5 空名拒绝');
+eq(normalizeTag('a[b').ok, false, 'T6 拒绝 [');
+eq(normalizeTag('a]b').ok, false, 'T7 拒绝 ]');
+eq(normalizeTag('a;b').ok, false, 'T8 拒绝 ;');
+eq(normalizeTag('a=b').ok, false, 'T9 拒绝 =');
+eq(normalizeTag('a,b').ok, false, 'T10 拒绝 ,');
+eq(tagKey('JS'), 'js', 'T11 小写折叠');
+eq(normalizeTags(['b', 'B', 'a']), ['a', 'b'], 'T12 大小写去重保留首次写法');
+eq(normalizeTags(['Z', 'a', '中']), ['Z', 'a', '中'], 'T13 码点序（大写在小写前）');
+
+// ------------------------------------------------------------ 2. 标题往返
+
+eq(parseTitle('普通标题'), { text: '普通标题', tags: [], conf: null }, 'P1 无标签');
+eq(
+  parseTitle('普通标题 [#a][#b]'),
+  { text: '普通标题', tags: ['a', 'b'], conf: null },
+  'P2 标签组'
+);
+eq(
+  parseTitle('标题 [#a] [**c:a=3]'),
+  { text: '标题', tags: ['a'], conf: { v: 1, colors: { a: '3' }, aliases: {}, flags: {}, extras: {}, errors: [] } },
+  'P3 标签 + 配置'
+);
+eq(parseTitle('[#a]').text, '', 'P4 空干净标题');
+eq(parseTitle('a [#x] 中间还有字').tags, [], 'P5 标签不在末尾就不算标签');
+eq(parseTitle('a [**c:x=1] 尾巴').conf, null, 'P6 配置不在末尾就不算配置');
+
+eq(buildTitle('标题', ['b', 'a'], null), '标题 [#a][#b]', 'B1 排序');
+eq(buildTitle('', ['a'], null), '[#a]', 'B2 空标题');
+eq(buildTitle('标题', [], null), '标题', 'B3 无标签返回干净标题');
+eq(buildTitle('标题', ['a'], { v: 1, colors: { a: '3' }, aliases: {}, flags: {}, extras: {} }), '标题 [#a] [**v:1;c:a=3]', 'B4 带配置');
+
+// 往返不变量
+const cases = [
+  ['标题', ['a'], null],
+  ['带空格的 标题', ['设计 规范', 'C++'], null],
+  ['', [], null],
+  ['只有标签', ['x'], { v: 1, colors: {}, aliases: {}, flags: {}, extras: { bmSort: 'title' } }],
+  ['条目', ['p'], { v: 1, colors: {}, aliases: {}, flags: { p: 1 }, extras: {} }],
+  ['多标签', ['a', 'b', 'c'], { v: 1, colors: { a: '3', b: '#4285f4' }, aliases: { x: 'a' }, flags: {}, extras: {} }],
+];
+for (const [text, tags, conf] of cases) {
+  const built = buildTitle(text, tags, conf);
+  const back = parseTitle(built);
+  eq(
+    { text: back.text, tags: back.tags },
+    { text: text.trim(), tags: normalizeTags(tags) },
+    `往返 ${JSON.stringify(text)}`
+  );
+  // 二次拼接必须完全一致（幂等）
+  eq(buildTitle(back.text, back.tags, back.conf), built, `幂等 ${JSON.stringify(text)}`);
+}
+
+// 配置序列化顺序稳定
+const c1 = { v: 1, colors: { b: '2', a: '1' }, aliases: {}, flags: {}, extras: {} };
+const c2 = { v: 1, colors: { a: '1', b: '2' }, aliases: {}, flags: {}, extras: {} };
+eq(serializeConfig(c1), serializeConfig(c2), 'S1 颜色按键排序，与插入顺序无关');
+eq(serializeConfig({ v: 1, colors: {}, aliases: {}, flags: {}, extras: {} }), '', 'S2 只有版本号返回空');
+eq(serializeConfig({ v: 1, colors: {}, aliases: {}, flags: {}, extras: { bmSort: 'title' } }), 'v:1;bmSort:title', 'S3 偏好');
+
+eq(parseConfig('v:1;c:a=3,b=#fff').colors, { a: '3', b: '#fff' }, 'S4 解析多色');
+eq(parseConfig('a:x=y').aliases, { x: 'y' }, 'S5 解析别名');
+eq(parseConfig('p:1').flags.p, 1, 'S6 条目级标记');
+eq(parseConfig('坏数据').errors.length, 1, 'S7 无冒号报错');
+
+const dict = {};
+setCI(dict, 'JS', '1');
+setCI(dict, 'js', '2');
+eq(dict, { JS: '2' }, 'S8 大小写不敏感覆盖');
+eq(lookupCI(dict, 'js'), '2', 'S9 大小写不敏感读');
+setCI(dict, 'js', null);
+eq(dict, {}, 'S10 删键');
+
+// ------------------------------------------------------------ 3. URL 归一化
+
+eq(canonicalUrl('https://Example.com/A/'), 'example.com/A', 'U1 去尾斜杠 + host 小写');
+eq(canonicalUrl('https://example.com'), 'example.com', 'U2 根路径');
+eq(canonicalUrl('http://example.com/'), 'example.com', 'U3 http 与 https 同键');
+eq(canonicalUrl('https://example.com:443/x'), 'example.com/x', 'U4 去默认端口');
+eq(canonicalUrl('https://example.com:8443/x'), 'example.com:8443/x', 'U5 保留非默认端口');
+eq(canonicalUrl('https://example.com/x#frag'), 'example.com/x', 'U6 去 fragment');
+eq(canonicalUrl('https://example.com/x?a=1'), 'example.com/x?a=1', 'U7 保留 query');
+
+// ------------------------------------------------------------ 4. 索引
+
+const tree = [
+  {
+    id: '0',
+    title: '',
+    children: [
+      {
+        id: '1',
+        title: '书签栏',
+        children: [
+          { id: '10', parentId: '1', title: 'Vue 官方文档 [#前端][#Vue]', url: 'https://vuejs.org/' },
+          { id: '11', parentId: '1', title: 'React 文档 [#前端][#React]', url: 'https://react.dev/' },
+          { id: '12', parentId: '1', title: '设计系统 [#设计][#前端]', url: 'https://design.example.com/' },
+          { id: '13', parentId: '1', title: '没标签的页面', url: 'https://plain.example.com/' },
+          {
+            id: '14',
+            parentId: '1',
+            title: '重复收藏 [#Vue]',
+            url: 'http://vuejs.org',
+          },
+        ],
+      },
+      {
+        id: '2',
+        title: '其他书签',
+        children: [
+          { id: '20', parentId: '2', title: 'TagSpace 配置·颜色 [**c:Vue=3]', url: 'chrome-extension://abc/space/space.html#cfg=colors' },
+        ],
+      },
+    ],
+  },
+];
+
+const idx = buildIndex(tree, { excludeIds: new Set(['20']) });
+
+eq(idx.counts.nodes, 5, 'I1 计入的节点数');
+eq(idx.counts.excluded, 1, 'I2 配置文件被排除');
+eq(idx.allKeys.size, 4, 'I3 去重后的 URL 数（vuejs.org 两个位置）');
+eq(idx.keyToNodes.get('vuejs.org').length, 2, 'I4 同一 URL 两个位置');
+eq(idx.keyToTags.get('vuejs.org'), ['Vue', '前端'], 'I5 标签并集');
+eq(idx.untaggedKeys.size, 1, 'I6 未打标签集合');
+eq([...idx.untaggedKeys][0], 'plain.example.com', 'I7 未打标签的键');
+eq(idx.tagToKeys.get('vue').size, 1, 'I8 标签到键（去重后仍 1）');
+eq(idx.nodeById.get('10').text, 'Vue 官方文档', 'I9 干净标题');
+eq(idx.nodeById.get('10').path, '书签栏', 'I10 目录路径');
+eq(
+  globalTagCounts(idx).map((t) => t.tag),
+  ['前端', '设计', 'React', 'Vue'],
+  'I11 标签按字母序（中文拼音在前、英文 A–Z 在后），次数只做平手裁决'
+);
+
+// ------------------------------------------------------------ 5. 查询
+
+function run(expr) {
+  const { ast, errors } = parseQuery(expr);
+  const keys = evaluate(ast, idx, {});
+  return { keys, ast, errors };
+}
+
+setEq(run('前端').keys, ['vuejs.org', 'react.dev', 'design.example.com'], 'Q1 单标签');
+setEq(run('前端, Vue').keys, ['vuejs.org'], 'Q2 交集');
+setEq(run('Vue + React').keys, ['vuejs.org', 'react.dev'], 'Q3 并集');
+setEq(run('前端 - Vue').keys, ['react.dev', 'design.example.com'], 'Q4 差集');
+setEq(run('前端 Vue').keys, ['vuejs.org'], 'Q5 隐式 AND');
+setEq(run('(Vue + React), 前端').keys, ['vuejs.org', 'react.dev'], 'Q6 分组');
+setEq(run('?vue').keys, ['vuejs.org'], 'Q7 全文检索（干净标题 + URL）');
+setEq(run('!Vue').keys, ['react.dev', 'design.example.com', 'plain.example.com'], 'Q8 补集包含未打标签');
+setEq(run('必不存在').keys, [], 'Q9 无结果');
+setEq(
+  run('').keys,
+  ['vuejs.org', 'react.dev', 'design.example.com', 'plain.example.com'],
+  'Q10 空表达式求值为全部（由背景层决定是否只显示已标签）'
+);
+ok(run('前端, , Vue').errors.length >= 1, 'Q11 错位逗号有提示');
+setEq(run('前端, , Vue').keys, ['vuejs.org'], 'Q12 容错后仍求值（多余逗号当隐式 AND）');
+setEq(run('未打标签').keys, ['plain.example.com'], 'Q13 虚拟标签');
+setEq(run('(?vue)').keys, ['vuejs.org'], 'Q14 括号里的检索');
+ok(run('(前端').errors.some((e) => e.reason === 'missing-paren'), 'Q15 未闭合括号提示');
+
+// 相关标签：排除查询内标签
+const rel = relatedTags(idx, run('前端').keys, { exclude: collectQueryTags(run('前端').ast) });
+eq(rel.map((r) => r.tag).sort(), ['React', 'Vue', '设计'], 'Q16 相关标签排除查询标签');
+eq(
+  relatedTags(idx, run('前端, Vue').keys).map((r) => r.tag),
+  ['前端', 'Vue'],
+  'Q17 相关标签按结果集统计（不排除时包含查询标签本身；字母序：中文拼音块在前）'
+);
+eq(relatedTags(idx, new Set()).length, 0, 'Q18 空结果无相关标签');
+
+// 表达式拼装
+eq(insertTag('', 'a', 'and'), 'a', 'E1 空表达式加标签');
+eq(insertTag('a', 'b', 'and'), 'a, b', 'E2 AND');
+eq(insertTag('a', 'b', 'or'), 'a + b', 'E3 OR');
+eq(insertTag('a', 'b', 'not'), 'a - b', 'E4 NOT');
+eq(insertTag('', 'C++', 'and'), 'C\\+\\+', 'E5 转义');
+eq(insertTag('a, b', 'a', 'and'), 'b', 'E6 已存在则移除');
+eq(removeTag('a, b, c', 'b'), 'a, c', 'E7 中间移除');
+eq(removeTag('b', 'b'), '', 'E8 唯一项移除');
+
+// ------------------------------------------------------------ 6. 配置识别
+
+eq(
+  categoryOf({ url: 'chrome-extension://abc/space/space.html#cfg=colors', title: '随便改的名字' }),
+  'colors',
+  'C1 靠 URL 识别，改标题不影响'
+);
+eq(categoryOf({ url: 'chrome-extension://abc/space/space.html#cfg=prefs' }), 'prefs', 'C2 偏好');
+eq(
+  categoryOf({ url: 'https://x.test/y', title: 'TagSpace 配置·别名' }),
+  'aliases',
+  'C3 标题兜底'
+);
+eq(categoryOf({ url: 'https://x.test/y', title: '普通书签' }), null, 'C4 普通书签不算配置');
+eq(categoryOf({ url: undefined, title: 'TagSpace 配置·颜色' }), null, 'C5 文件夹不算配置');
+eq(configFileTitle('colors', 'v:1;c:a=3'), 'TagSpace 配置·颜色 [**v:1;c:a=3]', 'C6 拼配置标题');
+eq(configFileTitle('colors', ''), 'TagSpace 配置·颜色', 'C7 空配置无后缀');
+eq(sanitizeConfFor('aliases', { colors: { a: '1' }, aliases: { x: 'a' }, extras: {} }).colors, {}, 'C8 别名文件不透传颜色');
+eq(sanitizeConfFor('prefs', { extras: { bmSort: 'url' } }).extras, { bmSort: 'url' }, 'C9 偏好只留 extras');
+ok(DEFAULT_PREFS.bmSort === 'title', 'C10 默认偏好存在');
+
+// ------------------------------------------------------------ 7. 颜色
+
+eq(resolveColorValue('3'), '#c9a227', 'K1 调色板序号');
+eq(resolveColorValue('#4285f4'), '#4285f4', 'K2 hex');
+eq(resolveColorValue('#abc'), '#aabbcc', 'K3 三位 hex 展开');
+eq(resolveColorValue('99'), null, 'K4 越界序号');
+eq(colorFor('前端', { 前端: '3' }), '#c9a227', 'K5 配置优先');
+ok(/^#[0-9a-f]{6}$/.test(colorFor('随便什么', {})), 'K6 未设色走哈希');
+ok(hashIndex('前端') >= 0 && hashIndex('前端') < 12, 'K7 哈希范围');
+
+// ------------------------------------------------------------ 8. 重复配置文件
+
+const dupA = { id: '300', title: 'TagSpace 配置·颜色 [**v:1;c:前端=3]', url: 'chrome-extension://x/space/space.html#cfg=colors', dateAdded: 1000 };
+const dupB = { id: '301', title: 'TagSpace 配置·颜色 [**v:1;c:前端=5,Chrome=#ff0000]', url: 'chrome-extension://x/space/space.html#cfg=colors', dateAdded: 2000 };
+const dupC = { id: '302', title: 'TagSpace 配置·颜色 [**v:1;c:设计=7]', url: 'chrome-extension://x/space/space.html#cfg=colors', dateAdded: 1000 };
+
+eq(canonicalOrder([dupB, dupA])[0].id, '300', 'R1 老文件优先');
+eq(canonicalOrder([dupA, dupC]).map((n) => n.id), ['300', '302'], 'R2 同 dateAdded 按 id 排');
+eq(pickCanonical([dupB, dupA]).id, '300', 'R3 挑出规范文件');
+eq(pickCanonical([]), null, 'R4 空集合');
+eq(canonicalOrder([dupA, dupB]).map((n) => n.id), canonicalOrder([dupB, dupA]).map((n) => n.id), 'R5 顺序与入参无关（跨设备一致）');
+
+const m1 = mergeConfs('colors', [parseConfig('v:1;c:前端=3'), parseConfig('v:1;c:前端=5,Chrome=#ff0000')]);
+eq(m1.conf.colors, { 前端: '3', Chrome: '#ff0000' }, 'R6 冲突以规范文件为准，其余并集填充');
+eq(m1.conflicts, [{ key: '前端', kept: '3', dropped: '5' }], 'R7 冲突被记录');
+eq(m1.filled, 1, 'R8 填充计数');
+
+const m2 = mergeConfs('colors', [parseConfig('v:1;c:设计=7'), parseConfig('v:1;c:设计=7')]);
+eq(m2.conflicts.length, 0, 'R9 同值不算冲突');
+
+const m3 = mergeConfs('aliases', [parseConfig('v:1'), parseConfig('v:1;a:前端开发=前端;c:前端=3')]);
+eq(m3.conf.aliases, { 前端开发: '前端' }, 'R10 别名文件不混入 c:');
+eq(m3.conf.colors, {}, 'R11 别名合并后颜色为空');
+
+const m4 = mergeConfs('prefs', [parseConfig('v:1;bmSort:title;view:cloud'), parseConfig('v:1;bmSort:url;click:new')]);
+eq(m4.conf.extras, { bmSort: 'title', view: 'cloud', click: 'new' }, 'R12 偏好冲突保留规范值，其余补齐');
+eq(m4.conf.v, 1, 'R13 版本号');
+
+const m5 = mergeConfs('prefs', [parseConfig('v:1;p:1'), parseConfig('v:2;r:1')]);
+eq(m5.conf.v, 2, 'R14 版本取最大');
+eq(m5.conf.flags, { p: 1, r: 1 }, 'R15 布尔标记取或');
+
+eq(mergeConfs('colors', []).sources, 0, 'R16 空输入不炸');
+
+// ------------------------------------------------------------ 9. 批量计划
+
+const p1 = planReplaceTags(idx, ['前端'], '前端开发');
+eq(p1.keys, 3, 'T1 三个标签集合用到「前端」');
+eq(p1.writes.length, 4, 'T2 四个位置要改写（vuejs 两处）');
+eq(p1.writes[0].before, 'Vue 官方文档 [#前端][#Vue]', 'T3 旧标题');
+eq(p1.writes[0].after, 'Vue 官方文档 [#Vue][#前端开发]', 'T4 新标题按码点序重排');
+eq(p1.to, '前端开发', 'T5 目标标签');
+eq(p1.mergedIntoExisting, 0, 'T6 目标原本不存在');
+
+const p2 = planReplaceTags(idx, ['设计'], '');
+eq(p2.writes.length, 1, 'T7 删除标签只改受影响的集合');
+eq(p2.writes[0].after, '设计系统 [#前端]', 'T8 剩下别的标签');
+
+const p3 = planReplaceTags(idx, ['Vue'], '前端');
+eq(p3.mergedIntoExisting, 1, 'T9 目标已存在时算合并');
+eq(p3.writes.length, 2, 'T10 两个位置都写');
+eq(p3.writes[0].after, 'Vue 官方文档 [#前端]', 'T11 去重后只剩一个');
+
+const p4 = planReplaceTags(idx, ['vue'], 'Vue2');
+eq(p4.writes.length, 2, 'T12 源标签大小写不敏感');
+
+const p5 = planReplaceTags(idx, ['前端'], '前端');
+eq(p5.writes.length, 0, 'T13 改成同名不产生写');
+eq(p5.unchangedKeys, 3, 'T14 三个集合被跳过');
+
+const p6 = planReplaceTags(idx, ['不存在的标签'], 'X');
+eq(p6.writes.length, 0, 'T15 没有匹配的标签');
+eq(p6.keys, 0, 'T16 影响集合为 0');
+
+const s1 = summarizePlan(p1);
+eq(s1.nodes, 4, 'T17 预演节点数');
+eq(s1.ms, 32, 'T18 预估耗时（8ms/条）');
+eq(s1.samples.length, 4, 'T19 样例条数');
+
+ok(validateTagTarget('').ok === false, 'T20 空名字不合法');
+ok(validateTagTarget('a;b').ok === false, 'T21 含分号不合法');
+ok(validateTagTarget('a[b').ok === false, 'T22 含方括号不合法');
+eq(validateTagTarget('  前端开发  ').tag, '前端开发', 'T23 去空格后合法');
+ok(validateTagTarget('C++').ok, 'T24 允许加号');
+
+// ------------------------------------------------------------ 9.7 名单编码
+// 文件夹名里的 , ; % 不能把配置串拆坏
+eq(splitList(joinList(['回收站', 'A,B;C', '100%'])).join('|'), '回收站|A,B;C|100%', 'T65 名单往返保留 , ; %');
+eq(joinList(['A,B;C']), 'A%2CB%3BC', 'T66 编码把分隔符换成 %2C / %3B');
+
+// ------------------------------------------------------------ 9.8 目录闭包
+// 单选：同枝全部；先选一级再选下级：只留跟每个已选项都同枝的目录
+const sibTree = [{ id: '0', title: '', children: [
+  { id: '1', title: '书签栏', children: [
+    { id: '11', title: 'A', children: [
+      { id: '111', title: 'B', children: [{ id: '1111', title: 'b', url: 'https://b.test/' }] },
+      { id: '112', title: 'C', children: [{ id: '1121', title: 'c', url: 'https://c.test/' }] },
+    ] },
+    { id: '12', title: 'D', children: [{ id: '121', title: 'd', url: 'https://d.test/' }] },
+  ] },
+  { id: '2', title: '其他书签', children: [] },
+] }];
+const sibIdx = buildIndex(sibTree);
+const relA = dirRelatedKeys(sibIdx, [tagKey('A')]);
+ok(relA.has(tagKey('B')) && relA.has(tagKey('C')), 'T73 单选 A：B 与 C 都算同枝');
+ok(!relA.has(tagKey('D')), 'T74 单选 A：另一枝的 D 不在闭包内');
+
+const relAB = dirRelatedKeys(sibIdx, [tagKey('A'), tagKey('B')]);
+ok(relAB.has(tagKey('A')) && relAB.has(tagKey('B')), 'T75 A+B：两级本身都留着');
+ok(!relAB.has(tagKey('C')), 'T76 A+B：与 B 无关的兄弟分支 C 消失');
+ok(!relAB.has(tagKey('D')), 'T77 A+B：跨枝的 D 也不在');
+
+// 同名子目录不能把两条枝"缝"成同枝：目录关系必须在路径图上算
+const twinTree = [{ id: '0', title: '', children: [
+  { id: '1', title: '书签栏', children: [
+    { id: '11', title: '设计', children: [
+      { id: '111', title: 'blog', children: [{ id: '1111', title: 'b1', url: 'https://b1.test/' }] },
+      { id: '112', title: 'Animate', children: [{ id: '1121', title: 'a1', url: 'https://a1.test/' }] },
+    ] },
+    { id: '12', title: '技巧', children: [
+      { id: '121', title: '网络技巧', children: [
+        { id: '1211', title: 'blog', children: [{ id: '12111', title: 'b2', url: 'https://b2.test/' }] },
+        { id: '1212', title: 'Animate', children: [{ id: '12121', title: 'a2', url: 'https://a2.test/' }] },
+      ] },
+    ] },
+  ] },
+  { id: '2', title: '其他书签', children: [] },
+] }];
+const twinIdx = buildIndex(twinTree);
+const twinRel = dirRelatedKeys(twinIdx, [tagKey('设计'), tagKey('网络技巧')]);
+eq([...twinRel].sort().join('|'), [tagKey('设计'), tagKey('网络技巧')].sort().join('|'),
+   'T81 两条枝各有同名 blog/Animate，也不会被算成同枝');
+ok(!dirRelatedKeys(twinIdx, [tagKey('设计')]).has(tagKey('网络技巧')),
+   'T82 单选 设计 时 网络技巧 不在相关集里');
+
+// ------------------------------------------------------------ 10. 健康检查
+
+const dirty = [
+  {
+    id: '0',
+    children: [
+      {
+        id: '1',
+        title: '书签栏',
+        children: [
+          { id: '30', title: '顺序错 [#前端][#Vue]', url: 'https://a.example/' },
+          { id: '31', title: '重复标签 [#JS][#js]', url: 'https://b.example/' },
+          { id: '32', title: '括号漏了 [#前后端', url: 'https://c.example/' },
+          { id: '33', title: '中间夹标签 [#游离] 后面还有字', url: 'https://d.example/' },
+          { id: '34', title: '配置不在末尾 [#末][**v:1] 尾巴', url: 'https://e.example/' },
+          { id: '35', title: '同网址位置一 [#甲]', url: 'https://same.example/' },
+          { id: '36', title: '同网址位置二 [#乙]', url: 'https://same.example/' },
+          { id: '37', title: '干净 [#Alpha][#Beta]', url: 'https://clean.example/' },
+        ],
+      },
+      {
+        id: '2',
+        title: '其他书签',
+        children: [
+          { id: '40', title: 'TagSpace 配置·颜色 [**c:JS=0;c:不存在=5;c:坏=zzz]', url: 'chrome-extension://abc/space/space.html#cfg=colors' },
+        ],
+      },
+    ],
+  },
+];
+
+const didx = buildIndex(dirty, { excludeIds: new Set(['40']) });
+const issues = diagScan(didx, {
+  config: { colors: { JS: '0', 不存在: '5', 坏: 'zzz' }, aliases: {} },
+  configFiles: {},
+  duplicates: [],
+  configErrors: [],
+});
+const kindsOf = new Set(issues.map((i) => i.kind));
+
+ok(kindsOf.has('tag-order'), 'T25 查出标签顺序不合规');
+ok(kindsOf.has('tag-duplicate'), 'T26 查出同标签重复');
+ok(kindsOf.has('tag-unclosed'), 'T27 查出括号不闭合');
+ok(kindsOf.has('tag-stray'), 'T28 查出标签混在正文里');
+ok(kindsOf.has('conf-not-last'), 'T29 查出配置组不在末尾');
+ok(kindsOf.has('multi'), 'T30 查出同网址多位置不一致');
+ok(kindsOf.has('color-invalid'), 'T31 查出非法颜色值');
+ok(kindsOf.has('color-orphan'), 'T32 查出颜色指向不存在的标签');
+ok(kindsOf.has('cfg-missing'), 'T33 查出配置文件缺失');
+
+const cleanHit = issues.find((i) => i.kind === 'tag-order');
+eq(cleanHit.count, 1, 'T34 只有 #30 顺序不合规（单标签无从谈顺序）');
+ok(cleanHit.samples.length <= 5, 'T35 样例最多 5 条');
+eq(issueMeta('tag-order').fixable, true, 'T36 顺序可自动修');
+eq(issueMeta('tag-unclosed').fixable, false, 'T37 括号不闭合只报告');
+
+const fixOrder = planFix(didx, ['tag-order']);
+eq(fixOrder.writes.length, 1, 'T38 顺序问题只改那一条');
+eq(fixOrder.writes[0].after, '顺序错 [#Vue][#前端]', 'T39 改成码点序');
+
+const fixDup = planFix(didx, ['tag-duplicate']);
+eq(fixDup.writes[0].after, '重复标签 [#JS]', 'T40 重复的只留一个');
+
+const fixMulti = planFix(didx, ['multi']);
+eq(fixMulti.writes.length, 2, 'T41 两个位置都写');
+ok(fixMulti.writes.every((w) => w.after.includes('[#甲]') && w.after.includes('[#乙]')), 'T42 按并集统一');
+
+const fixColor = planFix(didx, ['color-invalid', 'color-orphan'], { config: { colors: { JS: '0', 不存在: '5', 坏: 'zzz' } } });
+eq(Object.keys(fixColor.colors).join(','), 'JS', 'T43 只留下合法且有用的颜色');
+
+// 干净数据不该报问题
+const clean = [
+  { id: '0', children: [{ id: '1', title: '书签栏', children: [{ id: '50', title: '正常 [#Alpha][#Beta]', url: 'https://ok.example/' }] }] },
+];
+const cidx = buildIndex(clean);
+const cissues = diagScan(cidx, { config: { colors: {}, aliases: {} }, configFiles: {
+    colors: { id: '9', title: 'x [**v:1]' },
+    prefs: { id: '8', title: 'x [**v:1]' },
+    aliases: { id: '7', title: 'x [**v:1]' },
+  }, duplicates: [], configErrors: [] });
+eq(cissues.length, 0, 'T44 干净数据零误报');
+
+// ------------------------------------------------------------ 10.4 @ 前缀拼查询
+
+eq(insertTag('', '前端', 'and', '@'), '@前端', 'T50 空表达式直接得到 @标签');
+eq(insertTag('react', '前端', 'and', '@'), 'react, @前端', 'T51 追加保持 AND');
+eq(insertTag('react, @前端', '前端', 'and', '@'), 'react', 'T52 再次点击同目录标签即取消');
+eq(insertTag('', '前端', 'not', '@'), '!@前端', 'T53 非模式带前缀');
+
+// 目录闭包：同一枝（祖先/后代/自身），跨枝不相关
+const hierTree = [{ id: '0', title: '', children: [{ id: '1', title: '书签栏', children: [
+  { id: '20', title: '工具', children: [
+    { id: '21', title: '前端', children: [
+      { id: '22', title: 'Vue', children: [
+        { id: '23', title: '文档', children: [
+          { id: '24', title: 'Vue 文档', url: 'https://x.test/', parentId: '23' },
+        ] },
+      ] },
+    ] },
+  ] },
+  { id: '30', title: '设计', children: [
+    { id: '31', title: '配色', children: [
+      { id: '32', title: '色板', url: 'https://y.test/', parentId: '31' },
+    ] },
+  ] },
+] }] }];
+const hierIdx = buildIndex(hierTree);
+ok(hierIdx.dirEdges.get(tagKey('前端')).has(tagKey('工具')), 'T54 父子边：前端 的父是 工具');
+const relFront = dirRelatedKeys(hierIdx, [tagKey('前端')]);
+eq([...relFront].sort().join('|'),
+   [tagKey('工具'), tagKey('前端'), tagKey('Vue'), tagKey('文档')].sort().join('|'),
+   'T55 选中前端：上下级全在闭合内');
+ok(!relFront.has(tagKey('设计')) && !relFront.has(tagKey('配色')), 'T56 跨枝的 设计/配色 被排除');
+
+// 硬排除：整棵子树不入索引
+const skipIdx = buildIndex(hierTree, { skipDirs: ['书签栏/工具'] });
+eq(skipIdx.counts.dirTags, 2, 'T57 排除 工具 后只剩另一枝的两个目录名');
+ok(![...skipIdx.dirTagToKeys.keys()].includes(tagKey('前端')), 'T58 被排除枝的目录名不在索引里');
+eq(skipIdx.allKeys.size, 1, 'T59 被排除枝里的书签也不进索引');
+
+// 同名文件夹：按路径排除「回收站/前端」不能误伤「书签栏/前端」
+const dupTree = [{ id: '0', title: '', children: [
+  { id: '1', title: '书签栏', children: [
+    { id: '11', title: '前端', children: [
+      { id: '111', title: 'keep', url: 'https://keep.test/' },
+    ] },
+  ] },
+  { id: '9', title: '回收站', children: [
+    { id: '91', title: '前端', children: [
+      { id: '911', title: 'drop', url: 'https://drop.test/' },
+    ] },
+  ] },
+] }];
+const dupIdx = buildIndex(dupTree, { skipDirs: ['回收站/前端'] });
+eq(dupIdx.allKeys.size, 1, 'T67 只排除同名的那一个：书签栏/前端 仍在索引');
+// 老数据只有名字时，按名字解析成路径（行为与旧版等价）
+const nameIdx = buildIndex(dupTree, { skipDirs: ['前端'] });
+eq(nameIdx.allKeys.size, 0, 'T68 只有名字时按名字解析（两处同名一起排除）');
+eq(resolveDirEntries(['前端'], ['书签栏/前端', '回收站/前端']).length, 2, 'T69 名字解析出全部同名路径');
+
+// 老数据的级联后代条目：祖先已排除，后代条目应被清掉
+eq(pruneNestedPaths(['回收站', '回收站/t', '回收站/已保存/子', '书签栏/工具']).join('|'),
+  '回收站|书签栏/工具', 'T70 冗余后代条目被剪掉，只剩顶级目录');
+
+// 老数据：级联后代同名条目只落在已排除目录内部，不能波及外面同名目录
+const legacyPaths = ['回收站', '回收站/t', '回收站/前端', '书签栏/前端', '书签栏/工具'];
+const legacyResolved = resolveDirEntries(['回收站', 't', '前端', '工具'], legacyPaths);
+eq(legacyResolved.join('|'), '回收站|回收站/t|回收站/前端|书签栏/工具', 'T71 同名后代条目只解析到已排除目录内部');
+eq(pruneNestedPaths(legacyResolved).join('|'), '回收站|书签栏/工具', 'T72 剪枝后书签栏/前端 不受牵连');
+
+// 树根上的内容文件夹（如书签管理扩展建的「回收站」）不能当成根丢掉
+const trashTree = [{ id: '0', title: '', children: [
+  { id: '1', title: '书签栏', children: [] },
+  { id: '2', title: '其他书签', children: [] },
+  { id: '9', title: '回收站', children: [
+    { id: '91', title: '已保存的标签页 (2026-10-03, 11:34:53)', children: [
+      { id: '92', title: '页面A', url: 'https://trash.test/', parentId: '91' },
+    ] },
+  ] },
+] }];
+const trashIdx = buildIndex(trashTree);
+ok(trashIdx.dirTagToKeys.has(tagKey('回收站')), 'T60 直接挂在树根的回收站也是目录标签');
+ok(trashIdx.dirTagToKeys.has(tagKey('已保存的标签页 (2026-10-03, 11:34:53)')), 'T61 它的子文件夹同样成为目录标签');
+ok(trashIdx.dirEdges.get(tagKey('已保存的标签页 (2026-10-03, 11:34:53)')).has(tagKey('回收站')), 'T62 父子边正确');
+ok(!trashIdx.dirTagToKeys.has(tagKey('书签栏')) && !trashIdx.dirTagToKeys.has(tagKey('其他书签')), 'T63 真正的根仍然不成为目录标签');
+eq(trashIdx.counts.deepFolders, 2, 'T64 内容文件夹计数不含三个结构层');
+
+// ------------------------------------------------------------ 10.5 目录标签诊断计数
+
+const diagTree = [{
+  id: '0', title: '', children: [
+    { id: '1', title: '书签栏', children: [
+      { id: '10', title: '前端', children: [
+        { id: '11', title: 'Vue 文档', url: 'https://vuejs.org/', parentId: '10' },
+      ] },
+      { id: '12', title: '空文件夹', children: [] },
+      { id: '13', title: '不在目录的资料', url: 'https://a.test/', parentId: '1' },
+    ] },
+    { id: '2', title: '其他书签', children: [] },
+  ],
+}];
+const diagIdx = buildIndex(diagTree);
+eq(diagIdx.counts.dirTags, 1, 'T47 只有含书签的文件夹成为目录标签');
+eq(diagIdx.counts.deepFolders, 2, 'T48 深层文件夹计数含空文件夹、不含两个根');
+ok(diagIdx.keyToDirTags.size === 1, 'T49 根上直挂的书签不带目录标签');
+
+// ------------------------------------------------------------ 11. 样式兜底
+
+// 组件自带 display:flex 会盖掉 [hidden]，没有这条兜底，抽屉/弹窗会常显且关不掉
+for (const f of ['space/space.css', 'sidepanel/panel.css', 'popup/popup.css']) {
+  const css = readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+  ok(/\[hidden\]\s*\{\s*display:\s*none\s*!important/.test(css), `T45 ${f} 有 [hidden] 兜底`);
+}
+
+// T46：拼接损伤守卫——脚本批量改文件时若把标识符和 $( 粘在一起（如 `x$('#btnSpace')`），
+// 语法仍合法但会在运行时把整段逻辑吞掉，node --check 抓不出来，只能靠源码扫描
+for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepanel/panel.js', 'popup/popup.js']) {
+  const js = readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+  const bad = js.match(/[A-Za-z0-9_]\$\(\s*['"]#/g) || [];
+  eq(bad.length, 0, `T46 ${f} 无标识符粘连 $( 的拼接损伤`);
+}
+
+// T46a：侧边栏不能依赖原生 confirm——内嵌视图里它不弹窗、直接返回 false
+{
+  const js = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  ok(!/\bconfirm\s*\(/.test(js), 'T46a 侧边栏不使用原生 confirm');
+  ok(/armOrConfirm/.test(js), 'T46b 删除/清空改成就地二次确认');
+}
+
+// T46c：行密度三档（侧边栏），标签不做截断
+{
+  const html = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
+  const js = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  ok(/id="densityBtn"/.test(html), 'T46c 侧边栏有密度按钮');
+  ok(/\['normal', 'compact', 'ultra'\]/.test(js), 'T46d 密度三档');
+  ok(/'panel\.density'/.test(js), 'T46e 密度只存本机');
+  ok(/data-density="ultra"/.test(css), 'T46f 极简档有样式');
+  ok(!/LEARN|\+N|maxTags/.test(js), 'T46g 标签不截断');
+  ok(/li\.addEventListener\('click'/.test(js), 'T46h 整行可点勾选');
+  ok(/closest\('input, button, \.chip, \.badge'\)/.test(js), 'T46i 交互区不抢点击');
+  ok(/width: fit-content; max-width: 100%/.test(css), 'T46j 标题按钮只包文字（右侧留白可勾选）');
+}
+
+// T83：回收站机制（后台）——删除进回收站、二次删除彻底删、索引排除、move 型撤销
+{
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  ok(bg.includes("type === 'trash:setup'"), 'T83a trash:setup 消息');
+  ok(bg.includes("type === 'trash:list'"), 'T83b trash:list 消息');
+  ok(bg.includes("type === 'trash:restore'"), 'T83c trash:restore 消息');
+  ok(bg.includes("type === 'trash:purge'"), 'T83d trash:purge 消息');
+  ok(bg.includes('needTrash'), 'T83e 未设回收站时删除返回 needTrash');
+  ok(bg.includes('removeTree'), 'T83f 彻底删除用 removeTree');
+  ok(/trashPath.*skipDirs|skipDirs.*trashPath/s.test(bg) || bg.includes("skip = trashPath && !exPaths.includes(trashPath)"), 'T83g rebuild 把回收站路径注入排除');
+  ok(bg.includes('pushUndo(label, entries, op)'), 'T83h pushUndo 带 op');
+  ok(/entry\.op === 'move'/.test(bg), 'T83i applyUndo 按 move 分发');
+  ok(/`删除 \${undoEntries\.length} 条 → 回收站`/.test(bg), 'T83j 删除标签文案');
+  // 管理页
+  ok(sp.includes('id="bmTrash"') && sp.includes('id="trashPanel"'), 'T84a 管理页有回收站入口与面板');
+  ok(sp.includes('id="bmUndoBox"') && sp.includes('id="bmUndoList"'), 'T84b 管理页有最近操作面板');
+  ok(bm.includes("query: st.query"), 'T84c 书签页请求带查询');
+  ok(bm.includes('纯查询框'), 'T84d 搜索框=纯查询（输入即查询，全文走 ?词）');
+  ok(/UNDO_SHOW = 5/.test(bm) && /UNDO_MAX = 10/.test(bm), 'T84e 最近操作 5 条 + 更多 10 条');
+  ok(bm.includes("closest('input, button, a, .chip, .x, .bm-badge, .bm-sug')"), 'T84f 管理页整行空白可勾选');
+  // 侧边栏
+  ok(pn.includes('askTrashSetup'), 'T85a 侧边栏首次删除询问回收站');
+  ok(pn.includes('needTrash'), 'T85b 侧边栏处理 needTrash');
+  ok(pn.includes('已移入回收站'), 'T85c 侧边栏删除提示改为回收站');
+  // bookmarks:page 查询
+  ok(bg.includes('queryKeySet'), 'T86 bookmarks:page/ids 查询交集');
+}
+
+// T87：书签页标签云 / 按目录显示 / 回收站显式设置
+{
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  ok(bg.includes("type === 'trash:status'"), 'T87a trash:status 消息');
+  ok(bg.includes('TRASH_CANDIDATE_NAMES'), 'T87b 候选回收站名列表');
+  ok(bg.includes('detectTrashCandidates'), 'T87c 候选目录探测');
+  ok(/resolveTrash\(false\).*skipIds|skipIds.add\(trashNow.id\)/s.test(bg), 'T87d 目录下拉排除回收站');
+  ok(bg.includes("msg.sort === 'tree'"), 'T87e bookmarks:page 树序');
+  ok(sp.includes('id="bmCloud"') && sp.includes('id="bmCloudBtn"'), 'T87f 书签页标签云');
+  ok(sp.includes('id="bmSort"') && sp.includes('data-s="tree"'), 'T87g 按标题/按目录切换');
+  ok(sp.includes('id="trashCandidates"') && sp.includes('id="trashNoDetect"'), 'T87h 候选与"识别不到"提示');
+  ok(sp.includes('id="trashRelocate"'), 'T87i 更换位置入口');
+  ok(bm.includes('toggleCloudToken'), 'T87j 云 chip 点击切换查询词');
+  ok(bm.includes('renderFolderRow'), 'T87k 目录树文件夹行渲染');
+  ok(bm.includes('renderTrashSetup'), 'T87l 设置界面渲染');
+  ok(/bookmarks:page'\)[^}]*rebuildPending/s.test(bg) || /if \(rebuildPending\) await rebuild\(\); \/\/ 刚增删的书签/s.test(bg), 'T87m bookmarks:page 索引过期先重建');
+}
+
+// T88：目录树折叠 / 标签云收窄与着色
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  ok(!sp.includes('bmFolderBtn') && !sp.includes('bmFolderPop'), 'T88a 「所有目录」筛选下拉已移除（用目录 chip + 组头下钻）');
+  ok(!sp.includes('bmMoveToBtn') && !sp.includes('bmMoveToPop'), 'T88b 移到目录按钮+浮层已移除（剪贴板粘贴替代）');
+  ok(!sp.includes('<select id="bmFolder"') && !sp.includes('<select id="bmMoveTo"'), 'T88c 原生下拉已移除（不可折叠）');
+  ok(bm.includes('let dirOpen = new Set()'), 'T88d 公共折叠状态 dirOpen');
+  ok(bm.includes("'bm.dirOpen'"), 'T88e 折叠状态存本机');
+  ok(!bm.includes('function openTreePop') && !bm.includes('function renderTreeInto'), 'T88f 浮层树渲染已随移到目录移除');
+  ok(bm.includes('function renderTreeMode'), 'T88g 树模式整棵树渲染');
+  ok(bm.includes('function loadDirRows'), 'T88g1 展开目录懒加载直属书签');
+  ok(bm.includes('hiddenRows'), 'T88h 折叠数进摘要');
+  ok(!bm.includes('moveTarget'), 'T88i 移动目标状态已删（粘贴承担移动）');
+  ok(bm.includes('st.related') && bm.includes('st.relatedDirs'), 'T88j 云收窄数据接入');
+  ok(bm.includes('colorFor(name, colors)'), 'T88k 云 chip 用 colorFor 着色');
+  ok(css.includes('.bm-cloud-chip.on') && css.includes('background: currentColor'), 'T88l 选中态反白与侧边栏同款');
+  ok(!css.includes('.bm-pop') && css.includes('.bm-group-arrow'), 'T88m 浮层样式已删、组头箭头样式保留');
+  ok(/bookmarks:page[\s\S]{0,2000}relatedTags\(index, matchedKeys\)/.test(bg), 'T88n bookmarks:page 返回 related');
+  ok(bg.includes('翻页时云不能跟着变'), 'T88o related 按全部命中集算');
+}
+
+// T89：管理页搜索框纯查询化 + 组头下钻
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(sp.includes('?全文'), 'T89a placeholder 明示全文搜走 ?');
+  ok(bm.includes('currentNeedle'), 'T89b 打字即时过滤云');
+  ok(bm.includes('activeQueryNames'), 'T89c 裸名/#/@ 归一化高亮与摘除');
+  ok(bm.includes("e.key !== 'Escape'"), 'T89d Esc 逐词回退');
+  ok(bm.includes('160'), 'T89e 输入防抖');
+  ok(bm.includes('function renderCrumb'), 'T89f 下钻面包屑');
+  ok(sp.includes('id="bmCrumb"'), 'T89g 面包屑容器');
+  ok(bm.includes("点击只看这个目录"), 'T89h 组头名字=下钻');
+  ok(css.includes('.bm-crumb-seg'), 'T89i 面包屑样式');
+}
+
+// T90：按目录=真目录树（方案 B）
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  ok(bm.includes('DIR_FETCH_LIMIT'), 'T90a 直属书签一次出全（500 截断有提示）');
+  ok(bm.includes('visibleRowIds'), 'T90b 全选可见=当前渲染的书签');
+  ok(bm.includes("tree ? '全选可见' : '全选本页'"), 'T90c 按钮文案按模式切换');
+  ok(bm.includes('subtree: st.sort'), 'T90d 全选全部在树模式按子树');
+  ok(bm.includes('invalidateTree'), 'T90e 条件变化作废懒加载缓存');
+  ok(bm.includes('findFolderNode'), 'T90f 下钻定位子树');
+  ok(bm.includes("p.textContent = '载入中…'"), 'T90g 懒加载占位提示');
+  ok(bm.includes('仅显示前'), 'T90h 超限截断明示');
+  ok(bg.includes('msg.subtree'), 'T90i bookmarks:ids 支持子树范围');
+  ok(bg.includes('folderScope.has(String(n.parentId))'), 'T90j 子树按父目录集合过滤');
+}
+
+// T91：树行序与叶子文件夹可展开
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  ok(bm.includes('walk(n.children, true, depth + 1); // 文件夹靠前'), 'T91a 子文件夹先于直属书签');
+  ok(bm.includes('node.count > 0'), 'T91b 叶子文件夹（无子但有书签）也可展开');
+}
+
+// T92：树模式查询自动展开
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  ok(bg.includes('matchPaths'), 'T92a bookmarks:page 返回全部命中目录路径');
+  ok(bm.includes('function updateAutoOpen'), 'T92b 自动展开集合计算');
+  ok(bm.includes('autoCollapsed'), 'T92c 手动收起优先于自动展开');
+  ok(/return dirOpen\.has\(id\) \|\| autoOpen\.has\(id\)/.test(bm), 'T92d dirIsOpen 融合自动展开');
+}
+
+// T93：操作带书签搜索框 + 返回上级 + 切换按钮搬家
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  ok(sp.includes('id="bmTextSearch"'), 'T93a 操作带书签搜索框');
+  ok(sp.indexOf('bmTextSearch') < sp.indexOf('bmAllPage'), 'T93b 搜索框在「全选可见」左侧');
+  ok(sp.includes('平铺书签'), 'T93c 按标题已改名平铺书签');
+  ok(!sp.includes('按标题'), 'T93d 旧「按标题」文案已移除');
+  ok(sp.indexOf('id="bmSort"') > sp.indexOf('id="bmBulk"'), 'T93e 排序切换已搬进操作带');
+  ok(!sp.includes('bmUpBtn'), 'T93f 返回上级按钮已删（面包屑是唯一回退入口）');
+  ok(!bm.includes('bmUpBtn'), 'T93g 返回上级逻辑已删');
+  ok(bm.includes('function renderCrumb') && bm.includes("st.folderId = targetPath ? pathToId.get(targetPath)"), 'T93h 面包屑承担回退');
+  ok(bm.includes("st.text = e.target.value.trim()"), 'T93i 书签搜索写 st.text');
+  ok(!/st\.query = e\.target\.value\.trim\(\);\s*\n\s*st\.text = ''/.test(bm), 'T93j 标签查询框不清书签搜索词');
+  ok(bm.includes('text: st.text'), 'T93k 懒加载带书签搜索词');
+}
+
+// T94：剪贴板管理（新建文件夹/复制/剪切/粘贴）+ 文件夹复选框 + 紧凑 + 箭头
+{
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(bg.includes("type === 'folder:create'"), 'T94a 后台支持新建文件夹');
+  ok(bg.includes("type === 'bookmarks:paste'"), 'T94b 后台支持剪贴板粘贴');
+  ok(bg.includes('pushUndo(`剪切粘贴'), 'T94c 剪切粘贴进撤销栈');
+  ok(bg.includes('copyTree'), 'T94d 文件夹整棵复制（标题带走=标签保留）');
+  ok(sp.includes('bmNewFolder') && sp.includes('bmCopy') && sp.includes('bmCut') && sp.includes('bmPaste'), 'T94e 四个剪贴板按钮');
+  ok(!sp.includes('bmMoveTo') && !sp.includes('id="bmMove"'), 'T94f 移到目录/移动按钮已删');
+  ok(bm.includes('function splitSelection'), 'T94g 选中拆书签/文件夹');
+  ok(bm.includes('clip = { mode'), 'T94h 剪贴板状态');
+  ok(bm.includes("selected.has(node.id) ? ' on' : ''"), 'T94i 文件夹行复选框选中态');
+  ok(bm.includes("cb.addEventListener('change', () => setSelected(node.id"), 'T94j 文件夹复选框可点');
+  ok(css.includes('.bm-folder-row.on'), 'T94k 文件夹行选中高亮');
+  ok(/\.bm-group-arrow\s*{[^}]*font-size:\s*14px/.test(css), 'T94l 箭头加大到 14px');
+  ok(/\.bm-head, \.bm-row {[^}]*padding: 4px/.test(css), 'T94m 行距紧凑 4px');
+  ok(/\.bm-url {[^}]*line-height:\s*1\.3/.test(css), 'T94n 行高收紧');
+}
+
+// T95：面包屑进表头 / 剪贴板组分隔符 / 当前层级橙色
+{
+  const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  const head = sp.slice(sp.indexOf('class="bm-head"'), sp.indexOf('id="bmRows"'));
+  ok(head.includes('id="bmCrumb"') && !head.includes('bmUpBtn'), 'T95a 面包屑内嵌表头（返回上级已删）');
+  ok(!/<div id="bmCrumb"/.test(sp), 'T95b 顶部独立面包屑行已移除');
+  const seps = [...sp.matchAll(/bulk-sep/g)].map((m) => m.index);
+  ok(seps.length >= 2 && seps[seps.length - 1] > sp.indexOf('bmRemove') && seps[seps.length - 1] < sp.indexOf('bmNewFolder'), 'T95c 新建文件夹左侧分隔符');
+  ok(bm.includes('const isCur = dirIsOpen(node.id)'), 'T95d 橙色=展开状态（手动+自动都算）');
+  ok(css.includes('.bm-folder-row.cur') && css.includes('#f59e0b'), 'T95e 展开行橙色样式');
+  ok(css.includes('.bm-crumb-head'), 'T95f 表头内嵌面包屑样式');
+}
+
+// T96：操作带设计语言统一 + 删除按钮支持文件夹
+{
+  const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  ok(/\.bulk \.btn, \.bulk \.input, \.bulk select, \.bulk \.seg { height: 28px; border-radius: 8px; }/.test(css), 'T96a 操作带控件同高同圆角');
+  ok(/\.bulk \.input, \.bulk select\.input { font-size: 12\.5px/.test(css), 'T96b 输入框同字号');
+  ok(!sp.includes('>删除书签<'), 'T96c 删除书签已改名「删除」');
+  ok(sp.includes('title="删除选中的书签/文件夹（移入回收站，可还原）"'), 'T96d 删除按钮提示含文件夹');
+  ok(bm.includes('个文件夹`'), 'T96e 确认文案按书签/文件夹分别计数');
+}
+
+// T97：树模式 refresh 重拉目录树（删除/剪切/新建后立即生效）
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  ok(/async function refresh\(\) \{[\s\S]*?await loadFolders\(\)/.test(bm), 'T97a refresh 时重拉 folders:list');
+  ok(bm.includes('!idToPath.get(st.folderId)'), 'T97b 下钻目录被删后自动退回全部目录');
+  ok(/invalidateTree\(\);[\s\S]{0,120}dirtyTree\(\);/.test(bm), 'T97c refresh 时打脏树行缓存（删除书签立即消失）');
+}
+
+// T98：侧边栏云高自适应（=内容高度，刚好展示到最底下一行）
+{
+  const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const ph = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  ok(pj.includes('function applyCloudMode'), 'T98a 云高自适应函数');
+  ok(pj.includes("el.style.height = 'auto'") && pj.includes('60vh'), 'T98b 高度=内容、上限 60vh');
+  ok(pj.includes('applyCloudMode();'), 'T98c render 同步');
+  ok(!ph.includes('splitter') && !pc.includes('.splitter') && !pj.includes('LAYOUT_KEY'), 'T98d 拖动分隔线机制已退役');
+  ok(!pj.includes('applyCloudHeights'), 'T98e 旧的固定高度函数已移除');
+}
+
+// T99：目录云按树结构序（DFS 位次，同名取最早）
+{
+  // twinTree：设计(book, Animate) —— DFS 位次 设计=0, blog=1, Animate=2
+  const twinIdx = buildIndex(twinTree, {});
+  eq(
+    [twinIdx.dirOrder.get(tagKey('设计')), twinIdx.dirOrder.get(tagKey('blog')), twinIdx.dirOrder.get(tagKey('animate'))].join(','),
+    '0,1,2',
+    'T99a dirOrder 记录 DFS 位次'
+  );
+  const list = [
+    { key: 'animate', tag: 'Animate', count: 1 },
+    { key: 'blog', tag: 'blog', count: 1 },
+    { key: '设计', tag: '设计', count: 1 },
+  ];
+  eq(
+    sortDirTagsByTree(twinIdx, list).map((t) => t.tag),
+    ['设计', 'blog', 'Animate'],
+    'T99b 目录云按树结构序（父目录在前，子目录紧随其后）'
+  );
+  // 同名跨枝：取最早出现的位次，位置稳定
+  const sameTree = [{ id: '0', title: '', children: [
+    { id: '1', title: '书签栏', children: [
+      { id: 'x1', title: '工具', children: [{ id: 'x11', title: 'a', url: 'https://a.test/' }] },
+      { id: 'x2', title: '杂', children: [{ id: 'x21', title: 'b', url: 'https://b.test/' }] },
+    ] },
+    { id: '2', title: '其他书签', children: [
+      { id: 'y1', title: '工具', children: [{ id: 'y11', title: 'c', url: 'https://c.test/' }] },
+    ] },
+  ] }];
+  const sameIdx = buildIndex(sameTree, {});
+  eq(sameIdx.dirOrder.get(tagKey('工具')), 0, 'T99c 同名目录取最早 DFS 位次');
+  ok(/sortDirTagsByTree\(idx, out\)/.test(readFileSync(new URL('../background.js', import.meta.url), 'utf8')), 'T99d 后台三处目录云排序统一走 lib');
+}
+
+// T100：侧边栏清除体验与图标统一
+{
+  const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  const ph = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
+  ok(/\.clear {[^}]*width: 26px/.test(pc), 'T100a 清除 × 点击区加大到 26px');
+  ok(pj.includes("el.addEventListener('dblclick'"), 'T100b 双击云区空白清空输入');
+  ok(pj.includes("e.target.closest('.tag, button, input, a, label, .mini')"), 'T100c chip/按钮上双击不误触');
+  ok(ph.includes('id="btnRebuild" class="icon" title="重建索引"><svg'), 'T100d 重建按钮换 SVG 图标（与齿轮同规格）');
+  ok(pc.includes('.icon svg { display: block; }'), 'T100e 图标 flex 居中');
+}
+
+// T101：侧边栏操作带重构 + 目录栏收起
+{
+  const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  const ph = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
+  ok(!ph.includes('id="selAll"'), 'T101a 列表头全选按钮已删');
+  ok(ph.includes('id="bulkAll"'), 'T101b 全选=操作带勾选框');
+  ok(pj.includes('all.indeterminate'), 'T101c 半选三态');
+  ok(!ph.includes('<div class="pane-head">\n      <span class="pane-title" id="count"'), 'T101d 列表头两行并一行');
+  ok(ph.includes('id="densityBtn"') && ph.indexOf('id="densityBtn"') < ph.indexOf('id="tagInput"'), 'T101e 紧凑按钮在标签输入框左侧');
+  ok(/\.bulk {[^}]*border-bottom: 1px solid/.test(pc), 'T101g 操作带上下分割线');
+  ok(!/\.bulk {[^}]*border-radius/.test(pc) && !/\.bulk {[^}]*background: var\(--bg-soft\)/.test(pc), 'T101h 操作带无外框无底色');
+  ok(pj.includes("bulkEl.querySelectorAll('[data-act]')"), 'T101i 操作带常驻按钮置灰');
+  ok(/\.dir-pane\.off \.[\s\S]{0,80}display: none/.test(pc), 'T101j 目录关闭时整栏收起');
+  ok(!pj.includes('目录标签已关闭'), 'T101k 已关闭提示文案删除');
+  ok(pj.includes('splitTagInput(input)') && pj.includes('normalizeTagOrNull'), 'T101l 打标签切分规则与书签管理页一致');
+  ok(ph.includes('带空格用引号'), 'T101m 打标签占位文案一致');
+  ok(ph.includes('id="tagClear"'), 'T101n 打标签输入带 × 清除');
+}
+
+// T102：全选框原生尺寸 + 勾选框/已选计数在总条数左侧
+{
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  const ph = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
+  ok(pc.includes('.bulk input[type="text"] {'), 'T102a 文本框样式不再命中勾选框');
+  ok(ph.indexOf('id="bulkAll"') < ph.indexOf('id="count"'), 'T102b 勾选框+已选计数在总条数左侧');
+  ok(!/\.bulk input {/.test(pc.replace('.bulk input[type="text"] {', '.bulk-x {')), 'T102c 旧的 .bulk input 通配样式已收窄');
+}
+
+// T103：书签页补全 + 云默认开 + 目录子串补齐
+{
+  const pj = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const ps = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(ps.includes('id="bmSuggest"'), 'T103a 补全下拉容器存在');
+  ok(pc.includes('.suggest {') && pc.includes('top: calc(100% + 4px)'), 'T103b 补全下拉贴输入框下沿');
+  ok(pj.includes('updateSug()') && pj.includes('ArrowDown') && pj.includes('acceptSug'), 'T103c 补全键盘与采纳');
+  ok(pj.includes("input.dispatchEvent(new Event('input'"), 'T103d 采纳后走统一 input 通路');
+  ok(pj.includes("$('#bmCloud').hidden = false"), 'T103e 云默认开启：解除容器 hidden');
+  ok(pj.includes('let fullDirs = []'), 'T103f 全量目录缓存');
+  ok(pj.includes('terms.some((t) => n.includes(t))'), 'T103g 目录名含查询词即补齐（blog→blogbus）');
+  ok(pj.includes('function queryTerms'), 'T103h 查询纯词提取');
+}
+
+// 配置缺版本号：空文件不算，有配置组却没 v 才算
+const emptyCfg = [
+  { id: '0', children: [{ id: '1', title: '书签栏', children: [] }] },
+];
+const emptyFiles = {
+  colors: { id: '9', title: 'TagSpace 配置·颜色' },
+  prefs: { id: '8', title: 'TagSpace 配置·偏好' },
+  aliases: { id: '7', title: 'TagSpace 配置·别名' },
+};
+const scanEmpty = diagScan(buildIndex(emptyCfg), {
+  config: { colors: {}, aliases: {} },
+  configFiles: emptyFiles,
+  duplicates: [],
+  configErrors: [],
+});
+ok(!scanEmpty.some((i) => i.kind === 'cfg-version'), 'T45a 空配置文件不报缺版本号');
+
+const handFiles = { ...emptyFiles, colors: { id: '9', title: 'TagSpace 配置·颜色 [**c:X=1]' } };
+const scanHand = diagScan(buildIndex(emptyCfg), {
+  config: { colors: { X: '1' }, aliases: {} },
+  configFiles: handFiles,
+  duplicates: [],
+  configErrors: [],
+});
+ok(scanHand.some((i) => i.kind === 'cfg-version'), 'T45b 有配置组但缺 v 才算真异常');
+
+// ------------------------------------------------------------ 12. 目录标签
+
+const dirTree = [
+  {
+    id: '0',
+    children: [
+      {
+        id: '1',
+        title: '书签栏',
+        children: [
+          {
+            id: '10',
+            title: '前端',
+            children: [
+              { id: '11', title: 'Vue 文档 [#Vue]', url: 'https://vuejs.org/' },
+              { id: '12', title: '通用页', url: 'https://generic.example/' },
+              { id: '13', title: 'Vue', children: [{ id: '14', title: '深层页 [#深]', url: 'https://deep.example/' }] },
+            ],
+          },
+          { id: '20', title: '设计', children: [{ id: '21', title: '设计系统', url: 'https://generic.example/' }] },
+          { id: '30', title: '根下直接放', url: 'https://root.example/' },
+        ],
+      },
+      { id: '2', title: '其他书签', children: [] },
+    ],
+  },
+];
+const di = buildIndex(dirTree);
+
+eq(di.counts.dirTags, 3, 'T46 根文件夹不算目录标签，只有 前端/设计/Vue');
+ok(!di.dirTagToKeys.has('书签栏'), 'T47 书签栏本身不出现');
+ok(di.keyToDirTags.get('deep.example') !== undefined, 'T48 深层书签有目录标签（URL 规范化后的键）');
+eq(di.keyToDirTags.get('root.example'), undefined, 'T49 根下直接放的书签没有目录标签');
+const seqs = [...di.nodeById.values()].map((r) => r.seq);
+eq(new Set(seqs).size, seqs.length, 'T49a 每个书签节点有唯一树序 seq');
+
+// 硬排除：按名字解析成路径，整枝不进索引（侧边栏目录云也必须消失）
+const exTree = [{ id: '0', title: '', children: [{ id: '1', title: '书签栏', children: [
+  { id: '10', title: '工具', children: [{ id: '11', title: '古董', children: [{ id: '12', title: '旧站', url: 'https://old.example/' }] }] },
+  { id: '20', title: '保留', children: [{ id: '21', title: '新站', url: 'https://keep.example/' }] },
+] }] }];
+const exPaths = pruneNestedPaths(resolveDirEntries(['古董'], collectFolderPaths(exTree)));
+eq(exPaths.join(','), '书签栏/工具/古董', 'T49b 排除条目按名字解析成精确路径');
+const exIdx = buildIndex(exTree, { skipDirs: exPaths });
+ok(!exIdx.dirTagToKeys.has(tagKey('古董')), 'T49c 排除后目录标签不再出现');
+ok(!exIdx.allKeys.has('old.example'), 'T49d 排除后整枝书签不进索引');
+ok(exIdx.allKeys.has('keep.example'), 'T49e 其他目录不受影响');
+
+const { parse: dp, evaluate: de, insertTag: dit, escapeTag: det, hasTag } = await import('../lib/query.js');
+eq([...de(dp('@前端').ast, di, {})].sort().join(','), ['deep.example', 'generic.example', 'vuejs.org'].join(','), 'T50 @前端 含子级全部');
+eq([...de(dp('@前端 & #Vue').ast, di, {})].join(','), 'vuejs.org', 'T51 目录标签与普通标签可混算（# 精确到标签）');
+eq([...de(dp('@前端 & Vue').ast, di, {})].sort().join(','), ['vuejs.org', 'deep.example'].sort().join(','), 'T51a 裸名混算时同名目录也参与');
+eq([...de(dp('@Vue').ast, di, {})].join(','), 'deep.example', 'T52 深层文件夹名也是目录标签');
+eq([...de(dp('@设计 | Vue').ast, di, {})].sort().join(','), ['deep.example', 'generic.example', 'vuejs.org'].join(','), 'T53 OR 混用（裸名 Vue 含同名目录）');
+eq([...de(dp('Vue').ast, di, {})].sort().join(','), ['deep.example', 'vuejs.org'].join(','), 'T53a 裸名 = 标签 ∪ 同名目录');
+const relVue = relatedTags(di, de(dp('Vue').ast, di, {}));
+ok(relVue.some((t) => tagKey(t.tag) === tagKey('Vue')), 'T53a1 命中标签本身也留在相关标签里（不再被排除）');
+eq([...de(dp('#Vue').ast, di, {})].join(','), 'vuejs.org', 'T53b # 前缀只要标签，不掺目录');
+eq([...de(dp('@Vue').ast, di, {})].join(','), 'deep.example', 'T53c @ 前缀只要目录');
+eq([...de(dp('Vue').ast, di, { dirEnabled: false })].join(','), 'vuejs.org', 'T53d 目录开关关掉时裸名退回纯标签');
+eq(de(dp('@前端').ast, di, { dirEnabled: false }).size, 0, 'T54 关掉后 @ 求值为空');
+eq(det('a@b'), 'a\\@b', 'T55 标签名含 @ 要转义');
+eq(det('a#b'), 'a\\#b', 'T55a 标签名含 # 也要转义');
+eq(dp('#前端 & @Vue').ast.type, 'and', 'T55b # 与 @ 可与运算符组合');
+eq(dp('#前端 & @Vue').ast.left.type, 'tagOnly', 'T55c # 前缀解析为 tagOnly 节点');
+eq(dit('', '前端', 'and', '@'), '@前端', 'T56 插入带 @ 前缀');
+eq(dit('', '前端', 'and', '#'), '#前端', 'T56a 标签 chip 插入带 # 前缀');
+eq(dit('#前端', '前端', 'and', '#'), '', 'T56b #前缀再点一次即摘掉');
+ok(hasTag('前端', '前端', '#') === false, 'T56c 裸名不会被当成 #标签 toggle');
+eq(dit('mac', 'mac', 'and', '#'), '#mac', 'T56d 裸名已存在时升级为 #，不叠加');
+eq(dit('@mac, foo', 'mac', 'and', '#'), '@mac, foo, #mac', 'T56e @与#语义不同允许共存');
+eq(dit('mac', 'mac', 'and', '@'), '@mac', 'T56f 裸名已存在时升级为 @，不叠加');
+eq(dit('@前端, Vue', '前端', 'and', '@'), 'Vue', 'T57 再点一次摘掉的是 @前端');
+
+// 目录标签设色不算孤儿颜色
+const dscan = diagScan(di, {
+  config: { colors: { 前端: '3' }, aliases: {} },
+  configFiles: { colors: { id: '9', title: 'x [**v:1]' }, prefs: { id: '8', title: 'x [**v:1]' }, aliases: { id: '7', title: 'x [**v:1]' } },
+  duplicates: [],
+  configErrors: [],
+});
+ok(!dscan.some((i) => i.kind === 'color-orphan'), 'T58 给目录标签设色不算孤儿');
+
+// ---------------------------------------------------------------- 输入切分（弹窗/书签页共用）
+eq(splitTagInput('前端 学习 "Chrome 扩展" 设计'), ['前端', '学习', 'Chrome 扩展', '设计'], 'T59 空格分隔 + 引号包住含空格标签');
+eq(splitTagInput('前端,后端；设计、工具'), ['前端', '后端', '设计', '工具'], 'T60 逗号/分号/顿号都算分隔');
+eq(splitTagInput('   '), [], 'T61 全空白不产出标签');
+eq(splitTagInput('“标签 一” 二'), ['标签 一', '二'], 'T62 中文引号同样生效');
+eq(splitTagInput('a\nb\tc'), ['a', 'b', 'c'], 'T63 换行/制表符也算分隔');
+
+// ---------------------------------------------------------------- 静态守卫：脚本引用的 DOM id 必须在页面里
+const bmSrc = readFileSync('space/bookmarks.js', 'utf8');
+const spHtml = readFileSync('space/space.html', 'utf8');
+const bmIds = [...new Set([...bmSrc.matchAll(/\$\('#([A-Za-z0-9_-]+)'/g)].map((m) => m[1]))];
+const bmMissing = bmIds.filter((id) => !spHtml.includes(`id="${id}"`));
+ok(bmMissing.length === 0, `T64 书签视图引用的 id 都存在（缺 ${bmMissing.join(',')}）`);
+
+const popSrc = readFileSync('popup/popup.js', 'utf8');
+const popHtml = readFileSync('popup/popup.html', 'utf8');
+const popIds = [...new Set([...popSrc.matchAll(/\$\('#([A-Za-z0-9_-]+)'/g)].map((m) => m[1]))];
+const popMissing = popIds.filter((id) => !popHtml.includes(`id="${id}"`));
+ok(popMissing.length === 0, `T65 弹窗引用的 id 都存在（缺 ${popMissing.join(',')}）`);
+
+// 选择控件两页统一：表头复选框 + 「全选全部」+「取消选择」，不再有工具栏文字按钮
+ok(spHtml.includes('id="tagAllPage"'), 'T66 标签页的全选在常驻操作带里');
+ok(spHtml.includes('id="bmAllPage"'), 'T67 书签页的全选在常驻操作带里');
+ok(!spHtml.includes('btnSelectAll'), 'T68 旧的「全选显示的」工具栏按钮已移除');
+ok(spHtml.includes('全选全部'), 'T69 两个页面都提供「全选全部」入口');
+
+// 样式统一守卫：危险色只有一个来源；操作带里不留会伸缩的计数文本
+const cssSrc = readFileSync('space/space.css', 'utf8');
+ok(!spHtml.includes('id="bulkCount"') && !spHtml.includes('id="bmBulkCount"'), 'T70 操作带里不再放会伸缩的计数文本');
+ok(!cssSrc.includes('#c0392b'), 'T71 危险色只用 var(--danger)，不再有第二个红');
+ok(spHtml.includes('全选本页</button>\n      <button class="btn ghost" data-bulk="clear"') && !cssSrc.includes('.bulk-clear'),
+   'T72 「取消选择」紧挨着全选，不再单独推到右边');
+ok(cssSrc.includes('.bm-row.on'), 'T73 书签行选中也有整行高亮');
+
+// 列表面板：两个表格必须共用同一个外框样式
+ok(spHtml.includes('class="table-panel"'), 'T74 标签表也有列表面板外框');
+ok(cssSrc.includes('.table-panel, .bm-table'), 'T75 两个表格的外框来自同一条规则');
+
+// 行内复选框必须和表头同款，否则 UA 默认 margin 会把行往右推
+ok(readFileSync('space/tags.js', 'utf8').includes("ck.className = 'bm-cb'"), 'T76 标签行内复选框与表头同款');
+ok(readFileSync('space/bookmarks.js', 'utf8').includes("cb.className = 'bm-cb'"), 'T77 书签行内复选框与表头同款');
+
+// 首列单元格必须挂 .ck，否则 td 的 10px 内边距会把行内复选框推右
+ok(readFileSync('space/tags.js', 'utf8').includes("tdCk.className = 'ck'"), 'T78 标签首列单元格带 ck 类');
+ok(cssSrc.includes('.tagtable input[type="checkbox"]'), 'T79 表格复选框有兜底样式');
+
+// 首列复选框离面板左边 10px（与书签表一致），总宽 30px，所以第 2 列从 40px 起
+ok(cssSrc.includes('padding: 8px 6px 8px 10px'), 'T80 标签表首列与书签表同边距（10px）');
+
+// ---------------------------------------------------------------- 汇总
+
+
+
+
+
+
+
+console.log(`\n通过 ${pass} 项`);
+if (failures.length) {
+  console.log(`失败 ${failures.length} 项：\n`);
+  for (const f of failures) console.log(' ✗ ' + f + '\n');
+  process.exit(1);
+}
+console.log('全部通过 ✓');

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="bar">
+    <span class="brand">Tag<span>Space</span></span>
+    <span class="bar-actions">
+      <button id="btnSpace" class="icon" title="管理台（全页）"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      <button id="btnPanel" class="link" title="打开侧边栏">面板</button>
+    </span>
+  </header>
+
+  <div class="page">
+    <div id="ptitle" class="ptitle">…</div>
+    <div id="purl" class="purl"></div>
+    <div id="pcoll" class="pcoll"></div>
+  </div>
+
+  <div id="tags" class="tags"></div>
+
+  <div id="sugBox" class="sug-box" hidden>
+    <span class="sug-label">推荐</span>
+    <span id="sugChips" class="sug-chips"></span>
+  </div>
+
+  <div class="addrow">
+    <input id="tagInput" type="text" placeholder="标签，空格分开；带空格用 &quot;引号&quot;" autocomplete="off" spellcheck="false" />
+    <button id="btnAdd" class="btn">加</button>
+  </div>
+  <div id="tagPreview" class="tag-preview" hidden></div>
+  <div class="hint-line">空格 / 逗号 分隔多个标签；<b>"Chrome 扩展"</b> 用引号包住算一个标签</div>
+
+  <div id="destRow" class="row-dest">
+    <label for="destSelect">收藏到</label>
+    <select id="destSelect" class="dest"></select>
+  </div>
+
+  <footer class="foot">
+    <button id="btnCollect" class="btn ghost" hidden>收藏到这个目录</button>
+    <span id="hint" class="hint"></span>
+  </footer>
+
+  <div id="toast" class="toast" hidden></div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
