@@ -1173,7 +1173,15 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
 
 // T123：chip 与「目录标签」云 chip 同一套视觉规格
 {
-  ok(cssSrc.includes('font-size: 12px; line-height: 1.4;\n  padding: 2px 8px;') === false || true, 'T123a 占位');
+  const cc = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(cc.includes('font-size: 12px; line-height: 1.4;') && cc.includes('padding: 2px 8px;'),
+     'T123a chip 字号与内边距与云 chip 一致');
+  ok(cc.includes('.chip:hover { border-color: var(--accent); color: var(--accent); }'),
+     'T123b 悬停同为描边+文字变 accent');
+  ok(cc.includes('.chip.on { border-color: var(--accent); background: var(--accent); color: #fff; }'),
+     'T123c 选中同为反白实底');
+  ok(cc.includes('.chip.on .chip-acts button') && cc.includes('.chip.on .chip-n'),
+     'T123d 反白态下计数与就地按钮一起转白（可读性）');
 }
 
 
