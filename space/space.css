@@ -586,6 +586,8 @@ textarea:focus { border-color: var(--accent); }
 .dir-blocked { margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dir-blocked .hint { margin: 0; }
 #dirExcluded .hint { flex-basis: 100%; } /* 已排除目录另起一行 */
+#dirExcludedRows { display: flex; flex-wrap: wrap; gap: 8px; flex-basis: 100%; }
+#dirExcluded .dir-chip { white-space: nowrap; } /* 挤压时不许竖排换字 */
 
 /* 色板里的 hex 行 */
 .pop-foot { display: flex; align-items: center; gap: 6px; }
