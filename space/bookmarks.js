@@ -2274,6 +2274,24 @@ function dirIdForName(name, pane) {
   return cands[0].id;
 }
 
+/** 只展开这一条祖先链（目标目录及其各级父目录），其它目录一律收起 */
+function openChainOnly(pane, id) {
+  const path = idToPath.get(id) || '';
+  if (!path) return false;
+  const segs = path.split(PATH_SEP).filter(Boolean);
+  const chain = [];
+  for (let i = 1; i <= segs.length; i++) {
+    const fid = pathToId.get(segs.slice(0, i).join(PATH_SEP));
+    if (fid) chain.push(fid);
+  }
+  if (!chain.length) return false;
+  pane.dirOpen = new Set(chain.filter((x) => !rootIds.has(x)));
+  pane.autoOpen = new Set(); // 旧查询的自动展开不沿用，交给 refresh 按新查询重算
+  pane.autoCollapsed = new Set();
+  saveDirOpen(pane);
+  return true;
+}
+
 /** 目录标签：写/去查询里的 @目录 词（云随之收窄）；面包屑模式下再下钻到该目录 */
 function dirChipClick(name, presetId) {
   const pane = curPane();
@@ -2302,8 +2320,9 @@ function dirChipClick(name, presetId) {
       if (paneState[activePane] === pane) st.folderId = id;
       savePaneFolder();
     } else {
-      // 非面包屑模式：树靠 @词 的命中路径自动展开，这里只补"滚到那一行 + 闪一下"
-      scrollId = id;
+      // 非面包屑模式：展开到该目录（只留它的祖先链），其它无关目录全部收起，
+      // 再滚到那一行闪一下（@词 的命中路径本来就是它这枝，两者不打架）
+      if (openChainOnly(pane, id)) scrollId = id;
     }
   }
   refresh().then(() => {

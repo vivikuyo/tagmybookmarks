@@ -1448,6 +1448,8 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(bm10.includes('if (adding) parts.push(`@${name}`);'), 'T141c 点击即把 @目录 词写进查询框（云随之收窄）');
   ok(bm10.includes('if (pane.folderId) {') && bm10.includes('pane.folderId = id;'), 'T141d 面包屑模式：同时下钻到该目录');
   ok(bm10.includes("row.scrollIntoView({ block: 'center' })") && bm10.includes("row.classList.add('flash')"), 'T141e 非面包屑模式：滚到该目录那一行并闪一下');
+  ok(bm10.includes('function openChainOnly(') && bm10.includes('pane.dirOpen = new Set(chain.filter((x) => !rootIds.has(x)))'), 'T141e2 非面包屑模式：只展开目标祖先链、收起其它目录');
+  ok(bm10.includes('if (openChainOnly(pane, id)) scrollId = id;'), 'T141e3 收起发生在写词后的定位分支里');
   ok(bm10.includes('const adding = at < 0;') && bm10.includes('else parts.splice(at, 1);'), 'T141f 再点一次 = 去掉这条 @词（切换语义）');
   ok(bm10.includes('if (!targetPath) resetQueryBox();'), 'T141g 退出面包屑清空查询框');
   ok(bm10.includes('function resetQueryBox('), 'T141h 只清查询框，不动书名搜索与批量标签输入');
