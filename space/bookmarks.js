@@ -175,6 +175,7 @@ let rootIds = new Set(); // 三个根：永远视为展开
 const DIR_FETCH_LIMIT = 500; // 后台单目录取书签的上限（超过会截断并提示）
 let treeCache = { query: '', filter: 'all', text: '', rows: new Map() }; // folderId -> {rows, total}
 let dirLoading = new Set();
+let dirNameIndex = new Map(); // 小写文件夹名 → [{id,path}]（loadFolders 重建）
 let clip = null; // 剪贴板 {mode:'copy'|'cut', bookmarks:[id], folders:[id]}
 let trashOpen = false;
 let cloudTags = []; // [{tag,count}] 全量标签
@@ -222,9 +223,16 @@ async function loadFolders() {
   idToPath = new Map();
   pathToId = new Map();
   rootIds = new Set();
+  dirNameIndex = new Map(); // 小写文件夹名 → [{id,path}]，目录 chip 解析用（云每次重画都要查）
   const walk = (nodes, depth) => {
     for (const n of nodes || []) {
       foldersFlat.push({ id: n.id, path: n.path, title: n.title, depth, total: n.total });
+      const nk = String(n.title || '').toLowerCase();
+      if (nk) {
+        const arr = dirNameIndex.get(nk) || [];
+        arr.push({ id: n.id, path: n.path });
+        dirNameIndex.set(nk, arr);
+      }
       idToPath.set(n.id, n.path);
       pathToId.set(n.path, n.id);
       if (depth === 0) rootIds.add(n.id);
@@ -2312,7 +2320,7 @@ function renderCloud() {
 function dirIdForName(name, pane) {
   const key = String(name || '').toLowerCase();
   if (!key) return '';
-  const cands = foldersFlat.filter((f) => String(f.title || '').toLowerCase() === key);
+  const cands = dirNameIndex.get(key) || [];
   if (!cands.length) return '';
   const base = pane && pane.folderId ? idToPath.get(pane.folderId) || '' : '';
   if (base) {
