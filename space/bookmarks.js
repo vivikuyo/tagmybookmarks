@@ -179,8 +179,7 @@ let dirNameIndex = new Map(); // 小写文件夹名 → [{id,path}]（loadFolder
 let clip = null; // 剪贴板 {mode:'copy'|'cut', bookmarks:[id], folders:[id]}
 let trashOpen = false;
 let cloudTags = []; // [{tag,count}] 全量标签
-let cloudDirs = []; // [{tag,count,key?}] 目录标签（文件夹投影；作用域模式下来自子目录，带真实 id）
-let scopeInfo = null; // {path,total} 下钻模式下的作用域说明（云顶部那一条）
+let cloudDirs = []; // [{tag,count}] 目录标签（文件夹投影）
 let pendingDelete = null; // 回收站设置完成后再删这批
 let undoExpanded = false;
 let editor = null; // { row, id, key, input, box }
@@ -2023,21 +2022,6 @@ let fullDirs = []; // 全量目录缓存：供补全候选与「目录名含查�
 async function loadCloud() {
   const wrap = $('#bmCloud');
   if (!wrap || wrap.hidden) return;
-  const scopeId = st.sort === 'tree' && curPane().folderId ? curPane().folderId : '';
-  if (scopeId) {
-    // 下钻 = 作用域模式：云只看这棵子树里的标签/子目录，不相关 chip 自然消失
-    try {
-      const r = await send({ type: 'cloud:scope', folderId: scopeId, query: st.query, filter: st.filter, text: st.text });
-      if (r && r.ok) {
-        cloudTags = r.tags || [];
-        cloudDirs = r.dirs || [];
-        scopeInfo = { path: r.path || '', total: r.total || 0 };
-        renderCloud();
-        return;
-      }
-    } catch {}
-  }
-  scopeInfo = null;
   if (st.query) {
     // 有查询：只显示相关标签/目录（按全部命中集算，翻页不变）；命中标签保留可点掉
     cloudTags = st.related || [];
@@ -2228,63 +2212,23 @@ function renderCloud() {
   const tagsBox = $('#bmCloudTags');
   const dirsBox = $('#bmCloudDirs');
   if (!tagsBox || !dirsBox) return;
-  // 不在下钻状态就不该有作用域条（切平铺/退出下钻后立刻归位）
-  if (!(st.sort === 'tree' && curPane().folderId)) scopeInfo = null;
-  const wrap = $('#bmCloud');
-  if (wrap) {
-    // 作用域条：显式告诉用户"云被锁在这棵子树里了"，并给一键退出
-    let bar = $('#bmCloudScope');
-    if (!bar) {
-      bar = document.createElement('div');
-      bar.id = 'bmCloudScope';
-      bar.className = 'bm-cloud-scope';
-      wrap.insertBefore(bar, wrap.firstChild);
-    }
-    bar.textContent = '';
-    if (scopeInfo) {
-      const segs = String(scopeInfo.path || '').split(PATH_SEP).filter(Boolean);
-      const lab = document.createElement('span');
-      lab.textContent = `作用域：${segs.length ? segs[segs.length - 1] : '所有目录'} · ${scopeInfo.total} 条`;
-      lab.title = scopeInfo.path || '';
-      const btn = document.createElement('button');
-      btn.className = 'bm-cloud-scope-x';
-      btn.textContent = '显示全部';
-      btn.title = '退出下钻，回到所有目录（同时清空查询）';
-      btn.addEventListener('click', () => exitDrill());
-      bar.append(lab, btn);
-      bar.hidden = false;
-    } else {
-      bar.hidden = true;
-    }
-  }
   const active = activeQueryNames();
   const needle = currentNeedle();
   tagsBox.textContent = '';
   dirsBox.textContent = '';
 
-  const mkChip = (name, count, isDir, presetId) => {
+  const mkChip = (name, count, isDir) => {
     const b = document.createElement('button');
     b.className = 'bm-cloud-chip' + (isDir ? ' dir' : '');
     const tok = cloudToken(name, isDir);
     // 与侧边栏同一套着色：标签色做文字色，选中时 background: currentColor 反白
     b.style.color = colorFor(name, colors);
     if (isDir && st.sort === 'tree') {
-      // 按目录模式里，目录标签 = 导航入口：
-      //   已下钻 → 跳到这个目录（等价点面包屑，面包屑随之缩短）
-      //   没下钻 → 在树里展开到它、把无关目录收起来，并滚到它那一行
-      const pane = curPane();
-      const chipId = presetId || dirIdForName(name, pane);
-      // 下钻模式下云按作用域收窄，目录 chip 就是这一层的子目录：直接标出"当前作用域"
-      if (chipId && pane.folderId && String(chipId) === String(pane.folderId)) b.classList.add('on');
-      const curPath = pane.folderId ? idToPath.get(pane.folderId) || '' : '';
-      const chipPath = chipId ? idToPath.get(chipId) || '' : '';
-      if (chipPath && curPath && curPath.startsWith(chipPath + PATH_SEP)) b.classList.add('on'); // 某一级祖先
-      b.title = `@${name}：${pane.folderId ? '切到这个目录（作用域）' : '进入这个目录（作用域）'}；⌘/Ctrl+点击 = 只看该目录（写入 @词）`;
-      b.addEventListener('click', (e) => {
-        // 逃生舱：⌘/Ctrl 点击仍是老的"写 @目录 词 + 云收窄"，作用域不动
-        if (e.metaKey || e.ctrlKey) { toggleCloudToken(tok); return; }
-        gotoDirChip(name, chipId);
-      });
+      // 目录标签：一律写/去查询里的 @目录 词（云随之收窄）；
+      // 面包屑模式（已下钻）再多做一步——下钻到这个目录
+      if (active.has(name.toLowerCase())) b.classList.add('on');
+      b.title = `@${name}：${curPane().folderId ? '写进查询并下钻到这个目录' : '写进查询，目录树展开到这个目录'}`;
+      b.addEventListener('click', () => dirChipClick(name));
     } else {
       if (active.has(name.toLowerCase())) b.classList.add('on');
       b.title = isDir ? `@${name}：该目录（含子级）里的书签` : `${tok}：带这个标签的书签`;
@@ -2303,14 +2247,12 @@ function renderCloud() {
   if (!tags.length && !cloudDirs.length) {
     const p = document.createElement('span');
     p.className = 'hint';
-    p.textContent = scopeInfo ? '这个目录里没有可继续收窄的标签或子目录'
-      : (st.query ? '这个条件下没有可继续收窄的标签' : '还没有标签');
+    p.textContent = st.query ? '这个条件下没有可继续收窄的标签' : '还没有标签';
     tagsBox.append(p);
   }
   for (const t of tags) tagsBox.append(mkChip(t.tag, t.count, false));
   const dirs = needle ? cloudDirs.filter((d) => d.tag.toLowerCase().includes(needle)) : cloudDirs;
-  // 作用域云的目录 chip 带真实 id；全局云的 d.key 是 tagKey（不是 id），不能当 id 用
-  for (const d of dirs.slice(0, CLOUD_LIMIT)) dirsBox.append(mkChip(d.tag, d.count, true, d.id));
+  for (const d of dirs.slice(0, CLOUD_LIMIT)) dirsBox.append(mkChip(d.tag, d.count, true));
 }
 
 /**
@@ -2332,97 +2274,47 @@ function dirIdForName(name, pane) {
   return cands[0].id;
 }
 
-/** 导航前把查询框里同名的 @目录 词摘掉：否则跳过去以后还被这条词二次收窄 */
-function stripQueryDirToken(name) {
-  const target = String(name || '').replace(/^[@#/?]/, '').toLowerCase();
-  if (!target || !st.query) return;
-  const parts = st.query.split(/\s+/).filter(Boolean);
-  const keep = parts.filter((p) => {
-    if (!p.startsWith('@')) return true;
-    return p.replace(/^@/, '').replace(/^"/, '').replace(/"$/, '').toLowerCase() !== target;
-  });
-  const next = keep.join(' ');
-  if (next === st.query) return;
-  st.query = next;
-  const input = $('#bmSearch');
-  if (!input) return;
-  input.value = next;
-  const wrap = input.closest('.search');
-  if (wrap) wrap.classList.toggle('has', !!next);
-}
-
-/** 树里展开到指定目录：打开它的祖先链，其它目录一律收起，滚到它那一行并闪一下 */
-function focusDirInTree(pane, id) {
-  // 祖先链按"路径"算：folders:list 的节点里没有 parentId（只有 id/title/path/children），
-  // 老写法沿 parentId 往上走一步就断，结果只把目标目录标成展开、它的父目录还是收着的，
-  // 那一行根本没被渲染出来 —— 表现出来就是"点了目录标签没反应"
-  const path = idToPath.get(id) || '';
-  if (!path) return false;
-  const segs = path.split(PATH_SEP).filter(Boolean);
-  const chain = [];
-  for (let i = 1; i <= segs.length; i++) {
-    const fid = pathToId.get(segs.slice(0, i).join(PATH_SEP));
-    if (fid) chain.push(fid);
-  }
-  if (!chain.length) return false;
-  pane.dirOpen = new Set(chain.filter((x) => !rootIds.has(x)));
-  pane.autoOpen = new Set();
-  pane.autoCollapsed = new Set();
-  saveDirOpen(pane);
+/** 目录标签：写/去查询里的 @目录 词（云随之收窄）；面包屑模式下再下钻到该目录 */
+function dirChipClick(name, presetId) {
+  const pane = curPane();
+  const id = presetId || dirIdForName(name, pane);
+  const norm = String(name || '').toLowerCase();
+  const parts = (st.query || '').split(/\s+/).filter(Boolean);
+  const at = parts.findIndex((p) => p.startsWith('@')
+    && p.replace(/^@/, '').replace(/^"/, '').replace(/"$/, '').toLowerCase() === norm);
+  const adding = at < 0;
+  if (adding) parts.push(`@${name}`);
+  else parts.splice(at, 1);
+  st.query = parts.join(' ');
   st.offset = 0;
-  return refresh().then(() => {
-    const key = PANE_LIST.find((k) => paneState[k] === pane) || 'L';
-    const scroller = dual
-      ? document.querySelector(`.bm-pane[data-pane="${key}"] .bm-pane-rows`)
-      : document.querySelector('#bmRows');
-    const row = (scroller || document).querySelector(`.bm-folder-row[data-id="${CSS.escape(String(id))}"]`);
+  const input = $('#bmSearch');
+  if (input) {
+    input.value = st.query;
+    const wrap = input.closest('.search');
+    if (wrap) wrap.classList.toggle('has', !!st.query);
+  }
+  clearSelectionOnFilterChange();
+  let scrollId = '';
+  if (adding && id) {
+    if (pane.folderId) {
+      // 面包屑模式：同时下钻到该目录（@词 与下钻范围同枝，不会二次收窄成空）
+      pane.folderId = id;
+      if (paneState[activePane] === pane) st.folderId = id;
+      savePaneFolder();
+    } else {
+      // 非面包屑模式：树靠 @词 的命中路径自动展开，这里只补"滚到那一行 + 闪一下"
+      scrollId = id;
+    }
+  }
+  refresh().then(() => {
+    if (!scrollId) return;
+    const row = document.querySelector(`.bm-folder-row[data-id="${CSS.escape(String(scrollId))}"]`);
     if (!row) return;
     row.scrollIntoView({ block: 'center' });
     row.classList.add('flash');
     setTimeout(() => row.classList.remove('flash'), 1200);
   }).catch((x) => toast(x.message, true));
-}
-
-/** 退出下钻（作用域模式）→ 回所有目录，并把查询框一起复位 */
-function exitDrill() {
-  const pane = curPane();
-  if (!pane.folderId) return;
-  resetQueryBox();
-  pane.folderId = '';
-  if (paneState[activePane] === pane) st.folderId = '';
-  savePaneFolder();
-  st.offset = 0;
-  clearSelectionOnFilterChange();
-  scopeInfo = null; // 作用域条立刻撤掉，不等 cloud:scope 回来
-  refresh().catch((x) => toast(x.message, true));
-  renderCloud();
-}
-
-/** 点目录标签：已下钻就跳过去，没下钻就在树里展开定位 */
-async function gotoDirChip(name, presetId) {
-  const pane = curPane();
-  const id = presetId || dirIdForName(name, pane);
-  if (!id) {
-    toast(`找不到目录「${name}」：可能已改名或被排除`, true);
-    return;
-  }
-  stripQueryDirToken(name);
-  if (pane.folderId) {
-    pane.folderId = id;
-    if (paneState[activePane] === pane) st.folderId = pane.folderId;
-    savePaneFolder();
-    st.offset = 0;
-    clearSelectionOnFilterChange();
-    try {
-      await refresh();
-    } catch (x) {
-      toast(x.message, true);
-    }
-    return;
-  }
-  // 未下钻：展开到该目录并收拢无关目录；失败（比如这个目录不在目录树里）要说清楚
-  const ok = focusDirInTree(pane, id);
-  if (ok === false) toast(`目录「${name}」不在当前目录树里（可能被排除或已删除）`, true);
+  renderCloud(); // 立刻更新高亮，不等数据回来
 }
 
 /** 点 chip = 在查询里加上/去掉这个词（再点一下取消），与手打查询完全同一条路 */

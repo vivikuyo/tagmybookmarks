@@ -1429,40 +1429,6 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(tg.includes('if (drawerTag) openDrawer(drawerTag, drawerIsDir);'), 'T133e 操作后重开抽屉刷新内容');
 }
 
-// T144：下钻 = 显式作用域模式（云按子树收窄、面包屑挂徽标、⌘点保留 @词 通道）
-{
-  const bm13 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
-  const bg13 = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
-  const css13 = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
-  const html13 = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
-  ok(bm13.includes('function exitDrill('), 'T144a 退出下钻有统一入口（面包屑 ✕ 与云上「显示全部」共用）');
-  ok(bm13.includes("btn.textContent = '显示全部'") && bm13.includes('exitDrill()'), 'T144b 作用域条带一键退出');
-  ok(bm13.includes("type: 'cloud:scope'"), 'T144c 下钻时云改取作用域统计');
-  ok(bg13.includes('function scopeCloudStats(') && bg13.includes("type === 'cloud:scope'"), 'T144d 后台有作用域云统计通道');
-  ok(bg13.includes('scopeCloudCache.clear()'), 'T144e 索引重建时作用域缓存作废');
-  ok(html13.includes('id="bmCloudScope"') && css13.includes('.bm-cloud-scope'), 'T144f 云顶部作用域条（结构+样式）');
-  ok(bm13.includes('if (e.metaKey || e.ctrlKey) { toggleCloudToken(tok); return; }'), 'T144g ⌘/Ctrl 点击保留写 @词 的逃生舱');
-  ok(bm13.includes("textContent = '只看此目录'") && css13.includes('.bm-crumb-scope'), 'T144h 面包屑挂「只看此目录」，下钻可见');
-  // 全局云的 d.key 是 tagKey，不是目录 id：只能作用域云给 id 才能直接导航
-  ok(bg13.includes('dirs.push({ id: c.id') && bm13.includes('mkChip(d.tag, d.count, true, d.id)'), 'T144i 目录 chip 只在作用域云里带真实 id，避免拿 tagKey 当 id');
-}
-
-// T143：点目录标签→展开定位，祖先链必须按路径算（folders:list 里没有 parentId）
-{
-  const bm12 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
-  const i0 = bm12.indexOf('function focusDirInTree(');
-  const i1 = bm12.indexOf('function gotoDirChip(');
-  ok(i0 > 0 && i1 > i0, 'T143a 定位到 focusDirInTree 函数体');
-  const body = bm12.slice(i0, i1);
-  ok(!body.includes('node.parentId'), 'T143b 不再沿 node.parentId 往上走（该字段 folders:list 不返回）');
-  ok(body.includes('idToPath.get(id)') && body.includes('pathToId.get'), 'T143c 改按路径前缀解析祖先链');
-  ok(body.includes('return refresh()') && body.includes("'flash'"), 'T143d 展开后仍会滚动定位并高亮');
-  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
-  const flBlock = bg.slice(bg.indexOf("type === 'folders:list'"), bg.indexOf("type === 'bookmark:create'"));
-  ok(flBlock && !flBlock.includes('parentId'), 'T143e 后台 folders:list 确实不带 parentId（前提校验）');
-  ok(bm12.includes('不在当前目录树里'), 'T143f 展开失败会给出提示而不是静默无反应');
-}
-
 // T142：退出下钻后面包屑必须真的消失（列表回到所有目录，表头不许残留旧分段）
 {
   const bm11 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
@@ -1472,20 +1438,35 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(/function renderCrumbInto\(el, pane\)[\s\S]{0,300}el\.hidden = true;\s*el\.textContent = '';/.test(bm11), 'T142d 双窗每栏同样隐藏即清空');
 }
 
-// T141：目录标签 = 导航（下钻跳转 / 未下钻展开定位），退出面包屑复位查询
+// T141：目录标签 = 写 @目录 词（云收窄）+ 定位（非面包屑展开、面包屑下钻）
 {
   const bm10 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
   const css10 = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
-  ok(bm10.includes('function dirIdForName('), 'T141a 文件夹名 → 目录 id（优先当前枝/祖先/树序）');
-  ok(bm10.indexOf("isDir && st.sort === 'tree'") > 0 && bm10.indexOf('gotoDirChip(name', bm10.indexOf("isDir && st.sort === 'tree'")) >= 0, 'T141b 按目录模式下目录标签走导航而非加查询词');
-  ok(bm10.includes('async function gotoDirChip('), 'T141c 下钻时跳到该目录');
-  ok(bm10.includes('function focusDirInTree(') && bm10.includes('pane.dirOpen = new Set(chain.filter'), 'T141d 未下钻时展开到目标目录并收起其它');
-  ok(bm10.includes("row.scrollIntoView({ block: 'center' })"), 'T141e 定位后滚动到那一行');
-  ok(bm10.includes('function stripQueryDirToken('), 'T141f 导航前摘掉同名 @目录 词');
+  ok(bm10.includes('function dirIdForName(') && bm10.includes('dirNameIndex.get(key)'), 'T141a 文件夹名 → 目录 id（查表）');
+  ok(bm10.indexOf("isDir && st.sort === 'tree'") > 0
+     && bm10.indexOf('dirChipClick(name)', bm10.indexOf("isDir && st.sort === 'tree'")) >= 0, 'T141b 按目录模式下目录标签走 dirChipClick');
+  ok(bm10.includes('if (adding) parts.push(`@${name}`);'), 'T141c 点击即把 @目录 词写进查询框（云随之收窄）');
+  ok(bm10.includes('if (pane.folderId) {') && bm10.includes('pane.folderId = id;'), 'T141d 面包屑模式：同时下钻到该目录');
+  ok(bm10.includes("row.scrollIntoView({ block: 'center' })") && bm10.includes("row.classList.add('flash')"), 'T141e 非面包屑模式：滚到该目录那一行并闪一下');
+  ok(bm10.includes('const adding = at < 0;') && bm10.includes('else parts.splice(at, 1);'), 'T141f 再点一次 = 去掉这条 @词（切换语义）');
   ok(bm10.includes('if (!targetPath) resetQueryBox();'), 'T141g 退出面包屑清空查询框');
   ok(bm10.includes('function resetQueryBox('), 'T141h 只清查询框，不动书名搜索与批量标签输入');
   ok(css10.includes('.bm-folder-row.flash'), 'T141i 定位到的那一行有高亮提示');
-  ok(bm10.includes("String(chipId) === String(pane.folderId)") && bm10.includes('curPath.startsWith(chipPath + PATH_SEP)'), 'T141j 当前作用域及其祖先的 chip 高亮');
+  ok(bm10.includes("if (active.has(name.toLowerCase())) b.classList.add('on');")
+     && bm10.indexOf("if (active.has(name.toLowerCase())) b.classList.add('on');", bm10.indexOf("isDir && st.sort === 'tree'")) > 0, 'T141j @词 在查询里时目录 chip 高亮');
+}
+
+// T144：云收窄仍走查询（不残留上一版"作用域云"那套），面包屑挂模式徽标
+{
+  const bm13 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const bg13 = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  const css13 = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  const html13 = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  ok(!bm13.includes('cloud:scope') && !bg13.includes('cloud:scope'), 'T144a 不残留作用域云通道（收窄只由查询驱动）');
+  ok(!html13.includes('bmCloudScope') && !css13.includes('.bm-cloud-scope'), 'T144b 不残留云顶作用域条');
+  ok(!bm13.includes('scopeInfo'), 'T144c 不残留作用域状态变量');
+  ok(bm13.includes("textContent = '只看此目录'") && css13.includes('.bm-crumb-scope'), 'T144d 面包屑挂「只看此目录」，下钻可见');
+  ok(!bm13.includes('gotoDirChip') && !bm13.includes('focusDirInTree'), 'T144e 只保留一条目录标签路径，不并存两套导航实现');
 }
 
 // T140：功能带按模式分工——按目录专属控件在平铺里隐藏而不是置灰
