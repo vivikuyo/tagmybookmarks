@@ -1429,6 +1429,16 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(tg.includes('if (drawerTag) openDrawer(drawerTag, drawerIsDir);'), 'T133e 操作后重开抽屉刷新内容');
 }
 
+// T140：功能带按模式分工——按目录专属控件在平铺里隐藏而不是置灰
+{
+  const bm9 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const sp9 = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  ok(bm9.includes("for (const id of ['#bmCollapse', '#bmDual', '#bmNewFolder', '#bmCopy', '#bmCut', '#bmPaste', '#bmClipSep'])"), 'T140a 六个按目录专属控件 + 分隔线整块隐藏');
+  ok(bm9.includes('if (el) el.hidden = !tree;'), 'T140b 平铺隐藏、按目录显示');
+  ok(sp9.includes('id="bmClipSep"'), 'T140c 剪贴板分隔线有 id 才能跟着一起隐');
+  ok(bm9.includes("pageBtn.textContent = tree ? '全选可见' : '全选本页'"), 'T140d 全选按钮按模式换语义与文案');
+}
+
 // T139：平铺模式的排序（目录 / 标题）
 {
   const bm8 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');

@@ -1566,6 +1566,12 @@ function renderBulk() {
   if (orderEl) orderEl.hidden = tree; // 按目录模式固定树序，这组按钮没意义
   const orderHint = $('#bmOrderHint');
   if (orderHint) orderHint.hidden = tree;
+  // 只在「按目录」里有意义的控件：平铺时整块隐藏，不留一排灰按钮让人以为坏了
+  // （收起目录 / 双窗 / 新建文件夹 / 剪贴板三件 + 剪贴板分隔线）
+  for (const id of ['#bmCollapse', '#bmDual', '#bmNewFolder', '#bmCopy', '#bmCut', '#bmPaste', '#bmClipSep']) {
+    const el = $(id);
+    if (el) el.hidden = !tree;
+  }
   const nf = $('#bmNewFolder');
   if (nf) nf.disabled = !tree;
   const dualBtn = $('#bmDual');
