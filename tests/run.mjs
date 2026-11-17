@@ -701,7 +701,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(bm.includes('colorFor(name, colors)'), 'T88k 云 chip 用 colorFor 着色');
   ok(css.includes('.bm-cloud-chip.on') && css.includes('background: currentColor'), 'T88l 选中态反白与侧边栏同款');
   ok(!css.includes('.bm-pop') && css.includes('.bm-group-arrow'), 'T88m 浮层样式已删、组头箭头样式保留');
-  ok(/bookmarks:page[\s\S]{0,2000}relatedTags\(index, matchedKeys\)/.test(bg), 'T88n bookmarks:page 返回 related');
+  ok(/bookmarks:page[\s\S]{0,6000}relatedTags\(index, matchedKeys\)/.test(bg), 'T88n bookmarks:page 返回 related');
   ok(bg.includes('翻页时云不能跟着变'), 'T88o related 按全部命中集算');
 }
 
@@ -1427,6 +1427,22 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(tg.includes('function openDrawerCtx') && tg.includes("el.className = 'bm-ctx'"), 'T133c 右键菜单复用书签页 .bm-ctx 样式');
   ok(tg.includes("type: 'node:rename', id: item.nodeIds[0]") && tg.includes("type: 'delete', ids: [item.nodeIds[0]]"), 'T133d 重命名/删除走 node:rename 与 delete（nodeIds[0]，多位置书签取最前位置）');
   ok(tg.includes('if (drawerTag) openDrawer(drawerTag, drawerIsDir);'), 'T133e 操作后重开抽屉刷新内容');
+}
+
+// T136：排除只作用于标签/查询层，书签页按目录照常显示
+{
+  const bg5 = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  const bm5 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  ok(bg5.includes('let rawTree = null;'), 'T136a rebuuild 时缓存原始树');
+  ok(bg5.includes('rawTree = tree;'), 'T136b 重建时刷新原始树快照');
+  ok(bg5.includes('function treeScopeRows('), 'T136c 按目录从真实树组行');
+  ok(/bookmarks:page[\s\S]{0,900}if \(folderId\) \{[\s\S]{0,600}treeScopeRows/.test(bg5), 'T136d bookmarks:page 带到目录就走真实树');
+  const idsIdx = bg5.indexOf("type === 'bookmarks:ids'");
+  ok(idsIdx > 0 && bg5.indexOf('treeScopeRows(folderId, { subtree', idsIdx) > 0, 'T136e bookmarks:ids 同样按真实树');
+  ok(bg5.includes('folderExcluded,'), 'T136f 回包带 folderExcluded');
+  ok(bm5.includes('folderExcluded: !!r.folderExcluded'), 'T136g 前端记住目录被排除');
+  ok(bm5.includes('此目录已在标签管理页被排除：这里照常显示，但它不进标签云、也搜不到'), 'T136h 明确提示，不再让人以为目录坏了');
+  ok(bm5.includes("b.textContent = '恢复收录'"), 'T136i 一键恢复收录');
 }
 
 // T135：「当前生效」条件条——空页不再是哑的，失效目录词可一键移除

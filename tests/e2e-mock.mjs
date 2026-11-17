@@ -790,6 +790,33 @@ if (srcId) {
   ok(rs.ok !== false && rs.restored >= 1, 'E186 文件夹还原回原位置');
 }
 
+// 45+. 排除只作用于标签/查询层：书签页按目录仍能看到真实内容
+{
+  const xf = await chrome.bookmarks.create({ parentId: '1', title: '被排除目录' });
+  await chrome.bookmarks.create({ parentId: xf.id, title: 'X 页一 [#E2E]', url: 'https://x1.test/' });
+  await chrome.bookmarks.create({ parentId: xf.id, title: 'X 页二', url: 'https://x2.test/' });
+  await chrome.bookmarks.create({ parentId: xf.id, title: 'X 页三', url: 'https://x3.test/' });
+  await call({ type: 'index:rebuild' });
+
+  await call({ type: 'dirs:exclude', tag: '被排除目录', excluded: true });
+  const stX = await call({ type: 'state' });
+  ok(!stX.dirTags.some((t) => t.tag === '被排除目录'), 'E197 排除后目录标签从标签体系消失');
+  eq((await call({ type: 'query', expr: '@被排除目录' })).total, 0, 'E198 排除后查询不到这个目录里的书签');
+
+  const pgX = await call({ type: 'bookmarks:page', folderId: xf.id, limit: 200 });
+  eq(pgX.total, 3, 'E199 书签页按目录仍显示 3 条（排除不影响管理页的内容）');
+  ok(pgX.folderExcluded === true, 'E200 页面知道这个目录被排除了（用于给提示）');
+  ok(pgX.items.every((r) => typeof r.title === 'string' && r.tags.length >= 0), 'E201 行数据完整（标题/标签照常解析）');
+
+  const idsX = await call({ type: 'bookmarks:ids', folderId: xf.id });
+  eq(idsX.total, 3, 'E202 全选取 id 也按真实树算（排除目录里也能批量操作）');
+
+  await call({ type: 'dirs:exclude', tag: '被排除目录', excluded: false });
+  const stY = await call({ type: 'state' });
+  ok(stY.dirTags.some((t) => t.tag === '被排除目录'), 'E203 恢复后目录标签回来');
+  eq((await call({ type: 'query', expr: '@被排除目录' })).total, 3, 'E204 恢复后又能查询到');
+}
+
 // 46. 文件夹名含 / ：目录模式能下钻、按目录查询能命中、排除后整枝消失
 {
   const sf = await chrome.bookmarks.create({ parentId: '1', title: 'program/ff' });

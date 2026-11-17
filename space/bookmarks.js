@@ -1126,7 +1126,7 @@ async function loadDirRows(folderId) {
       limit: 500,
       offset: 0,
     });
-    treeCache.rows.set(key, { rows: r.items || [], total: r.total || 0 });
+    treeCache.rows.set(key, { rows: r.items || [], total: r.total || 0, folderExcluded: !!r.folderExcluded });
   } catch (e) {
     toast(e.message, true);
   } finally {
@@ -1929,6 +1929,12 @@ async function loadCloud() {
 async function syncFilterNote() {
   const el = $('#bmFilterNote');
   if (!el) return;
+  // 当前下钻的目录是否被"排除"了：排除只影响标签云/查询，管理页照常显示，
+  // 但必须说清楚，否则用户会以为目录坏了（一起在下方条件条里提示）
+  const pane = paneState[activePane] || paneState.L;
+  const fid = pane && pane.folderId ? String(pane.folderId) : '';
+  const hit = fid ? treeCache.rows.get(fid) : null;
+  const exclNode = hit && hit.folderExcluded ? findFolderNode(folderTree, fid) : null;
   const qTerms = (st.query || '').split(/\s+/).filter(Boolean);
   const dirTerms = qTerms.filter((p) => /^!?@/.test(p));
   let stale = [];
@@ -1946,11 +1952,35 @@ async function syncFilterNote() {
     });
   }
   el.textContent = '';
-  if (!st.query && !st.text && (!st.filter || st.filter === 'all')) {
+  const anyCond = !!(st.query || st.text || (st.filter && st.filter !== 'all'));
+  if (!anyCond && !exclNode) {
     el.hidden = true;
     return;
   }
   el.hidden = false;
+  if (exclNode) {
+    const w = document.createElement('span');
+    w.className = 'stale';
+    w.textContent = `此目录已在标签管理页被排除：这里照常显示，但它不进标签云、也搜不到`;
+    el.append(w);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn ghost small';
+    b.textContent = '恢复收录';
+    b.title = '把这个目录重新放进标签体系（云、查询、统计都会回来）';
+    b.addEventListener('click', async () => {
+      try {
+        await send({ type: 'dirs:exclude', tag: exclNode.title || '', excluded: false });
+        invalidateTree();
+        await refresh();
+        await loadCloud();
+        toast('已恢复收录');
+      } catch (x) {
+        toast(x.message, true);
+      }
+    });
+    el.append(b);
+  }
   const lab = document.createElement('span');
   lab.className = 'lab';
   lab.textContent = '当前生效：';

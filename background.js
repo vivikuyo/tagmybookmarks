@@ -20,6 +20,7 @@ import {
   collectFolderPaths,
   resolveDirEntries,
   pruneNestedPaths,
+  folderPathOf,
   PATH_SEP,
 } from './lib/index.js';
 import { parse as parseQuery, evaluate, relatedTags, collectQueryTags, collectQueryDirs } from './lib/query.js';
@@ -45,6 +46,8 @@ const PANEL_PAGE = 'sidepanel/panel.html';
 const SPACE_PAGE = 'space/space.html';
 
 let index = null;
+let rawTree = null; // 最近一次重建时的原始书签树（书签页按目录读行用，绕开"排除"）
+let rawMaps = null; // { byId, pathOf, seqOf } 与 rawTree 同批缓存
 let resolvedExcluded = [];
 let configFolderId = null;
 let configNodes = {}; // category → 规范文件 {id, title, url}
@@ -561,6 +564,82 @@ function suggestTagsFor({ url, title, text, limit }) {
   return items;
 }
 
+/**
+ * 真实书签树的索引缓存：id→节点、id→路径（PATH_SEP 形态）、id→树序。
+ * 书签页按目录取行时用——目录被"排除"只是从标签/查询体系里摘掉，
+ * 管理页必须还能看到真实内容（否则会出现树上 58 条、列表空白）。
+ */
+function treeMaps() {
+  if (rawMaps || !rawTree) return rawMaps;
+  const byId = new Map();
+  const pathOf = new Map();
+  const seqOf = new Map();
+  let seq = 0;
+  (function walk(nodes, path) {
+    for (const node of nodes || []) {
+      byId.set(String(node.id), node);
+      if (node.url) {
+        seqOf.set(String(node.id), seq++);
+        continue;
+      }
+      if (!node.children) continue;
+      const fp = folderPathOf(path, node.title || '');
+      pathOf.set(String(node.id), fp);
+      walk(node.children, fp);
+    }
+  })(rawTree, '');
+  rawMaps = { byId, pathOf, seqOf };
+  return rawMaps;
+}
+
+/** 某个文件夹（或整棵子树）里的书签行：完全按真实树组装，不经索引 */
+function treeScopeRows(folderId, opts) {
+  const maps = treeMaps();
+  const rows = [];
+  const ids = [];
+  let cAll = 0;
+  let cUntagged = 0;
+  const node = maps && maps.byId.get(String(folderId));
+  if (!node) return { rows, ids, cAll, cUntagged, path: '', excluded: false };
+  const path = maps.pathOf.get(String(folderId)) || '';
+  const excluded = !!(index && index.skipPaths
+    && [...index.skipPaths].some((p) => p && (path === p || path.startsWith(p + PATH_SEP))));
+
+  const walk = (parent) => {
+    for (const n of parent.children || []) {
+      if (!n.url) {
+        if (opts.subtree) walk(n);
+        continue;
+      }
+      const key = canonicalUrl(n.url);
+      const parsed = parseTitle(n.title || '');
+      const tags = [...parsed.tags].sort(cpCompare);
+      if (opts.queryKeys && !opts.queryKeys.has(key)) continue;
+      const untagged = tags.length === 0;
+      cAll++;
+      if (untagged) cUntagged++;
+      if (opts.filter === 'untagged' && !untagged) continue;
+      if (opts.filter === 'tagged' && untagged) continue;
+      const title = parsed.text || n.title || n.url;
+      if (opts.q && !`${title} ${n.url}`.toLowerCase().includes(opts.q)) continue;
+      ids.push(n.id);
+      rows.push({
+        id: n.id,
+        key,
+        parentId: n.parentId,
+        title,
+        url: n.url,
+        tags,
+        path: maps.pathOf.get(String(n.parentId)) || path,
+        locations: 1,
+        seq: maps.seqOf.get(String(n.id)) ?? Infinity,
+      });
+    }
+  };
+  walk(node);
+  return { rows, ids, cAll, cUntagged, path, excluded };
+}
+
 // ---------------------------------------------------------------- 索引
 
 async function rebuild() {
@@ -568,6 +647,8 @@ async function rebuild() {
   const countsBefore = index ? JSON.stringify(index.counts) : '';
   if (configFolderId) await scanConfigNodes();
   const tree = await chrome.bookmarks.getTree();
+  rawTree = tree;
+  rawMaps = null; // 树换了，缓存作废
   const exclude = new Set();
   if (configFolderId) exclude.add(configFolderId);
   for (const n of Object.values(configNodes)) if (n && n.id) exclude.add(n.id);
@@ -1647,7 +1728,16 @@ async function handle(msg) {
     const rows = [];
     let cAll = 0;
     let cUntagged = 0;
-    for (const [key, nodes] of index.keyToNodes) {
+    let folderExcluded = false;
+    if (folderId) {
+      // 按目录：直接读真实树。目录被"排除"只是从标签/查询体系里摘掉，
+      // 管理页仍要能看到内容（否则树上显示 58 条、列表却是空白）
+      const scoped = treeScopeRows(folderId, { queryKeys, filter, q });
+      rows.push(...scoped.rows);
+      cAll = scoped.cAll;
+      cUntagged = scoped.cUntagged;
+      folderExcluded = scoped.excluded;
+    } else for (const [key, nodes] of index.keyToNodes) {
       if (queryKeys && !queryKeys.has(key)) continue;
       const tags = index.keyToTags.get(key) || [];
       const untagged = tags.length === 0;
@@ -1709,6 +1799,8 @@ async function handle(msg) {
       relatedDirs: relatedDirsSorted,
       // 全部命中集涉及的目录路径（树模式自动展开用；按全部算，与翻页无关）
       matchPaths: [...new Set(rows.map((r) => r.path).filter(Boolean))],
+      // 该目录是否在排除名单里：是的话列表照常显示，但要给一句说明
+      folderExcluded,
     };
   }
 
@@ -1739,6 +1831,10 @@ async function handle(msg) {
       }
     }
     const ids = [];
+    if (folderId) {
+      const scoped = treeScopeRows(folderId, { subtree: !!msg.subtree, queryKeys, filter, q });
+      return { ok: true, ids: scoped.ids, total: scoped.ids.length };
+    }
     for (const [key, nodes] of index.keyToNodes) {
       if (queryKeys && !queryKeys.has(key)) continue;
       const tags = index.keyToTags.get(key) || [];
