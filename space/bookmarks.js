@@ -1201,6 +1201,17 @@ function renderCrumb() {
   renderCrumbInto(el, curPane());
 }
 
+/** 查询框 + 条件一起清空（不动"搜书签名/网址"和批量打标签输入） */
+function resetQueryBox() {
+  if (!st.query) return;
+  st.query = '';
+  const input = $('#bmSearch');
+  if (!input) return;
+  input.value = '';
+  const wrap = input.closest('.search');
+  if (wrap) wrap.classList.remove('has');
+}
+
 /** 双窗：每栏自己的面包屑（跳转只影响本栏） */
 function renderCrumbInto(el, pane) {
   if (!pane.folderId) {
@@ -1213,6 +1224,9 @@ function renderCrumbInto(el, pane) {
   const segs = path.split(PATH_SEP).filter(Boolean);
 
   const jump = (targetPath) => {
+    // 退出面包屑（点「所有目录」或 ✕）：查询框一起复位。
+    // 否则下钻期间点目录标签留下的 @目录 词会让整页看起来只剩空列表
+    if (!targetPath) resetQueryBox();
     pane.folderId = targetPath ? pathToId.get(targetPath) || '' : '';
     if (paneState[activePane] === pane) st.folderId = pane.folderId;
     savePaneFolder();
@@ -2188,11 +2202,26 @@ function renderCloud() {
     const b = document.createElement('button');
     b.className = 'bm-cloud-chip' + (isDir ? ' dir' : '');
     const tok = cloudToken(name, isDir);
-    if (active.has(name.toLowerCase())) b.classList.add('on');
     // 与侧边栏同一套着色：标签色做文字色，选中时 background: currentColor 反白
     b.style.color = colorFor(name, colors);
-    b.title = isDir ? `@${name}：该目录（含子级）里的书签` : `${tok}：带这个标签的书签`;
-    b.addEventListener('click', () => toggleCloudToken(tok));
+    if (isDir && st.sort === 'tree') {
+      // 按目录模式里，目录标签 = 导航入口：
+      //   已下钻 → 跳到这个目录（等价点面包屑，面包屑随之缩短）
+      //   没下钻 → 在树里展开到它、把无关目录收起来，并滚到它那一行
+      const pane = curPane();
+      const chipId = dirIdForName(name, pane);
+      const curPath = pane.folderId ? idToPath.get(pane.folderId) || '' : '';
+      const chipPath = chipId ? idToPath.get(chipId) || '' : '';
+      if (chipPath && curPath && (curPath === chipPath || curPath.startsWith(chipPath + PATH_SEP))) {
+        b.classList.add('on'); // 当前目录，或当前目录的某一级祖先
+      }
+      b.title = `@${name}：${pane.folderId ? '跳到这个目录（不改变查询条件）' : '在树里展开定位到这个目录'}`;
+      b.addEventListener('click', () => gotoDirChip(name));
+    } else {
+      if (active.has(name.toLowerCase())) b.classList.add('on');
+      b.title = isDir ? `@${name}：该目录（含子级）里的书签` : `${tok}：带这个标签的书签`;
+      b.addEventListener('click', () => toggleCloudToken(tok));
+    }
     const t = document.createElement('span');
     t.textContent = name;
     const c = document.createElement('span');
@@ -2212,6 +2241,95 @@ function renderCloud() {
   for (const t of tags) tagsBox.append(mkChip(t.tag, t.count, false));
   const dirs = needle ? cloudDirs.filter((d) => d.tag.toLowerCase().includes(needle)) : cloudDirs;
   for (const d of dirs.slice(0, CLOUD_LIMIT)) dirsBox.append(mkChip(d.tag, d.count, true));
+}
+
+/**
+ * 目录标签是"文件夹名"级投影（一级一个名字），同名文件夹可能落在不同枝。
+ * 解析顺序：当前下钻枝里的 → 当前枝的祖先 → 树里最早出现的那个。
+ */
+function dirIdForName(name, pane) {
+  const key = String(name || '').toLowerCase();
+  if (!key) return '';
+  const cands = foldersFlat.filter((f) => String(f.title || '').toLowerCase() === key);
+  if (!cands.length) return '';
+  const base = pane && pane.folderId ? idToPath.get(pane.folderId) || '' : '';
+  if (base) {
+    const inside = cands.find((f) => f.path === base || f.path.startsWith(base + PATH_SEP));
+    if (inside) return inside.id;
+    const anc = cands.find((f) => base.startsWith(f.path + PATH_SEP));
+    if (anc) return anc.id;
+  }
+  return cands[0].id;
+}
+
+/** 导航前把查询框里同名的 @目录 词摘掉：否则跳过去以后还被这条词二次收窄 */
+function stripQueryDirToken(name) {
+  const target = String(name || '').replace(/^[@#/?]/, '').toLowerCase();
+  if (!target || !st.query) return;
+  const parts = st.query.split(/\s+/).filter(Boolean);
+  const keep = parts.filter((p) => {
+    if (!p.startsWith('@')) return true;
+    return p.replace(/^@/, '').replace(/^"/, '').replace(/"$/, '').toLowerCase() !== target;
+  });
+  const next = keep.join(' ');
+  if (next === st.query) return;
+  st.query = next;
+  const input = $('#bmSearch');
+  if (!input) return;
+  input.value = next;
+  const wrap = input.closest('.search');
+  if (wrap) wrap.classList.toggle('has', !!next);
+}
+
+/** 树里展开到指定目录：打开它的祖先链，其它目录一律收起，滚到它那一行并闪一下 */
+function focusDirInTree(pane, id) {
+  const chain = [];
+  let node = findFolderNode(folderTree, id);
+  while (node) {
+    chain.push(node.id);
+    node = node.parentId ? findFolderNode(folderTree, node.parentId) : null;
+  }
+  pane.dirOpen = new Set(chain.filter((x) => !rootIds.has(x)));
+  pane.autoOpen = new Set();
+  pane.autoCollapsed = new Set();
+  saveDirOpen(pane);
+  st.offset = 0;
+  refresh().then(() => {
+    const key = PANE_LIST.find((k) => paneState[k] === pane) || 'L';
+    const scroller = dual
+      ? document.querySelector(`.bm-pane[data-pane="${key}"] .bm-pane-rows`)
+      : document.querySelector('#bmRows');
+    const row = (scroller || document).querySelector(`.bm-folder-row[data-id="${CSS.escape(String(id))}"]`);
+    if (!row) return;
+    row.scrollIntoView({ block: 'center' });
+    row.classList.add('flash');
+    setTimeout(() => row.classList.remove('flash'), 1200);
+  }).catch((x) => toast(x.message, true));
+}
+
+/** 点目录标签：已下钻就跳过去，没下钻就在树里展开定位 */
+async function gotoDirChip(name) {
+  const pane = curPane();
+  const id = dirIdForName(name, pane);
+  if (!id) {
+    toast(`找不到目录「${name}」：可能已改名或被排除`, true);
+    return;
+  }
+  stripQueryDirToken(name);
+  if (pane.folderId) {
+    pane.folderId = id;
+    if (paneState[activePane] === pane) st.folderId = pane.folderId;
+    savePaneFolder();
+    st.offset = 0;
+    clearSelectionOnFilterChange();
+    try {
+      await refresh();
+    } catch (x) {
+      toast(x.message, true);
+    }
+    return;
+  }
+  focusDirInTree(pane, id);
 }
 
 /** 点 chip = 在查询里加上/去掉这个词（再点一下取消），与手打查询完全同一条路 */

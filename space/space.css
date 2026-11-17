@@ -24,6 +24,7 @@
 
 * { box-sizing: border-box; }
 
+.bm-folder-row.flash { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 6px; }
 /* 很多组件自带 display:flex，会盖掉浏览器给 [hidden] 的 display:none。
    抽屉、弹窗、重复横幅、journal 条都靠 hidden 开关，缺这条会全部常显。 */
 [hidden] { display: none !important; }
