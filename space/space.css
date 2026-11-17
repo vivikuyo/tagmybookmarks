@@ -507,7 +507,7 @@ textarea:focus { border-color: var(--accent); }
   padding-top: 4px;
 }
 /* 标签管理页：区块之间不再画线（顶线/标题底线都去掉），靠留白分区 */
-#view-tags .alias-sec { border-top: 0; }
+#view-tags .alias-sec { border-top: 1px solid var(--line); }
 #view-tags .health-head { border-bottom: 0; padding-bottom: 0; }
 
 .alias-add {
@@ -585,6 +585,7 @@ textarea:focus { border-color: var(--accent); }
 
 .dir-blocked { margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dir-blocked .hint { margin: 0; }
+#dirExcluded .hint { flex-basis: 100%; } /* 已排除目录另起一行 */
 
 /* 色板里的 hex 行 */
 .pop-foot { display: flex; align-items: center; gap: 6px; }

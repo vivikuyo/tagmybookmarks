@@ -1409,12 +1409,13 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
 // T132：标签管理页去分隔线 + 云字号 +2 + 最近操作分隔线
 {
   const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
-  ok(css.includes('#view-tags .alias-sec { border-top: 0; }') && css.includes('#view-tags .health-head { border-bottom: 0;'), 'T132a 标签管理页区块分隔线移除（限本页，概览页 health-head 不受影响）');
+  ok(css.includes('#view-tags .alias-sec { border-top: 1px solid var(--line); }') && css.includes('#view-tags .health-head { border-bottom: 0;'), 'T132a 标签管理页：区块顶线保留、标题下线移除（概览页不受影响）');
   ok((css.match(/font-size: 14px; line-height: 1;/g) || []).length >= 2, 'T132b tagchip/dir-chip 字号 12→14');
   ok(/\.bm-cloud-chip \{[\s\S]*?font-size: 14px;/.test(css), 'T132c 书签页云 chip 字号 12→14');
   ok(css.includes('#undoBox { border-top: 1px solid var(--line); padding-top: 12px; }'), 'T132d 最近操作（可撤销）上方分隔线');
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
-  ok(pc.includes('font-size: 14.5px;'), 'T132e 侧边栏云 chip 字号 12.5→14.5');
+  ok(pc.includes('font-size: 13px;'), 'T132e 侧边栏云 chip 字号 13px');
+  ok(css.includes('#dirExcluded .hint { flex-basis: 100%; }'), 'T132f 已排除目录提示占满整行，chips 另起一行');
 }
 
 // 选择控件两页统一：表头复选框 + 「全选全部」+「取消选择」，不再有工具栏文字按钮
