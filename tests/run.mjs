@@ -1459,7 +1459,7 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   const bm10 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
   const css10 = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
   ok(bm10.includes('function dirIdForName('), 'T141a 文件夹名 → 目录 id（优先当前枝/祖先/树序）');
-  ok(bm10.indexOf("isDir && st.sort === 'tree'") > 0 && bm10.indexOf('gotoDirChip(name)', bm10.indexOf("isDir && st.sort === 'tree'")) >= 0, 'T141b 按目录模式下目录标签走导航而非加查询词');
+  ok(bm10.indexOf("isDir && st.sort === 'tree'") > 0 && bm10.indexOf('gotoDirChip(name', bm10.indexOf("isDir && st.sort === 'tree'")) >= 0, 'T141b 按目录模式下目录标签走导航而非加查询词');
   ok(bm10.includes('async function gotoDirChip('), 'T141c 下钻时跳到该目录');
   ok(bm10.includes('function focusDirInTree(') && bm10.includes('pane.dirOpen = new Set(chain.filter'), 'T141d 未下钻时展开到目标目录并收起其它');
   ok(bm10.includes("row.scrollIntoView({ block: 'center' })"), 'T141e 定位后滚动到那一行');
@@ -1467,7 +1467,7 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(bm10.includes('if (!targetPath) resetQueryBox();'), 'T141g 退出面包屑清空查询框');
   ok(bm10.includes('function resetQueryBox('), 'T141h 只清查询框，不动书名搜索与批量标签输入');
   ok(css10.includes('.bm-folder-row.flash'), 'T141i 定位到的那一行有高亮提示');
-  ok(/chipPath && curPath && \(curPath === chipPath \|\| curPath\.startsWith\(chipPath \+ PATH_SEP\)\)/.test(bm10), 'T141j 当前目录及其祖先的 chip 高亮');
+  ok(bm10.includes("String(chipId) === String(pane.folderId)") && bm10.includes('curPath.startsWith(chipPath + PATH_SEP)'), 'T141j 当前作用域及其祖先的 chip 高亮');
 }
 
 // T140：功能带按模式分工——按目录专属控件在平铺里隐藏而不是置灰

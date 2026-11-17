@@ -947,6 +947,17 @@ input.input, select.input { min-height: 28px; border-radius: 8px; box-sizing: bo
   padding: 2px 6px; border-radius: 6px; font-size: 12px;
 }
 .bm-crumb-x:hover { background: rgba(127,127,127,.1); color: var(--text); }
+/* 下钻 = 显式模式：面包屑末尾挂一枚「只看此目录」，别让"为什么只剩这几条"成为谜 */
+.bm-crumb-scope {
+  margin-left: 4px;
+  padding: 1px 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 11px; line-height: 1.5;
+  white-space: nowrap;
+  user-select: none;
+}
 
 /* 组头名字可下钻：与箭头区分（箭头=折叠，名字=下钻） */
 .bm-group-name { cursor: pointer; border: 0; background: none; color: inherit; font: inherit; font-weight: 600; letter-spacing: .3px; }

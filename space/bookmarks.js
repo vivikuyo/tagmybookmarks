@@ -1258,10 +1258,15 @@ function renderCrumbInto(el, pane) {
     el.append(seg(sg, segs.slice(0, i + 1).join(PATH_SEP), i === segs.length - 1));
     if (i < segs.length - 1) el.append(sep());
   });
+  const scope = document.createElement('span');
+  scope.className = 'bm-crumb-scope';
+  scope.textContent = '只看此目录';
+  scope.title = '下钻模式：范围锁在这一棵子树里，查询条件另外单独生效';
+  el.append(scope);
   const x = document.createElement('button');
   x.className = 'bm-crumb-x';
   x.textContent = '✕';
-  x.title = '回到所有目录';
+  x.title = '回到所有目录（退出下钻模式）';
   x.addEventListener('click', () => jump(''));
   el.append(x);
 }
@@ -2204,7 +2209,7 @@ function renderCloud() {
   tagsBox.textContent = '';
   dirsBox.textContent = '';
 
-  const mkChip = (name, count, isDir) => {
+  const mkChip = (name, count, isDir, presetId) => {
     const b = document.createElement('button');
     b.className = 'bm-cloud-chip' + (isDir ? ' dir' : '');
     const tok = cloudToken(name, isDir);
@@ -2215,14 +2220,18 @@ function renderCloud() {
       //   已下钻 → 跳到这个目录（等价点面包屑，面包屑随之缩短）
       //   没下钻 → 在树里展开到它、把无关目录收起来，并滚到它那一行
       const pane = curPane();
-      const chipId = dirIdForName(name, pane);
+      const chipId = presetId || dirIdForName(name, pane);
+      // 下钻模式下云按作用域收窄，目录 chip 就是这一层的子目录：直接标出"当前作用域"
+      if (chipId && pane.folderId && String(chipId) === String(pane.folderId)) b.classList.add('on');
       const curPath = pane.folderId ? idToPath.get(pane.folderId) || '' : '';
       const chipPath = chipId ? idToPath.get(chipId) || '' : '';
-      if (chipPath && curPath && (curPath === chipPath || curPath.startsWith(chipPath + PATH_SEP))) {
-        b.classList.add('on'); // 当前目录，或当前目录的某一级祖先
-      }
-      b.title = `@${name}：${pane.folderId ? '跳到这个目录（不改变查询条件）' : '在树里展开定位到这个目录'}`;
-      b.addEventListener('click', () => gotoDirChip(name));
+      if (chipPath && curPath && curPath.startsWith(chipPath + PATH_SEP)) b.classList.add('on'); // 某一级祖先
+      b.title = `@${name}：${pane.folderId ? '切到这个目录（作用域）' : '进入这个目录（作用域）'}；⌘/Ctrl+点击 = 只看该目录（写入 @词）`;
+      b.addEventListener('click', (e) => {
+        // 逃生舱：⌘/Ctrl 点击仍是老的"写 @目录 词 + 云收窄"，作用域不动
+        if (e.metaKey || e.ctrlKey) { toggleCloudToken(tok); return; }
+        gotoDirChip(name, chipId);
+      });
     } else {
       if (active.has(name.toLowerCase())) b.classList.add('on');
       b.title = isDir ? `@${name}：该目录（含子级）里的书签` : `${tok}：带这个标签的书签`;
@@ -2246,7 +2255,7 @@ function renderCloud() {
   }
   for (const t of tags) tagsBox.append(mkChip(t.tag, t.count, false));
   const dirs = needle ? cloudDirs.filter((d) => d.tag.toLowerCase().includes(needle)) : cloudDirs;
-  for (const d of dirs.slice(0, CLOUD_LIMIT)) dirsBox.append(mkChip(d.tag, d.count, true));
+  for (const d of dirs.slice(0, CLOUD_LIMIT)) dirsBox.append(mkChip(d.tag, d.count, true, d.key));
 }
 
 /**
@@ -2320,9 +2329,9 @@ function focusDirInTree(pane, id) {
 }
 
 /** 点目录标签：已下钻就跳过去，没下钻就在树里展开定位 */
-async function gotoDirChip(name) {
+async function gotoDirChip(name, presetId) {
   const pane = curPane();
-  const id = dirIdForName(name, pane);
+  const id = presetId || dirIdForName(name, pane);
   if (!id) {
     toast(`找不到目录「${name}」：可能已改名或被排除`, true);
     return;
