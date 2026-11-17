@@ -447,6 +447,10 @@ async function pasteInto(targetId, targetName) {
     const r = await send({ type: 'bookmarks:paste', targetId: tid, clip });
     if (clip.mode === 'cut') clip = null; // 剪切是一次性的
     selected.clear();
+    // 剪切把条目移走：分页模式回退 offset，避免当前页变空跳页
+    if (st.sort !== 'tree' && clip === null && r && r.moved) {
+      st.offset = Math.max(0, st.offset - r.moved);
+    }
     await refresh();
     toast(`已粘贴到「${targetName}」：复制 ${r.copied} 项、移动 ${r.moved} 项`);
   } catch (e) {
@@ -682,6 +686,12 @@ async function refresh() {
 function render() {
   const rows = $('#bmRows');
   if (!rows) return;
+  // 重画前记忆滚动与焦点：删除/移动后列表整块重建，不记忆就会跳顶、焦点丢到 body
+  const prevScroll = rows.scrollTop;
+  const prevFocusId = document.activeElement && document.activeElement.closest
+    ? document.activeElement.closest('.bm-row')?.dataset.id || ''
+    : '';
+  const prevHadFocus = document.activeElement && rows.contains(document.activeElement);
   rows.textContent = '';
 
   renderCrumb();
@@ -739,6 +749,15 @@ function render() {
     for (const row of st.items) rows.append(renderRow(row));
   }
   renderBulk();
+  // 恢复滚动与焦点（重画后行高一致，scrollTop 直接可用；行被删则尽量贴近原位置）
+  if (!tree) {
+    rows.scrollTop = Math.min(prevScroll, Math.max(0, rows.scrollHeight - rows.clientHeight));
+    if (prevHadFocus) {
+      const target = prevFocusId ? rows.querySelector(`.bm-row[data-id="${CSS.escape(prevFocusId)}"]`)
+        : rows.querySelector('.bm-row');
+      if (target) target.focus?.();
+    }
+  }
   requestAnimationFrame(compensateScrollbar); // 表头补滚动条宽度，逐列对齐
 }
 
@@ -1135,6 +1154,7 @@ function renderRow(row, pane, depth = 0) {
   const line = document.createElement('div');
   line.className = 'bm-row' + (sel.has(row.id) ? ' on' : '');
   line.dataset.id = row.id;
+  line.tabIndex = -1; // 可编程聚焦：删除/移动重画后把焦点还给原行，不丢到 body
 
   const cb = document.createElement('input');
   cb.type = 'checkbox';
@@ -2090,6 +2110,10 @@ async function setupTrash(parentId) {
 
 function finishDelete(r) {
   selected.clear();
+  // 分页模式下按消失条数回退 offset，避免页尾删完跳到空页
+  if (st.sort !== 'tree' && r && (r.trashed || r.purged)) {
+    st.offset = Math.max(0, st.offset - (r.trashed || 0) - (r.purged || 0));
+  }
   refresh().catch((x) => toast(x.message, true));
   if (r && r.purged) toast(`已彻底删除 ${r.purged} 条`);
   else if (r) toast(`已移入回收站 ${r.trashed || 0} 条（${r.path}）`);

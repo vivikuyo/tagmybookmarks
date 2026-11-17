@@ -1369,6 +1369,19 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(pp.includes("prefix + quoteTag(tag)"), 'T128e 建议插入带空格标签也包引号');
 }
 
+// T129：删除/移动后列表不跳动、不失焦
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  ok(bm.includes('const prevScroll = rows.scrollTop;') && bm.includes('rows.scrollTop = Math.min(prevScroll'),
+     'T129a 平铺/按目录重画前后保存并恢复滚动位置');
+  ok(bm.includes('prevFocusId') && bm.includes('line.tabIndex = -1;'),
+     'T129b 焦点行记忆 + 行可编程聚焦');
+  ok(bm.includes('st.offset = Math.max(0, st.offset - (r.trashed || 0)'),
+     'T129c 删除后 offset 回正（不落空页）');
+  ok(bm.includes('st.offset = Math.max(0, st.offset - r.moved)'),
+     'T129d 剪切粘贴移走后 offset 回正');
+}
+
 // 选择控件两页统一：表头复选框 + 「全选全部」+「取消选择」，不再有工具栏文字按钮
 ok(spHtml.includes('id="tagAllPage"'), 'T66 标签页的全选在常驻操作带里');
 ok(spHtml.includes('id="bmAllPage"'), 'T67 书签页的全选在常驻操作带里');
