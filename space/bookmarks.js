@@ -652,6 +652,7 @@ async function refresh() {
   if (st.sort === 'tree') {
     st.offset = 0; // 树模式无分页
     invalidateTree();
+    capturePaneAnchors(); // 只在改动前的稳定 DOM 抓一次；多目录懒加载多轮重绘共用同一锚点
     dirtyTree(); // 书签/文件夹增删改后立即生效（查询词没变时 invalidateTree 不会清行缓存）
     // 目录树可能刚被删/剪/新建过，重拉 folders:list，别用内存里的旧树
     await loadFolders();
@@ -687,7 +688,6 @@ function render() {
   const rows = $('#bmRows');
   if (!rows) return;
   // 重画前记忆滚动与焦点：删除/移动后列表整块重建，不记忆就会跳顶、焦点丢到 body
-  capturePaneAnchors(); // 按目录模式：抓每栏视口首行锚点（须在清 DOM 前做）
   const prevScroll = rows.scrollTop;
   const prevFocusId = document.activeElement && document.activeElement.closest
     ? document.activeElement.closest('.bm-row')?.dataset.id || ''
@@ -791,6 +791,8 @@ function restorePaneAnchor(rowsEl, pane) {
       rowsEl.scrollTop += el.getBoundingClientRect().top - rowsEl.getBoundingClientRect().top - a.off;
       return;
     }
+    if (dirLoading.size) return; // 还有目录在懒加载，锚点行可能下一轮才出现，先不动
+    pane.anchor = null; // 全部载入完仍没有该行（被删/被过滤）→ 放弃锚点
   }
   rowsEl.scrollTop = pane.scroll;
 }

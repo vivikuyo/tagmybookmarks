@@ -1389,7 +1389,8 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(bm2.includes('function restorePaneAnchor(rowsEl, pane)') && bm2.includes('restorePaneAnchor(rowsEl, pane);'),
      'T130b buildPane 用锚点恢复滚动');
   ok(bm2.includes('div.dataset.id = node.id;'), 'T130c 文件夹行有 data-id 可锚定');
-  ok(bm2.includes('capturePaneAnchors(); // 按目录模式：抓每栏视口首行锚点'), 'T130d 重画清空前抓锚点');
+  ok(bm2.includes("capturePaneAnchors(); // 只在改动前的稳定 DOM 抓一次"), 'T130d refresh 清缓存前抓锚点（render 不重抓，防中间态漂移）');
+  ok(bm2.includes('if (dirLoading.size) return; // 还有目录在懒加载'), 'T130f 锚点行未现且懒加载中：等待下一轮');
   ok(bm2.includes('paneState[k].anchor = null;'), 'T130e 查询条件变化时锚点作废');
 }
 
