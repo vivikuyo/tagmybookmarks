@@ -178,7 +178,8 @@ let dirLoading = new Set();
 let clip = null; // 剪贴板 {mode:'copy'|'cut', bookmarks:[id], folders:[id]}
 let trashOpen = false;
 let cloudTags = []; // [{tag,count}] 全量标签
-let cloudDirs = []; // [{tag,count}] 目录标签（文件夹投影）
+let cloudDirs = []; // [{tag,count,key?}] 目录标签（文件夹投影；作用域模式下来自子目录，带真实 id）
+let scopeInfo = null; // {path,total} 下钻模式下的作用域说明（云顶部那一条）
 let pendingDelete = null; // 回收站设置完成后再删这批
 let undoExpanded = false;
 let editor = null; // { row, id, key, input, box }
@@ -2014,6 +2015,21 @@ let fullDirs = []; // 全量目录缓存：供补全候选与「目录名含查�
 async function loadCloud() {
   const wrap = $('#bmCloud');
   if (!wrap || wrap.hidden) return;
+  const scopeId = st.sort === 'tree' && curPane().folderId ? curPane().folderId : '';
+  if (scopeId) {
+    // 下钻 = 作用域模式：云只看这棵子树里的标签/子目录，不相关 chip 自然消失
+    try {
+      const r = await send({ type: 'cloud:scope', folderId: scopeId, query: st.query, filter: st.filter, text: st.text });
+      if (r && r.ok) {
+        cloudTags = r.tags || [];
+        cloudDirs = r.dirs || [];
+        scopeInfo = { path: r.path || '', total: r.total || 0 };
+        renderCloud();
+        return;
+      }
+    } catch {}
+  }
+  scopeInfo = null;
   if (st.query) {
     // 有查询：只显示相关标签/目录（按全部命中集算，翻页不变）；命中标签保留可点掉
     cloudTags = st.related || [];
@@ -2204,6 +2220,35 @@ function renderCloud() {
   const tagsBox = $('#bmCloudTags');
   const dirsBox = $('#bmCloudDirs');
   if (!tagsBox || !dirsBox) return;
+  // 不在下钻状态就不该有作用域条（切平铺/退出下钻后立刻归位）
+  if (!(st.sort === 'tree' && curPane().folderId)) scopeInfo = null;
+  const wrap = $('#bmCloud');
+  if (wrap) {
+    // 作用域条：显式告诉用户"云被锁在这棵子树里了"，并给一键退出
+    let bar = $('#bmCloudScope');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'bmCloudScope';
+      bar.className = 'bm-cloud-scope';
+      wrap.insertBefore(bar, wrap.firstChild);
+    }
+    bar.textContent = '';
+    if (scopeInfo) {
+      const segs = String(scopeInfo.path || '').split(PATH_SEP).filter(Boolean);
+      const lab = document.createElement('span');
+      lab.textContent = `作用域：${segs.length ? segs[segs.length - 1] : '所有目录'} · ${scopeInfo.total} 条`;
+      lab.title = scopeInfo.path || '';
+      const btn = document.createElement('button');
+      btn.className = 'bm-cloud-scope-x';
+      btn.textContent = '显示全部';
+      btn.title = '退出下钻，回到所有目录（同时清空查询）';
+      btn.addEventListener('click', () => exitDrill());
+      bar.append(lab, btn);
+      bar.hidden = false;
+    } else {
+      bar.hidden = true;
+    }
+  }
   const active = activeQueryNames();
   const needle = currentNeedle();
   tagsBox.textContent = '';
@@ -2250,12 +2295,14 @@ function renderCloud() {
   if (!tags.length && !cloudDirs.length) {
     const p = document.createElement('span');
     p.className = 'hint';
-    p.textContent = st.query ? '这个条件下没有可继续收窄的标签' : '还没有标签';
+    p.textContent = scopeInfo ? '这个目录里没有可继续收窄的标签或子目录'
+      : (st.query ? '这个条件下没有可继续收窄的标签' : '还没有标签');
     tagsBox.append(p);
   }
   for (const t of tags) tagsBox.append(mkChip(t.tag, t.count, false));
   const dirs = needle ? cloudDirs.filter((d) => d.tag.toLowerCase().includes(needle)) : cloudDirs;
-  for (const d of dirs.slice(0, CLOUD_LIMIT)) dirsBox.append(mkChip(d.tag, d.count, true, d.key));
+  // 作用域云的目录 chip 带真实 id；全局云的 d.key 是 tagKey（不是 id），不能当 id 用
+  for (const d of dirs.slice(0, CLOUD_LIMIT)) dirsBox.append(mkChip(d.tag, d.count, true, d.id));
 }
 
 /**
@@ -2326,6 +2373,21 @@ function focusDirInTree(pane, id) {
     row.classList.add('flash');
     setTimeout(() => row.classList.remove('flash'), 1200);
   }).catch((x) => toast(x.message, true));
+}
+
+/** 退出下钻（作用域模式）→ 回所有目录，并把查询框一起复位 */
+function exitDrill() {
+  const pane = curPane();
+  if (!pane.folderId) return;
+  resetQueryBox();
+  pane.folderId = '';
+  if (paneState[activePane] === pane) st.folderId = '';
+  savePaneFolder();
+  st.offset = 0;
+  clearSelectionOnFilterChange();
+  scopeInfo = null; // 作用域条立刻撤掉，不等 cloud:scope 回来
+  refresh().catch((x) => toast(x.message, true));
+  renderCloud();
 }
 
 /** 点目录标签：已下钻就跳过去，没下钻就在树里展开定位 */

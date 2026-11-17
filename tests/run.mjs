@@ -1429,6 +1429,24 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(tg.includes('if (drawerTag) openDrawer(drawerTag, drawerIsDir);'), 'T133e 操作后重开抽屉刷新内容');
 }
 
+// T144：下钻 = 显式作用域模式（云按子树收窄、面包屑挂徽标、⌘点保留 @词 通道）
+{
+  const bm13 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const bg13 = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  const css13 = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  const html13 = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  ok(bm13.includes('function exitDrill('), 'T144a 退出下钻有统一入口（面包屑 ✕ 与云上「显示全部」共用）');
+  ok(bm13.includes("btn.textContent = '显示全部'") && bm13.includes('exitDrill()'), 'T144b 作用域条带一键退出');
+  ok(bm13.includes("type: 'cloud:scope'"), 'T144c 下钻时云改取作用域统计');
+  ok(bg13.includes('function scopeCloudStats(') && bg13.includes("type === 'cloud:scope'"), 'T144d 后台有作用域云统计通道');
+  ok(bg13.includes('scopeCloudCache.clear()'), 'T144e 索引重建时作用域缓存作废');
+  ok(html13.includes('id="bmCloudScope"') && css13.includes('.bm-cloud-scope'), 'T144f 云顶部作用域条（结构+样式）');
+  ok(bm13.includes('if (e.metaKey || e.ctrlKey) { toggleCloudToken(tok); return; }'), 'T144g ⌘/Ctrl 点击保留写 @词 的逃生舱');
+  ok(bm13.includes("textContent = '只看此目录'") && css13.includes('.bm-crumb-scope'), 'T144h 面包屑挂「只看此目录」，下钻可见');
+  // 全局云的 d.key 是 tagKey，不是目录 id：只能作用域云给 id 才能直接导航
+  ok(bg13.includes('dirs.push({ id: c.id') && bm13.includes('mkChip(d.tag, d.count, true, d.id)'), 'T144i 目录 chip 只在作用域云里带真实 id，避免拿 tagKey 当 id');
+}
+
 // T143：点目录标签→展开定位，祖先链必须按路径算（folders:list 里没有 parentId）
 {
   const bm12 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');

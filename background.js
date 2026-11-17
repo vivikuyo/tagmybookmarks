@@ -593,6 +593,80 @@ function treeMaps() {
 }
 
 /** 某个文件夹（或整棵子树）里的书签行：完全按真实树组装，不经索引 */
+// 下钻（作用域模式）下的"云"：只统计这棵子树里的标签与子目录。
+// 一次性遍历 + 缓存，键里带上查询/筛选，索引重建时清空。
+const scopeCloudCache = new Map();
+
+function scopeCloudStats(folderId, opts) {
+  const cacheKey = [String(folderId), opts.queryRaw || '', opts.filter || 'all', opts.q || ''].join('\u0001');
+  const hit = scopeCloudCache.get(cacheKey);
+  if (hit) return hit;
+  const maps = treeMaps();
+  const node = maps && maps.byId.get(String(folderId));
+  if (!node) return null;
+  const path = maps.pathOf.get(String(folderId)) || '';
+  const seen = new Set();
+  const tagCount = new Map(); // tagKey -> {tag, count}
+  let total = 0;
+
+  const countKeys = (parent) => {
+    let n = 0;
+    const seenLocal = new Set();
+    const walkCount = (p) => {
+      for (const c of p.children || []) {
+        if (!c.url) { walkCount(c); continue; }
+        const key = canonicalUrl(c.url);
+        if (key && !seenLocal.has(key)) { seenLocal.add(key); n++; }
+      }
+    };
+    walkCount(parent);
+    return n;
+  };
+
+  const walk = (parent) => {
+    for (const c of parent.children || []) {
+      if (!c.url) { walk(c); continue; }
+      const key = canonicalUrl(c.url);
+      if (!key || seen.has(key)) continue;
+      const tags = (index && index.keyToTags.get(key)) || [];
+      const untagged = tags.length === 0;
+      if (opts.filter === 'untagged' && !untagged) continue;
+      if (opts.filter === 'tagged' && untagged) continue;
+      if (opts.queryKeys && !opts.queryKeys.has(key)) continue;
+      if (opts.q) {
+        const title = (parseTitle(c.title || '').text || c.title || '');
+        if (!`${title} ${c.url}`.toLowerCase().includes(opts.q)) continue;
+      }
+      seen.add(key);
+      total++;
+      for (const tg of tags) {
+        const k = tagKey(tg);
+        const rec = tagCount.get(k) || { tag: tg, count: 0 };
+        rec.count++;
+        tagCount.set(k, rec);
+      }
+    }
+  };
+  walk(node);
+
+  const tags = [...tagCount.values()].sort((a, b) => b.count - a.count || cpCompare(a.tag, b.tag));
+  const dirs = [];
+  const walkDirs = (parent) => {
+    for (const c of parent.children || []) {
+      if (c.url) continue;
+      // id 才是真目录 id（全局云的 d.key 是 tagKey，别混用）
+      dirs.push({ id: c.id, tag: c.title || '(无标题)', count: countKeys(c) });
+      walkDirs(c);
+    }
+  };
+  walkDirs(node);
+
+  const data = { path, total, tags, dirs };
+  if (scopeCloudCache.size > 60) scopeCloudCache.clear();
+  scopeCloudCache.set(cacheKey, data);
+  return data;
+}
+
 function treeScopeRows(folderId, opts) {
   const maps = treeMaps();
   const rows = [];
@@ -663,6 +737,7 @@ async function rebuild() {
   const trashPath = String(config.prefs.trashPath || '').trim();
   const skip = trashPath && !exPaths.includes(trashPath) ? [...exPaths, trashPath] : exPaths;
   index = buildIndex(tree, { excludeIds: exclude, skipDirs: skip });
+  scopeCloudCache.clear(); // 书签/目录变了，作用域云的统计作废
   rebuildPending = false;
   stats.rebuilds++;
   stats.lastBuildMs = Date.now() - t0;
@@ -1714,6 +1789,21 @@ async function handle(msg) {
   }
 
   // ------------------------------------------------ 书签视图（M1/M2）
+  if (type === 'cloud:scope') {
+    await ready;
+    if (rebuildPending) await rebuild();
+    const queryRaw = String(msg.query || '');
+    const queryKeys = queryRaw ? await queryKeySet(queryRaw) : null;
+    const data = scopeCloudStats(msg.folderId, {
+      queryKeys,
+      queryRaw,
+      filter: msg.filter === 'untagged' || msg.filter === 'tagged' ? msg.filter : 'all',
+      q: String(msg.text || '').trim().toLowerCase(),
+    });
+    if (!data) return { ok: false };
+    return { ok: true, ...data };
+  }
+
   if (type === 'bookmarks:page') {
     await ready;
     if (rebuildPending) await rebuild(); // 刚增删的书签要先重建索引，否则查不到
