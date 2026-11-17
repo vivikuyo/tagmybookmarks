@@ -1187,8 +1187,8 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
 // T124：chip 圆弧外框尺寸统一 —— 高度写死、盒模型按 border-box，内部件不再把 pill 撑高
 {
   const cc2 = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
-  ok(cc2.includes('height: 24px; box-sizing: border-box; padding: 0 8px;'), 'T124a chip 高度统一 24px（含描边）');
-  ok(cc2.includes('display: inline-flex; align-items: center; gap: 4px;'), 'T124b 勾选框/色点/文字之间 4px 缝');
+  ok(cc2.includes('height: 26px; box-sizing: border-box; padding: 0 10px;'), 'T124a chip 高度统一 24px（含描边）');
+  ok(cc2.includes('display: inline-flex; align-items: center; gap: 6px;'), 'T124b 勾选框/色点/文字之间 4px 缝');
   ok(cc2.includes('line-height: 20px;'), 'T124c chip 内按钮行高受限，不撑出 pill');
 }
 
