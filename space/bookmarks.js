@@ -2289,18 +2289,24 @@ function stripQueryDirToken(name) {
 
 /** 树里展开到指定目录：打开它的祖先链，其它目录一律收起，滚到它那一行并闪一下 */
 function focusDirInTree(pane, id) {
+  // 祖先链按"路径"算：folders:list 的节点里没有 parentId（只有 id/title/path/children），
+  // 老写法沿 parentId 往上走一步就断，结果只把目标目录标成展开、它的父目录还是收着的，
+  // 那一行根本没被渲染出来 —— 表现出来就是"点了目录标签没反应"
+  const path = idToPath.get(id) || '';
+  if (!path) return false;
+  const segs = path.split(PATH_SEP).filter(Boolean);
   const chain = [];
-  let node = findFolderNode(folderTree, id);
-  while (node) {
-    chain.push(node.id);
-    node = node.parentId ? findFolderNode(folderTree, node.parentId) : null;
+  for (let i = 1; i <= segs.length; i++) {
+    const fid = pathToId.get(segs.slice(0, i).join(PATH_SEP));
+    if (fid) chain.push(fid);
   }
+  if (!chain.length) return false;
   pane.dirOpen = new Set(chain.filter((x) => !rootIds.has(x)));
   pane.autoOpen = new Set();
   pane.autoCollapsed = new Set();
   saveDirOpen(pane);
   st.offset = 0;
-  refresh().then(() => {
+  return refresh().then(() => {
     const key = PANE_LIST.find((k) => paneState[k] === pane) || 'L';
     const scroller = dual
       ? document.querySelector(`.bm-pane[data-pane="${key}"] .bm-pane-rows`)
@@ -2335,7 +2341,9 @@ async function gotoDirChip(name) {
     }
     return;
   }
-  focusDirInTree(pane, id);
+  // 未下钻：展开到该目录并收拢无关目录；失败（比如这个目录不在目录树里）要说清楚
+  const ok = focusDirInTree(pane, id);
+  if (ok === false) toast(`目录「${name}」不在当前目录树里（可能被排除或已删除）`, true);
 }
 
 /** 点 chip = 在查询里加上/去掉这个词（再点一下取消），与手打查询完全同一条路 */

@@ -1429,6 +1429,22 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(tg.includes('if (drawerTag) openDrawer(drawerTag, drawerIsDir);'), 'T133e 操作后重开抽屉刷新内容');
 }
 
+// T143：点目录标签→展开定位，祖先链必须按路径算（folders:list 里没有 parentId）
+{
+  const bm12 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const i0 = bm12.indexOf('function focusDirInTree(');
+  const i1 = bm12.indexOf('function gotoDirChip(');
+  ok(i0 > 0 && i1 > i0, 'T143a 定位到 focusDirInTree 函数体');
+  const body = bm12.slice(i0, i1);
+  ok(!body.includes('node.parentId'), 'T143b 不再沿 node.parentId 往上走（该字段 folders:list 不返回）');
+  ok(body.includes('idToPath.get(id)') && body.includes('pathToId.get'), 'T143c 改按路径前缀解析祖先链');
+  ok(body.includes('return refresh()') && body.includes("'flash'"), 'T143d 展开后仍会滚动定位并高亮');
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  const flBlock = bg.slice(bg.indexOf("type === 'folders:list'"), bg.indexOf("type === 'bookmark:create'"));
+  ok(flBlock && !flBlock.includes('parentId'), 'T143e 后台 folders:list 确实不带 parentId（前提校验）');
+  ok(bm12.includes('不在当前目录树里'), 'T143f 展开失败会给出提示而不是静默无反应');
+}
+
 // T142：退出下钻后面包屑必须真的消失（列表回到所有目录，表头不许残留旧分段）
 {
   const bm11 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
