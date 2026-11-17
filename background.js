@@ -766,7 +766,7 @@ async function collectAllFolders() {
   (function walk(nodes, path) {
     for (const node of nodes || []) {
       if (node.url || !node.children) continue;
-      const fp = path ? `${path}/${node.title || ''}` : node.title || '';
+      const fp = path ? `${path}${PATH_SEP}${node.title || ''}` : node.title || '';
       out.push({ id: node.id, title: node.title || '', path: fp, parentId: node.parentId || '' });
       walk(node.children, fp);
     }
@@ -1226,8 +1226,8 @@ async function handle(msg) {
         if (remove.has(list[i]) || list[i] === name) list.splice(i, 1);
       }
     }
-    // 落盘用 '/' 显示形：配置串存控制字符可能被 Chrome 规整，读取时再归一回 PATH_SEP
-    await writePrefs({ excludeDirs: joinList(list.map((p) => p.split(PATH_SEP).join('/'))) });
+    // 落盘仍用 PATH_SEP（encodeListName 会把它编成 %1F，配置串里不出现控制字符）
+    await writePrefs({ excludeDirs: joinList(list) });
     await rebuild();
     // writePrefs 的广播发生在 rebuild 之前，侧边栏那时拿到的还是旧索引；
     // 重建完成后再广播一次，否则界面永远停留在"上一次开关"的状态
@@ -1400,7 +1400,7 @@ async function handle(msg) {
     return {
       ok: true,
       configured: !!String(config.prefs.trashPath || '').trim(),
-      configuredPath: String(config.prefs.trashPath || '').trim(),
+      configuredPath: String(config.prefs.trashPath || '').trim().split(PATH_SEP).join('/'),
       resolved: !!resolved, // 配置了但目录没了 → false，前端要明确提示重新设置
       path: resolved ? resolved.path : '',
       candidates,
@@ -1500,11 +1500,11 @@ async function handle(msg) {
       // 直接从树上取；非中文 locale 的根名是 Other bookmarks
       const all = await collectAllFolders();
       const base = (all.find((f) => f.id === configFolderId) || {}).path || CONFIG_DIR_NAME;
-      target = { id: folder.id, path: `${base}/${TRASH_NAME}` };
+      target = { id: folder.id, path: `${base}${PATH_SEP}${TRASH_NAME}` };
     }
     await writePrefs({ trashPath: target.path });
     await rebuild();
-    return { ok: true, ...target };
+    return { ok: true, ...target, path: target.path.split(PATH_SEP).join('/') };
   }
 
   if (type === 'trash:list') {
@@ -1515,7 +1515,7 @@ async function handle(msg) {
     const items = [];
     const walk = (nodes, path) => {
       for (const n of nodes || []) {
-        const fp = path ? `${path}/${n.title || ''}` : `${trash.path}/${n.title || ''}`;
+        const fp = path ? `${path}${PATH_SEP}${n.title || ''}` : `${trash.path}${PATH_SEP}${n.title || ''}`;
         const o = origins[n.id] || null;
         if (n.url) {
           items.push({
@@ -1523,7 +1523,7 @@ async function handle(msg) {
             title: n.title || '',
             url: n.url,
             isFolder: false,
-            originPath: (o && index.folderPath.get(o.parentId)) || '',
+            originPath: String((o && index.folderPath.get(o.parentId)) || '').split(PATH_SEP).join('/'),
             at: (o && o.at) || 0,
           });
         } else if (Array.isArray(n.children)) {

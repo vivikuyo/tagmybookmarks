@@ -698,6 +698,7 @@ function render() {
 
   renderCrumb();
   renderSummary();
+  syncFilterNote().catch(() => {});
 
   const tree = st.sort === 'tree';
   const pos = $('#bmPos');
@@ -1094,7 +1095,10 @@ function appendDirRows(container, node, depth, pane) {
     const p = document.createElement('span');
     p.className = 'hint';
     p.style.paddingLeft = `${(depth + 1) * 12}px`;
-    p.textContent = node.count ? '（直属书签都不匹配当前查询/搜索）' : '（没有直属书签）';
+    const filtering = !!(st.query || st.text || (st.filter && st.filter !== 'all'));
+    p.textContent = node.count
+      ? (filtering ? '（直属书签都被当前查询/搜索/筛选筛掉了，看上方「当前生效」条）' : '（直属书签都不匹配当前查询/搜索）')
+      : '（没有直属书签）';
     box.append(p);
   } else if (hit.total > hit.rows.length) {
     // 后台单次最多取 500 条：极少数直属书签过多的目录会截断，明说而不是悄悄少
@@ -1141,6 +1145,7 @@ function dirtyTree() {
 function invalidateTree() {
   if (treeCache.query === st.query && treeCache.filter === st.filter && treeCache.text === st.text) return;
   treeCache = { query: st.query, filter: st.filter, text: st.text, rows: new Map() };
+  fullDirs = []; // 目录名可能变了（改名/合并/排除），下次条件条重新取一遍全量目录
   dirLoading.clear();
   for (const k of PANE_LIST) paneState[k].anchor = null; // 条件变了，旧位置没有意义
 }
@@ -1914,6 +1919,101 @@ async function loadCloud() {
   cloudDirs = s.dirTags || [];
   fullDirs = s.dirTags || [];
   renderCloud();
+}
+
+/**
+ * 「当前生效」条件条：把查询/搜索/筛选亮出来，并把失效的目录词标红给一键移除。
+ * 起因：目录被改名或从两级合成一级后，查询框里残留的 @旧名 会让整页看起来"空了"，
+ * 而树上的计数来自原始书签树，仍显示 58 条——用户完全看不出是查询在筛。
+ */
+async function syncFilterNote() {
+  const el = $('#bmFilterNote');
+  if (!el) return;
+  const qTerms = (st.query || '').split(/\s+/).filter(Boolean);
+  const dirTerms = qTerms.filter((p) => /^!?@/.test(p));
+  let stale = [];
+  if (dirTerms.length) {
+    if (!fullDirs.length) {
+      try {
+        const s = await send({ type: 'state' });
+        fullDirs = s.dirTags || [];
+      } catch {}
+    }
+    const names = new Set(fullDirs.map((d) => String(d.tag).toLowerCase()));
+    stale = dirTerms.filter((p) => {
+      const n = p.replace(/^!?@/, '').replace(/^"/, '').replace(/"$/, '').toLowerCase();
+      return n && !names.has(n);
+    });
+  }
+  el.textContent = '';
+  if (!st.query && !st.text && (!st.filter || st.filter === 'all')) {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  const lab = document.createElement('span');
+  lab.className = 'lab';
+  lab.textContent = '当前生效：';
+  el.append(lab);
+  const cond = (code, title, onClear) => {
+    const box = document.createElement('span');
+    box.className = 'cond';
+    const c = document.createElement('code');
+    c.textContent = code;
+    c.title = title;
+    box.append(c);
+    const x = document.createElement('button');
+    x.className = 'x';
+    x.type = 'button';
+    x.textContent = '×';
+    x.title = '移除这个条件';
+    x.addEventListener('click', onClear);
+    box.append(x);
+    el.append(box);
+  };
+  if (st.query) cond(st.query, '查询表达式', () => setQueryValue(''));
+  if (st.text) cond(`"${st.text}"`, '书签名/网址搜索', () => setTextValue(''));
+  if (st.filter && st.filter !== 'all') {
+    cond(st.filter === 'untagged' ? '未打标签' : '已打标签', '筛选', () => setFilterValue('all'));
+  }
+  if (stale.length) {
+    const w = document.createElement('span');
+    w.className = 'stale';
+    w.textContent = `${stale.join('、')} 已不存在（目录被改名或移动了）`;
+    el.append(w);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn ghost small';
+    b.textContent = '移除失效词';
+    b.addEventListener('click', () => {
+      const keep = qTerms.filter((p) => !stale.includes(p));
+      setQueryValue(keep.join(' '));
+    });
+    el.append(b);
+  }
+}
+
+/** 写回查询框并触发同一条链路（输入框文字、has 态、列表一起复位） */
+function setQueryValue(v) {
+  const input = $('#bmSearch');
+  if (!input) return;
+  input.value = v;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+function setTextValue(v) {
+  const input = $('#bmTextSearch');
+  if (!input) return;
+  input.value = v;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+function setFilterValue(f) {
+  const btn = $('#bmFilters') && $('#bmFilters').querySelector(`button[data-f="${f}"]`);
+  if (btn) btn.click();
+  else {
+    st.filter = f;
+    st.offset = 0;
+    refresh().catch((x) => toast(x.message, true));
+  }
 }
 
 /** 查询词形态：普通标签 #名；带空格的标签引号裸名（# 后不认引号）；目录 @名 */

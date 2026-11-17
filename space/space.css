@@ -823,6 +823,25 @@ input.input, select.input { min-height: 28px; border-radius: 8px; box-sizing: bo
 .trash-foot-btns { display: flex; gap: 6px; }
 
 /* ---------------- 书签页：标签云 / 目录分组 ---------------- */
+.bm-filter-note{
+  display:flex;flex-wrap:wrap;align-items:center;gap:6px;
+  margin:8px 0 6px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;
+  font-size:12.5px;color:var(--muted);background:var(--bg2, rgba(127,127,127,.06));
+}
+.bm-filter-note .lab{color:var(--muted)}
+.bm-filter-note .cond{
+  display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 6px;
+  border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--fg);
+  font:inherit;cursor:default;
+}
+.bm-filter-note .cond code{font-size:12px}
+.bm-filter-note .cond .x{
+  border:0;background:transparent;color:var(--muted);cursor:pointer;font:inherit;padding:0 2px;line-height:1;
+}
+.bm-filter-note .cond .x:hover{color:var(--fg)}
+.bm-filter-note .stale{color:#c2410c}
+.bm-filter-note .btn.small{height:22px;padding:0 8px;font-size:12px}
+
 .bm-cloud {
   border: 1px solid var(--line);
   border-radius: 10px;

@@ -1429,6 +1429,23 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(tg.includes('if (drawerTag) openDrawer(drawerTag, drawerIsDir);'), 'T133e 操作后重开抽屉刷新内容');
 }
 
+// T135：「当前生效」条件条——空页不再是哑的，失效目录词可一键移除
+{
+  const bm4 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const html4 = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  const css4 = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(html4.includes('id="bmFilterNote"'), 'T135a 工具条下有「当前生效」条容器');
+  ok(css4.includes('.bm-filter-note{'), 'T135b 条件条有样式');
+  ok(bm4.includes('async function syncFilterNote()'), 'T135c 条件条渲染函数存在');
+  ok(bm4.includes("dirTerms = qTerms.filter((p) => /^!?@/.test(p))"), 'T135d 从查询里挑出目录词');
+  ok(bm4.includes('!names.has(n)'), 'T135e 目录词与现有目录名比对，判失效');
+  ok(bm4.includes('已不存在（目录被改名或移动了）'), 'T135f 失效词有明确说明');
+  ok(bm4.includes("b.textContent = '移除失效词'"), 'T135g 一键移除失效词');
+  ok(bm4.includes("input.dispatchEvent(new Event('input', { bubbles: true }))"), 'T135h 清除走与 × 同一条 input 链路');
+  ok(bm4.includes('直属书签都被当前查询/搜索/筛选筛掉了'), 'T135i 空目录提示说清是被筛选掉的');
+  ok(bm4.includes('fullDirs = []; // 目录名可能变了'), 'T135j 条件变化后清全量目录缓存');
+}
+
 // T134：文件夹名里含 "/" 不再被误拆成两级
 {
   ok(folderPathOf('书签栏', 'program/ff') === ['书签栏', 'program/ff'].join(PATH_SEP),

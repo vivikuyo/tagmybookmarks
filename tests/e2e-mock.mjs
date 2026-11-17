@@ -790,6 +790,43 @@ if (srcId) {
   ok(rs.ok !== false && rs.restored >= 1, 'E186 文件夹还原回原位置');
 }
 
+// 46. 文件夹名含 / ：目录模式能下钻、按目录查询能命中、排除后整枝消失
+{
+  const sf = await chrome.bookmarks.create({ parentId: '1', title: 'program/ff' });
+  const s1 = await chrome.bookmarks.create({ parentId: sf.id, title: 'FF 主页 [#E2E]', url: 'https://ff1.test/' });
+  const s2 = await chrome.bookmarks.create({ parentId: sf.id, title: 'FF 文档', url: 'https://ff2.test/' });
+  await call({ type: 'index:rebuild' });
+
+  const st = await call({ type: 'state' });
+  const find = (nodes) => {
+    for (const n of nodes || []) {
+      if (String(n.id) === String(sf.id)) return n;
+      const r = n.children ? find(n.children) : null;
+      if (r) return r;
+    }
+    return null;
+  };
+  const row = find((await call({ type: 'folders:list' })).tree);
+  ok(row && row.count === 2 && row.title === 'program/ff', 'E189 含 / 的文件夹直属计数为 2（没被拆成两级）');
+  ok(st.dirTags.some((t) => t.tag === 'program/ff'), 'E190 目录标签只有一颗，名字完整');
+
+  const page = await call({ type: 'bookmarks:page', folderId: sf.id, limit: 200 });
+  ok(page.total === 2, 'E191 点该目录能看到 2 条书签（不是空）');
+
+  const qdir = await call({ type: 'query', expr: '@"program/ff"' });
+  ok(qdir.total === 2, 'E192 按目录查询 @"program/ff" 命中 2 条');
+
+  const bead = await call({ type: 'dirs:exclude', tag: 'program/ff', excluded: true });
+  ok(!bead.error, 'E193 含 / 的目录可以排除');
+  const st2 = await call({ type: 'state' });
+  ok(!st2.dirTags.some((t) => t.tag === 'program/ff'), 'E194 排除后目录标签消失');
+  ok(st2.excludedDirs.includes(['书签栏', 'program/ff'].join(PATH_SEP)), 'E195 名单里是该目录的完整路径');
+  await call({ type: 'dirs:exclude', tag: 'program/ff', excluded: false });
+  const st3 = await call({ type: 'state' });
+  ok(st3.dirTags.some((t) => t.tag === 'program/ff')
+     && !st3.excludedDirs.includes(['书签栏', 'program/ff'].join(PATH_SEP)), 'E196 取消排除后恢复');
+}
+
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);
