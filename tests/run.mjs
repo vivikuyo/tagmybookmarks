@@ -1174,7 +1174,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
 // T123：chip 与「目录标签」云 chip 同一套视觉规格
 {
   const cc = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
-  ok(cc.includes('font-size: 12px; line-height: 1.4;') && cc.includes('padding: 2px 8px;'),
+  ok(cc.includes('font-size: 14px; line-height: 1.4;') && cc.includes('padding: 2px 8px;'),
      'T123a chip 字号与内边距与云 chip 一致');
   ok(cc.includes('.tagchip:hover { border-color: var(--accent); color: var(--accent); }'),
      'T123b 悬停同为描边+文字变 accent');
@@ -1404,6 +1404,17 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(bm2.includes("$('#bmCloud').addEventListener('dblclick'"), 'T131c 双击 chips 区空白清空查询');
   ok(bm2.includes("if (e.target.closest('.bm-cloud-chip')) return;"), 'T131d 点 chip 的双击不触发清空（chip 双击=两次 toggle）');
   ok(bm2.includes("input.dispatchEvent(new Event('input', { bubbles: true }));"), 'T131e 复用 × 按钮同一条 input 链路（文字/has 态/云高亮/列表一起复位）');
+}
+
+// T132：标签管理页去分隔线 + 云字号 +2 + 最近操作分隔线
+{
+  const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(css.includes('#view-tags .alias-sec { border-top: 0; }') && css.includes('#view-tags .health-head { border-bottom: 0;'), 'T132a 标签管理页区块分隔线移除（限本页，概览页 health-head 不受影响）');
+  ok((css.match(/font-size: 14px; line-height: 1;/g) || []).length >= 2, 'T132b tagchip/dir-chip 字号 12→14');
+  ok(/\.bm-cloud-chip \{[\s\S]*?font-size: 14px;/.test(css), 'T132c 书签页云 chip 字号 12→14');
+  ok(css.includes('#undoBox { border-top: 1px solid var(--line); padding-top: 12px; }'), 'T132d 最近操作（可撤销）上方分隔线');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  ok(pc.includes('font-size: 14.5px;'), 'T132e 侧边栏云 chip 字号 12.5→14.5');
 }
 
 // 选择控件两页统一：表头复选框 + 「全选全部」+「取消选择」，不再有工具栏文字按钮

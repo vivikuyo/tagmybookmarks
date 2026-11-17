@@ -251,7 +251,7 @@ textarea:focus { border-color: var(--accent); }
   height: 26px; box-sizing: border-box; padding: 0 10px;
   border: 1px solid var(--line); border-radius: 999px;
   background: transparent; color: var(--text);
-  font-size: 12px; line-height: 1;
+  font-size: 14px; line-height: 1;
   max-width: 100%;
 }
 .tagchip:hover { border-color: var(--accent); color: var(--accent); }
@@ -327,6 +327,7 @@ textarea:focus { border-color: var(--accent); }
 .journal button { margin-left: auto; }
 
 .undo { margin-top: 22px; }
+#undoBox { border-top: 1px solid var(--line); padding-top: 12px; }
 .undo h3 { font-size: 13px; font-weight: 600; margin: 0 0 8px; color: var(--text-dim); }
 .undo ul { list-style: none; margin: 0; padding: 0; }
 .undo li {
@@ -503,9 +504,11 @@ textarea:focus { border-color: var(--accent); }
 
 .alias-sec {
   margin-top: 26px;
-  border-top: 1px solid var(--line);
   padding-top: 4px;
 }
+/* 标签管理页：区块之间不再画线（顶线/标题底线都去掉），靠留白分区 */
+#view-tags .alias-sec { border-top: 0; }
+#view-tags .health-head { border-bottom: 0; padding-bottom: 0; }
 
 .alias-add {
   display: flex;
@@ -551,7 +554,7 @@ textarea:focus { border-color: var(--accent); }
   border: 1px solid var(--line);
   border-radius: 999px;
   background: transparent;
-  font-size: 12px; line-height: 1;
+  font-size: 14px; line-height: 1;
   max-width: 100%;
 }
 
@@ -839,10 +842,16 @@ input.input, select.input { min-height: 28px; border-radius: 8px; box-sizing: bo
   margin-right: 4px;
 }
 .bm-cloud-row.bm-cloud-dirs::before { content: '@ 目录'; }
+/* 普通标签区与目录标签区之间用分隔线隔开 */
+.bm-cloud-row.bm-cloud-dirs {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
 .bm-cloud-row + .bm-cloud-row { margin-top: 6px; }
 .bm-cloud-chip {
   display: inline-flex; align-items: center; gap: 4px;
-  font-size: 12px; line-height: 1.4;
+  font-size: 14px; line-height: 1.4;
   padding: 2px 8px;
   border: 1px solid var(--line);
   border-radius: 999px;
