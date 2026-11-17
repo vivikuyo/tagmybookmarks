@@ -3,7 +3,6 @@ import { splitTagInput, normalizeTagOrNull } from '../lib/title.js';
 
 const $ = (s) => document.querySelector(s);
 const tagInput = $('#tagInput');
-const btnAdd = $('#btnAdd');
 const btnCollect = $('#btnCollect');
 const toastEl = $('#toast');
 const destSelect = $('#destSelect');
@@ -95,10 +94,27 @@ function renderPreview() {
 
 async function loadFolders() {
   let tree = [];
-  try {
-    const r = await send({ type: 'folders:list' });
-    tree = r.tree || [];
-  } catch {}
+  // 后台 service worker 冷启动时首次消息可能失败：重试一次，避免收藏位置下拉空白
+  for (let i = 0; i < 2; i++) {
+    try {
+      const r = await send({ type: 'folders:list' });
+      tree = r.tree || [];
+      break;
+    } catch (e) {
+      if (i === 1) {
+        const destRow = $('#destRow');
+        if (destRow) {
+          destRow.hidden = false;
+          destSelect.textContent = '';
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = '目录加载失败，点此重试';
+          destSelect.append(opt);
+          destSelect.addEventListener('change', () => loadFolders().then(refresh).catch(() => {}), { once: true });
+        }
+      }
+    }
+  }
   foldersFlat = [];
   const walk = (nodes, depth) => {
     for (const n of nodes || []) {
@@ -246,7 +262,6 @@ async function boot() {
   renderSuggest('').catch(() => {});
 }
 
-btnAdd.addEventListener('click', addTags);
 btnCollect.addEventListener('click', collectOnly);
 
 tagInput.addEventListener('input', () => {

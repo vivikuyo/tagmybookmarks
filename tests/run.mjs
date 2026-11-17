@@ -1344,6 +1344,8 @@ const popHtml = readFileSync('popup/popup.html', 'utf8');
 const popIds = [...new Set([...popSrc.matchAll(/\$\('#([A-Za-z0-9_-]+)'/g)].map((m) => m[1]))];
 const popMissing = popIds.filter((id) => !popHtml.includes(`id="${id}"`));
 ok(popMissing.length === 0, `T65 弹窗引用的 id 都存在（缺 ${popMissing.join(',')}）`);
+ok(!popHtml.includes('btnAdd') && !popSrc.includes('btnAdd'), 'T65b 弹窗标签输入行不再有「加」按钮（Enter 提交）');
+ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下拉加载失败有重试占位');
 
 // 选择控件两页统一：表头复选框 + 「全选全部」+「取消选择」，不再有工具栏文字按钮
 ok(spHtml.includes('id="tagAllPage"'), 'T66 标签页的全选在常驻操作带里');
