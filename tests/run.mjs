@@ -1390,7 +1390,8 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
      'T130b buildPane 用锚点恢复滚动');
   ok(bm2.includes('div.dataset.id = node.id;'), 'T130c 文件夹行有 data-id 可锚定');
   ok(bm2.includes("capturePaneAnchors(); // 只在改动前的稳定 DOM 抓一次"), 'T130d refresh 清缓存前抓锚点（render 不重抓，防中间态漂移）');
-  ok(bm2.includes('if (dirLoading.size) return; // 还有目录在懒加载'), 'T130f 锚点行未现且懒加载中：等待下一轮');
+  ok(bm2.includes('if (dirLoading.size) return; // 锚点行还没渲染出来'), 'T130f 锚点行未现且懒加载中：等待下一轮');
+  ok(bm2.includes('if (!dirLoading.size) pane.anchor = null;'), 'T130g 锚点活到全部懒加载结束才消费（防上方目录膨胀推走视口）');
   ok(bm2.includes('paneState[k].anchor = null;'), 'T130e 查询条件变化时锚点作废');
 }
 

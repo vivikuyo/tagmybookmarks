@@ -787,11 +787,13 @@ function restorePaneAnchor(rowsEl, pane) {
   if (a) {
     const el = rowsEl.querySelector(`[data-id="${CSS.escape(a.id)}"]`);
     if (el) {
-      pane.anchor = null; // 成功才消费，懒加载多轮 render 会反复重试
+      // 锚点行上方可能还有目录在懒加载：它们从占位膨胀成真行会把锚点行推下去，
+      // 所以锚点必须活到全部懒加载结束——每轮 render 都重新对位，最后消费
       rowsEl.scrollTop += el.getBoundingClientRect().top - rowsEl.getBoundingClientRect().top - a.off;
+      if (!dirLoading.size) pane.anchor = null;
       return;
     }
-    if (dirLoading.size) return; // 还有目录在懒加载，锚点行可能下一轮才出现，先不动
+    if (dirLoading.size) return; // 锚点行还没渲染出来（其目录仍在加载），等下一轮
     pane.anchor = null; // 全部载入完仍没有该行（被删/被过滤）→ 放弃锚点
   }
   rowsEl.scrollTop = pane.scroll;
