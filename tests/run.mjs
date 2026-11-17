@@ -1386,8 +1386,8 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
 {
   const bm2 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
   ok(bm2.includes('function capturePaneAnchors()'), 'T130a 视口首行锚点抓取');
-  ok(bm2.includes('function restorePaneAnchor(scroller, pane)') && bm2.includes('restorePaneAnchor(scroller, pane);'),
-     'T130b buildPane 在真正的滚动容器上恢复（单窗=#bmRows，双窗=各栏 rowsEl）');
+  ok(bm2.includes('function restoreAllPaneAnchors()') && bm2.includes('restoreAllPaneAnchors(); // 面板已挂载'),
+     'T130b 挂载完成后按真容器恢复（单窗=#bmRows，双窗=各栏 rowsEl）；buildPane 内不做恢复');
   ok(bm2.includes('div.dataset.id = node.id;'), 'T130c 文件夹行有 data-id 可锚定');
   ok(bm2.includes("capturePaneAnchors(); // 只在改动前的稳定 DOM 抓一次"), 'T130d refresh 清缓存前抓锚点（render 不重抓，防中间态漂移）');
   ok(bm2.includes('if (dirLoading.size) return; // 锚点行还没渲染出来'), 'T130f 锚点行未现且懒加载中：等待下一轮');

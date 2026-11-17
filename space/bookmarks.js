@@ -739,6 +739,7 @@ function render() {
       wrap.append(buildPane('L'));
     }
     rows.append(wrap);
+    restoreAllPaneAnchors(); // 面板已挂载，锚点行可查、rect 有效
   } else {
     rows.classList.toggle('bm-tree-host', false);
     const outerHead = document.querySelector('.bm-table .bm-head');
@@ -803,6 +804,16 @@ function restorePaneAnchor(scroller, pane) {
   scroller.scrollTop = pane.scroll;
 }
 
+/** 树模式重绘挂载完成后恢复滚动：单窗容器是 #bmRows，双窗是各栏 .bm-pane-rows */
+function restoreAllPaneAnchors() {
+  for (const k of dual ? PANE_LIST : ['L']) {
+    const sc = dual
+      ? document.querySelector(`.bm-pane[data-pane="${k}"] .bm-pane-rows`)
+      : document.querySelector('#bmRows');
+    if (sc) restorePaneAnchor(sc, paneState[k]);
+  }
+}
+
 /** 双窗里的一栏：头部（来源/目标 + 面包屑）+ 可滚动行区 */
 function buildPane(paneKey) {
   const pane = paneState[paneKey];
@@ -814,12 +825,11 @@ function buildPane(paneKey) {
   const rowsEl = document.createElement('div');
   rowsEl.className = 'bm-pane-rows';
   renderTreeMode(rowsEl, pane);
-  // 恢复滚动位置：渲染会整块重画，别让用户每次操作都跳回顶部。
-  // 按目录模式行数会变（懒加载、行被删），scrollTop 恢复会漂移，用锚点行定位。
+  // 滚动位置恢复见 restoreAllPaneAnchors()——必须等面板挂进 DOM 后做，
+  // 游离元素上 getBoundingClientRect 全是 0、锚点行也查不到。
   // 单窗的真滚动容器是 #bmRows（pane-rows overflow:visible），双窗才是 rowsEl；
   // #bmRows 跨 render 常驻，滚动监听只挂一次防叠加。
   const scroller = dual ? rowsEl : document.querySelector('#bmRows');
-  restorePaneAnchor(scroller, pane);
   if (scroller && !scroller.dataset.scrollBound) {
     scroller.dataset.scrollBound = '1';
     scroller.addEventListener('scroll', () => (pane.scroll = scroller.scrollTop));
