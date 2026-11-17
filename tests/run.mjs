@@ -1437,10 +1437,13 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(bm6.includes('function disarmDelete()'), 'T137b 复位函数存在');
   ok(bm6.includes('b.textContent = `确认 ${selected.size}？`'), 'T137c 上膛文字带数量');
   ok(bm6.includes('delArmTimer = setTimeout(disarmDelete, 3000)'), 'T137d 3 秒自动复位（与侧边栏一致）');
-  ok(bm6.includes("toast('再点一次确认删除')"), 'T137e 上膛时给出提示');
+  ok(bm6.includes('再点一次确认：删除${parts.join'), 'T137e 上膛时给出提示（带类型拆分）');
   ok(/\$\('#bmDelete'\)\.addEventListener\('click'[\s\S]{0,200}armDelete\(\)\) return/.test(bm6), 'T137f 底部删除第一次点击只上膛');
   ok(!/\$\('#bmDelete'\)[\s\S]{0,400}window\.confirm/.test(bm6), 'T137g 底部删除不再用 window.confirm');
   ok(bm6.includes('disarmDelete(); // 选中项变了'), 'T137h 选中项变化就复位');
+  ok(/st\.sort = btn\.dataset\.s;[\s\S]{0,200}clearSelectionOnFilterChange\(\)/.test(bm6), 'T137l 切视图（平铺↔按目录）清空选择，避免旧勾选跟着新视图走');
+  ok(bm6.includes('function folderBranchIds('), 'T137m 勾文件夹时剔掉同枝重复项');
+  ok(bm6.includes('const drop = folderBranchIds(id, sel);'), 'T137n 勾选文件夹立刻剪掉后代/祖先');
   ok(css6.includes('.btn.danger.armed'), 'T137i 上膛态有视觉标记');
   ok(bm6.includes("window.confirm('清空回收站"), 'T137j 回收站的不可逆操作仍保留系统确认');
   ok(bm6.includes('run: () => deleteNodes([row.id])'), 'T137k 右键删除保持直接删除');

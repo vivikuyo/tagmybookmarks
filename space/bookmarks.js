@@ -635,7 +635,11 @@ function armDelete() {
   b.textContent = `确认 ${selected.size}？`;
   b.classList.add('armed');
   delArmTimer = setTimeout(disarmDelete, 3000);
-  toast('再点一次确认删除');
+  const { bmIds, dirIds } = splitSel(selected);
+  const parts = [];
+  if (bmIds.length) parts.push(`${bmIds.length} 条书签`);
+  if (dirIds.length) parts.push(`${dirIds.length} 个文件夹`);
+  toast(`再点一次确认：删除${parts.join(' + ')}（进回收站，可还原）`);
   return false;
 }
 
@@ -1238,8 +1242,21 @@ function renderCrumbInto(el, pane) {
 }
 
 function setSelected(id, on, line, cb, sel = selected) {
-  if (on) sel.add(id);
-  else sel.delete(id);
+  if (on) {
+    sel.add(id);
+    // 勾文件夹 = 整枝都要进回收站：把同一枝里已经勾上的后代/祖先 ids 去掉，
+    // 否则删除对象数会虚高，同一个条目还会被删两次
+    const drop = folderBranchIds(id, sel);
+    for (const x of drop) {
+      sel.delete(x);
+      // 同枝里被剪掉的条目，界面上的勾也要跟着取消（否则看着还选着）
+      for (const el of document.querySelectorAll(`[data-id="${CSS.escape(String(x))}"]`)) {
+        el.classList.remove('on');
+        const box = el.querySelector('input.bm-cb');
+        if (box) box.checked = false;
+      }
+    }
+  } else sel.delete(id);
   if (cb) cb.checked = on;
   if (line) line.classList.toggle('on', on);
   renderBulk();
@@ -1458,6 +1475,29 @@ function clearSelectionOnFilterChange() {
 }
 
 const BOOKMARKS_BAR_ID = '1';
+
+/**
+ * 勾中某个文件夹时，同一枝里"和它重复"的 ids：它的后代，以及它已经被覆盖的祖先。
+ * 只在真正是文件夹 id 时才动手；书签 id 直接返回空。
+ */
+function folderBranchIds(id, sel) {
+  const node = findFolderNode(folderTree, id);
+  if (!node) return [];
+  const out = [];
+  (function walk(ns) {
+    for (const n of ns || []) {
+      if (sel.has(n.id)) out.push(n.id);
+      if (!n.url) walk(n.children);
+    }
+  })(node.children);
+  // 祖先也被选了：祖先那条同样覆盖本枝，留祖先即可
+  let p = node.parentId ? findFolderNode(folderTree, node.parentId) : null;
+  while (p) {
+    if (sel.has(p.id)) out.push(p.id);
+    p = p.parentId ? findFolderNode(folderTree, p.parentId) : null;
+  }
+  return out;
+}
 
 /** 选中集合拆成书签/文件夹两类（foldersFlat 里有的是文件夹） */
 function splitSel(set) {
@@ -1832,6 +1872,8 @@ function bind() {
     if (!btn || btn.dataset.s === st.sort) return;
     st.sort = btn.dataset.s;
     st.offset = 0;
+    // 换视图 = 换一批"看得见的对象"，旧的勾选留着只会让删除数字对不上号
+    clearSelectionOnFilterChange();
     for (const k of PANE_LIST) paneState[k].autoCollapsed = new Set();
     $('#bmSort').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === btn));
     refresh().catch((x) => toast(x.message, true));
