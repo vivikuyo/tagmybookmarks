@@ -13,7 +13,7 @@ import {
   lookupCI,
   splitTagInput,
 } from '../lib/title.js';
-import { buildIndex, canonicalUrl, globalTagCounts, sortDirTagsByTree, dirRelatedKeys, resolveDirEntries, pruneNestedPaths, collectFolderPaths } from '../lib/index.js';
+import { buildIndex, canonicalUrl, globalTagCounts, sortDirTagsByTree, dirRelatedKeys, resolveDirEntries, pruneNestedPaths, collectFolderPaths, folderPathOf, PATH_SEP } from '../lib/index.js';
 import {
   parse as parseQuery,
   evaluate,
@@ -543,17 +543,18 @@ eq(dupIdx.allKeys.size, 1, 'T67 只排除同名的那一个：书签栏/前端 �
 // 老数据只有名字时，按名字解析成路径（行为与旧版等价）
 const nameIdx = buildIndex(dupTree, { skipDirs: ['前端'] });
 eq(nameIdx.allKeys.size, 0, 'T68 只有名字时按名字解析（两处同名一起排除）');
-eq(resolveDirEntries(['前端'], ['书签栏/前端', '回收站/前端']).length, 2, 'T69 名字解析出全部同名路径');
+eq(resolveDirEntries(['前端'], [['书签栏', '前端'].join(PATH_SEP), ['回收站', '前端'].join(PATH_SEP)]).length, 2, 'T69 名字解析出全部同名路径');
 
 // 老数据的级联后代条目：祖先已排除，后代条目应被清掉
-eq(pruneNestedPaths(['回收站', '回收站/t', '回收站/已保存/子', '书签栏/工具']).join('|'),
-  '回收站|书签栏/工具', 'T70 冗余后代条目被剪掉，只剩顶级目录');
+eq(pruneNestedPaths([['回收站'].join(PATH_SEP), ['回收站', 't'].join(PATH_SEP), ['回收站', '已保存', '子'].join(PATH_SEP), ['书签栏', '工具'].join(PATH_SEP)]).join('|'),
+  [['回收站'].join(PATH_SEP), ['书签栏', '工具'].join(PATH_SEP)].join('|'), 'T70 冗余后代条目被剪掉，只剩顶级目录');
 
 // 老数据：级联后代同名条目只落在已排除目录内部，不能波及外面同名目录
-const legacyPaths = ['回收站', '回收站/t', '回收站/前端', '书签栏/前端', '书签栏/工具'];
+const P = (...segs) => segs.join(PATH_SEP);
+const legacyPaths = [P('回收站'), P('回收站', 't'), P('回收站', '前端'), P('书签栏', '前端'), P('书签栏', '工具')];
 const legacyResolved = resolveDirEntries(['回收站', 't', '前端', '工具'], legacyPaths);
-eq(legacyResolved.join('|'), '回收站|回收站/t|回收站/前端|书签栏/工具', 'T71 同名后代条目只解析到已排除目录内部');
-eq(pruneNestedPaths(legacyResolved).join('|'), '回收站|书签栏/工具', 'T72 剪枝后书签栏/前端 不受牵连');
+eq(legacyResolved.join('|'), [P('回收站'), P('回收站', 't'), P('回收站', '前端'), P('书签栏', '工具')].join('|'), 'T71 同名后代条目只解析到已排除目录内部');
+eq(pruneNestedPaths(legacyResolved).join('|'), [P('回收站'), P('书签栏', '工具')].join('|'), 'T72 剪枝后书签栏/前端 不受牵连');
 
 // 树根上的内容文件夹（如书签管理扩展建的「回收站」）不能当成根丢掉
 const trashTree = [{ id: '0', title: '', children: [
@@ -1109,7 +1110,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(bm.includes('async function pasteInto(targetId, targetName)'), 'T117a 右键专用 pasteInto（显式目标目录）');
   ok(bm.includes('const parentId = row.parentId ? String(row.parentId) : curPane().folderId || BOOKMARKS_BAR_ID;'), 'T117b 书签右键 → 粘贴到它所在的父目录');
   ok(bm.includes('run: () => pasteInto(node.id, name)'), 'T117c 文件夹右键 → 粘贴进该文件夹本身');
-  ok(bm.includes('targetPath.startsWith(`${p}/`)'), 'T117d 防呆：剪切的文件夹不能粘进自己/子树');
+  ok(bm.includes('targetPath.startsWith(`${p}${PATH_SEP}`)'), 'T117d 防呆：剪切的文件夹不能粘进自己/子树');
   ok(bm.includes('已粘贴到「${targetName}」'), 'T117e 粘贴结果 toast 标出目标目录');
   ok(bm.includes("if (clip.mode === 'cut') clip = null; // 剪切是一次性的"), 'T117f 剪切粘贴后清空剪贴板');
 }
@@ -1283,7 +1284,7 @@ const exTree = [{ id: '0', title: '', children: [{ id: '1', title: '书签栏', 
   { id: '20', title: '保留', children: [{ id: '21', title: '新站', url: 'https://keep.example/' }] },
 ] }] }];
 const exPaths = pruneNestedPaths(resolveDirEntries(['古董'], collectFolderPaths(exTree)));
-eq(exPaths.join(','), '书签栏/工具/古董', 'T49b 排除条目按名字解析成精确路径');
+eq(exPaths.join(','), ['书签栏', '工具', '古董'].join(PATH_SEP), 'T49b 排除条目按名字解析成精确路径（内部用 PATH_SEP）');
 const exIdx = buildIndex(exTree, { skipDirs: exPaths });
 ok(!exIdx.dirTagToKeys.has(tagKey('古董')), 'T49c 排除后目录标签不再出现');
 ok(!exIdx.allKeys.has('old.example'), 'T49d 排除后整枝书签不进索引');
@@ -1426,6 +1427,27 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(tg.includes('function openDrawerCtx') && tg.includes("el.className = 'bm-ctx'"), 'T133c 右键菜单复用书签页 .bm-ctx 样式');
   ok(tg.includes("type: 'node:rename', id: item.nodeIds[0]") && tg.includes("type: 'delete', ids: [item.nodeIds[0]]"), 'T133d 重命名/删除走 node:rename 与 delete（nodeIds[0]，多位置书签取最前位置）');
   ok(tg.includes('if (drawerTag) openDrawer(drawerTag, drawerIsDir);'), 'T133e 操作后重开抽屉刷新内容');
+}
+
+// T134：文件夹名里含 "/" 不再被误拆成两级
+{
+  ok(folderPathOf('书签栏', 'program/ff') === ['书签栏', 'program/ff'].join(PATH_SEP),
+     'T134a folderPathOf 单段折叠：名字里的 / 不当分隔符');
+  const slashTree = [{ id: '0', title: '', children: [{ id: '1', title: '书签栏', children: [
+    { id: '40', title: 'program/ff', children: [{ id: '41', title: 'ff 页', url: 'https://ff.test/' }] },
+  ] }] }];
+  const slashIdx = buildIndex(slashTree);
+  ok(slashIdx.dirTagToKeys.has(tagKey('program/ff')), 'T134b 目录标签按整个名字投影（一个 chip，不是两级）');
+  eq(slashIdx.counts.dirTags, 1, 'T134c 目录计数为 1（没被拆成 program 和 ff 两级）');
+  const bm3 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  ok(!bm3.includes("path.split('/')") && bm3.includes('path.split(PATH_SEP)'), 'T134d 树渲染/面包屑/目录格全部按 PATH_SEP 拆分');
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  ok(bg.includes('PATH_SEP') && bg.includes('folders:list') === true, 'T134e folders:list 树路径同用 PATH_SEP');
+  // 名字本身含 / 的目录：按名字排除能解析到（整条路径以它为结尾）
+  eq(resolveDirEntries(['program/ff'], collectFolderPaths(slashTree)).join('|'),
+     ['书签栏', 'program/ff'].join(PATH_SEP), 'T134f 含 / 的目录名按名字也能排除');
+  // 落盘不存控制字符：配置串写回 '/' 显示形
+  ok(bg.includes(".split(PATH_SEP).join('/')"), 'T134g 排除名单落盘转回 / 显示形（防 Chrome 规整控制字符）');
 }
 
 // 选择控件两页统一：表头复选框 + 「全选全部」+「取消选择」，不再有工具栏文字按钮

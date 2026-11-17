@@ -20,6 +20,7 @@ import {
   collectFolderPaths,
   resolveDirEntries,
   pruneNestedPaths,
+  PATH_SEP,
 } from './lib/index.js';
 import { parse as parseQuery, evaluate, relatedTags, collectQueryTags, collectQueryDirs } from './lib/query.js';
 import {
@@ -910,7 +911,7 @@ function descendantDirNames(name) {
   const folders = index.folders || [];
   const roots = folders.filter((f) => tagKey(f.name) === k);
   for (const r of roots) {
-    const prefix = String(r.path) + '/';
+    const prefix = String(r.path) + PATH_SEP;
     for (const f of folders) {
       if (f.name && String(f.path).startsWith(prefix)) out.add(f.name);
     }
@@ -1213,19 +1214,20 @@ async function handle(msg) {
     const tree = await chrome.bookmarks.getTree();
     const paths = collectFolderPaths(tree);
     const targets = resolveDirEntries([name], paths);
-    const list = excludedDirList();
+    const list = excludedDirList().map((e) => String(e).replaceAll('/', PATH_SEP)); // 内部统一用 PATH_SEP 比对
 
     if (msg.excluded) {
       for (const t of targets) {
         if (!list.some((x) => x === t)) list.push(t);
       }
     } else {
-      const remove = new Set([name, ...targets]);
+      const remove = new Set([...targets]);
       for (let i = list.length - 1; i >= 0; i--) {
-        if (remove.has(list[i])) list.splice(i, 1);
+        if (remove.has(list[i]) || list[i] === name) list.splice(i, 1);
       }
     }
-    await writePrefs({ excludeDirs: joinList(list) });
+    // 落盘用 '/' 显示形：配置串存控制字符可能被 Chrome 规整，读取时再归一回 PATH_SEP
+    await writePrefs({ excludeDirs: joinList(list.map((p) => p.split(PATH_SEP).join('/'))) });
     await rebuild();
     // writePrefs 的广播发生在 rebuild 之前，侧边栏那时拿到的还是旧索引；
     // 重建完成后再广播一次，否则界面永远停留在"上一次开关"的状态
@@ -1783,7 +1785,7 @@ async function handle(msg) {
         if (node.url || !node.children) continue;
         if (skipIds.has(node.id)) continue;
         if (node.title === CONFIG_DIR_NAME) continue;
-        const path = parentPath ? `${parentPath}/${node.title}` : node.title;
+        const path = parentPath ? `${parentPath}${PATH_SEP}${node.title}` : node.title;
         const c = countOf(node);
         out.push({
           id: node.id,

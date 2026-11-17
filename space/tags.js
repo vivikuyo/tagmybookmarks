@@ -1,6 +1,7 @@
 // 标签管理视图：全量标签表 + 批量重命名/合并/删除 + 颜色 + 撤销
 import { PALETTE, colorFor, isExplicitColor } from '../lib/palette.js';
 import { escapeTag, quoteTag } from '../lib/query.js';
+import { PATH_SEP } from '../lib/index.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -718,13 +719,13 @@ function renderExcludedDirs() {
     const chip = document.createElement('span');
     chip.className = 'dir-chip';
     const code = document.createElement('code');
-    const slash = String(name).lastIndexOf('/');
+    const slash = String(name).lastIndexOf(PATH_SEP);
     code.textContent = slash >= 0 ? String(name).slice(slash + 1) : name;
-    code.title = name;
+    code.title = String(name).split(PATH_SEP).join('/');
     if (slash >= 0) {
       const where = document.createElement('span');
       where.className = 'hint';
-      where.textContent = ` ${String(name).slice(0, slash)} › `;
+      where.textContent = ` ${String(name).slice(0, slash).split(PATH_SEP).join('/')} › `;
       chip.append(where);
     }
     const restore = document.createElement('button');

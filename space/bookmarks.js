@@ -1,6 +1,7 @@
 // 书签视图：给书签打标签、批量整理（标签管理页的第三个视图）
 // 一个 URL 一行；多位置时只显示第一个位置，右下角标注 ×N
 import { colorFor } from '../lib/palette.js';
+import { PATH_SEP } from '../lib/index.js';
 import { splitTagInput, normalizeTagOrNull } from '../lib/title.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -247,9 +248,9 @@ function updateAutoOpen(pane, matchPaths) {
   if (!st.query) return;
   const next = new Set();
   for (const path of matchPaths) {
-    const segs = path.split('/').filter(Boolean);
+    const segs = path.split(PATH_SEP).filter(Boolean);
     for (let i = 1; i < segs.length; i++) {
-      const id = pathToId.get(segs.slice(0, i + 1).join('/'));
+      const id = pathToId.get(segs.slice(0, i + 1).join(PATH_SEP));
       if (id && !rootIds.has(id)) next.add(id);
     }
   }
@@ -437,7 +438,7 @@ async function pasteInto(targetId, targetName) {
   const bad = (clip.folders || []).some((id) => {
     const p = idToPath.get(String(id));
     // 剪切的文件夹自己或它的上级：粘进去等于把自己搬进自己的子树，直接拒绝
-    return p && targetPath && (targetPath === p || targetPath.startsWith(`${p}/`));
+    return p && targetPath && (targetPath === p || targetPath.startsWith(`${p}${PATH_SEP}`));
   });
   if (bad) {
     toast('不能把文件夹粘贴到它自己或它的子目录里', true);
@@ -1166,7 +1167,7 @@ function renderCrumbInto(el, pane) {
   el.hidden = false;
   el.textContent = '';
   const path = idToPath.get(pane.folderId) || '';
-  const segs = path.split('/').filter(Boolean);
+  const segs = path.split(PATH_SEP).filter(Boolean);
 
   const jump = (targetPath) => {
     pane.folderId = targetPath ? pathToId.get(targetPath) || '' : '';
@@ -1191,7 +1192,7 @@ function renderCrumbInto(el, pane) {
   };
   el.append(seg('所有目录', '', false), sep());
   segs.forEach((sg, i) => {
-    el.append(seg(sg, segs.slice(0, i + 1).join('/'), i === segs.length - 1));
+    el.append(seg(sg, segs.slice(0, i + 1).join(PATH_SEP), i === segs.length - 1));
     if (i < segs.length - 1) el.append(sep());
   });
   const x = document.createElement('button');
@@ -1275,7 +1276,7 @@ function renderRow(row, pane, depth = 0) {
   // 目录
   const path = document.createElement('div');
   path.className = 'bm-path';
-  path.textContent = (row.path || '').split('/').slice(-1)[0] || '';
+  path.textContent = (row.path || '').split(PATH_SEP).slice(-1)[0] || '';
   path.title = row.path || '';
 
   if (pane) {

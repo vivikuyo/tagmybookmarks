@@ -2,7 +2,7 @@
 // node tests/e2e-mock.mjs
 
 import { parseTitle } from '../lib/title.js';
-import { canonicalUrl } from '../lib/index.js';
+import { canonicalUrl, PATH_SEP } from '../lib/index.js';
 
 // ------------------------------------------------------------ 假的 chrome
 
@@ -523,8 +523,8 @@ eq((await call({ type: 'state' })).blockedDirs.length, 0, 'E110 全部恢复后�
 
 // 27. 排除目录：只记被点的那一个（按路径），后代靠"不入索引"自然消失
 const exR = await call({ type: 'dirs:exclude', tag: '工具', excluded: true });
-eq((exR.added || []).join('|'), '书签栏/工具', 'E111 只把被点的目录写入名单，不级联列后代');
-eq((await call({ type: 'state' })).excludedDirs.join('|'), '书签栏/工具', 'E112 名单只有一条（完整路径）');
+eq((exR.added || []).join('|'), ['书签栏', '工具'].join(PATH_SEP), 'E111 只把被点的目录写入名单，不级联列后代');
+eq((await call({ type: 'state' })).excludedDirs.join('|'), ['书签栏', '工具'].join(PATH_SEP), 'E112 名单只有一条（完整路径）');
 eq((await call({ type: 'query', expr: '@前端2' })).total, 0, 'E113 子目录标签一并消失，@查询查不到');
 
 await call({ type: 'dirs:exclude', tag: '工具', excluded: false });
@@ -541,7 +541,7 @@ ok(!wb.error, 'E116 含分隔符的目录名可以隐藏');
 ok((await call({ type: 'state' })).blockedDirs.includes('报告, 2026;归档'), 'E117 名单里名字原样保留');
 
 const wex = await call({ type: 'dirs:exclude', tag: '报告, 2026;归档', excluded: true });
-ok(!wex.error && (await call({ type: 'state' })).excludedDirs.join('|') === '书签栏/报告, 2026;归档', 'E118 含分隔符也可以排除（路径原样往返）');
+ok(!wex.error && (await call({ type: 'state' })).excludedDirs.join('|') === ['书签栏', '报告, 2026;归档'].join(PATH_SEP), 'E118 含分隔符也可以排除（路径原样往返）');
 
 // 29. 多选目录取交集：先选一级、再选下级，与下级无关的分支不再出现
 const qTwo = await call({ type: 'query', expr: '@工具 & @前端2' });
