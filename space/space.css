@@ -728,6 +728,7 @@ input.input, select.input { min-height: 28px; border-radius: 8px; box-sizing: bo
 /* 按钮只有三档：次要（带底）/ 幽灵（透明）/ 危险（实心红） */
 .btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 .btn.danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; filter: brightness(1.08); }
+.btn.danger.armed { box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 35%, transparent); font-weight: 600; }
 .btn.ghost.danger-text { color: var(--danger); background: transparent; }
 .btn.ghost.danger-text:hover { color: var(--danger); border-color: var(--danger); }
 

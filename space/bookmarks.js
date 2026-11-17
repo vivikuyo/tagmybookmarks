@@ -610,6 +610,35 @@ function renameRow(lineEl, row) {
   input.addEventListener('click', (e) => e.stopPropagation());
 }
 
+/**
+ * 删除按钮的就地二次确认（与侧边栏同一套手感）：第一次点击只"上膛"，
+ * 按钮字样改成「确认 N？」并红底标出，3 秒不点第二次就自动复位。
+ * 内嵌视图里 window.confirm 又丑又会打断操作，且不可撤销的错觉更强。
+ */
+let delArmTimer = null;
+function disarmDelete() {
+  clearTimeout(delArmTimer);
+  delArmTimer = null;
+  const b = $('#bmDelete');
+  if (!b) return;
+  b.classList.remove('armed');
+  b.textContent = '删除';
+}
+function armDelete() {
+  const b = $('#bmDelete');
+  if (!b) return false;
+  if (b.classList.contains('armed')) {
+    disarmDelete();
+    return true; // 第二次点击：放行
+  }
+  disarmDelete();
+  b.textContent = `确认 ${selected.size}？`;
+  b.classList.add('armed');
+  delArmTimer = setTimeout(disarmDelete, 3000);
+  toast('再点一次确认删除');
+  return false;
+}
+
 async function deleteNodes(ids) {
   try {
     const r = await send({ type: 'delete', ids });
@@ -1486,6 +1515,7 @@ function renderBulk() {
     const el = $(id);
     if (el) el.disabled = !needSel;
   }
+  disarmDelete(); // 选中项变了、或删除已完成：武装态一律作废
   const tree = st.sort === 'tree';
   const nf = $('#bmNewFolder');
   if (nf) nf.disabled = !tree;
@@ -1778,12 +1808,7 @@ function bind() {
 
   $('#bmDelete').addEventListener('click', async () => {
     if (!selected.size) return;
-    const { bmIds, dirIds } = splitSelection();
-    const parts = [];
-    if (bmIds.length) parts.push(`${bmIds.length} 条书签`);
-    if (dirIds.length) parts.push(`${dirIds.length} 个文件夹`);
-    const ok = window.confirm(`删除 ${parts.join('、')}？将移入回收站，可随时还原（标签随标题保留）。`);
-    if (!ok) return;
+    if (!armDelete()) return; // 第一次点击只上膛，第二次才真删
     try {
       let r = await send({ type: 'delete', ids: [...selected] });
       if (r.needTrash) {
