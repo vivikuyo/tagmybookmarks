@@ -14,7 +14,8 @@ let st = {
   filter: 'all',
   text: '',
   query: '', // #标签 @目录 ?关键词 查询（与侧边栏同一套语法）
-  sort: 'title', // 'title' 按标题 | 'tree' 按目录（书签树序）
+  sort: 'title', // 'title' 平铺 | 'tree' 按目录（真目录树）
+  order: 'dir', // 平铺模式的排序：'dir' 按目录树序（同目录的书签相邻）| 'title' 按标题
   folderId: '',
   counts: { all: 0, untagged: 0, tagged: 0 },
   hiddenRows: 0, // 按目录显示时被折叠隐藏的书签数（只影响显示，不影响筛选/全选）
@@ -708,7 +709,8 @@ async function refresh() {
     // 而平铺是"全部书签"的清单——下钻只是按目录视图里的浏览位置，
     // 不该变成一个看不见的全局筛选条件（切到平铺仍然只剩这个目录曾是 bug）
     folderId: '',
-    sort: st.sort,
+    // 平铺模式按 st.order 决定行序：目录（书签树序，同目录相邻）或标题
+    sort: st.sort === 'tree' ? 'tree' : st.order,
   });
   st.items = r.items || [];
   st.total = r.total || 0;
@@ -1560,6 +1562,10 @@ function renderBulk() {
   }
   disarmDelete(); // 选中项变了、或删除已完成：武装态一律作废
   const tree = st.sort === 'tree';
+  const orderEl = $('#bmOrder');
+  if (orderEl) orderEl.hidden = tree; // 按目录模式固定树序，这组按钮没意义
+  const orderHint = $('#bmOrderHint');
+  if (orderHint) orderHint.hidden = tree;
   const nf = $('#bmNewFolder');
   if (nf) nf.disabled = !tree;
   const dualBtn = $('#bmDual');
@@ -1880,6 +1886,16 @@ function bind() {
     clearSelectionOnFilterChange();
     for (const k of PANE_LIST) paneState[k].autoCollapsed = new Set();
     $('#bmSort').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === btn));
+    refresh().catch((x) => toast(x.message, true));
+  });
+
+  // 平铺模式的行序：按目录（书签树序）或按标题；两种排序的选择集不变，不用清空
+  $('#bmOrder').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-o]');
+    if (!btn || btn.dataset.o === st.order) return;
+    st.order = btn.dataset.o;
+    st.offset = 0;
+    $('#bmOrder').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === btn));
     refresh().catch((x) => toast(x.message, true));
   });
 

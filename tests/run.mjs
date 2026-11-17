@@ -1429,6 +1429,18 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(tg.includes('if (drawerTag) openDrawer(drawerTag, drawerIsDir);'), 'T133e 操作后重开抽屉刷新内容');
 }
 
+// T139：平铺模式的排序（目录 / 标题）
+{
+  const bm8 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const sp8 = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  const bg8 = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  ok(bm8.includes("order: 'dir', // 平铺模式的排序"), 'T139a 平铺默认按目录排序');
+  ok(bm8.includes("sort: st.sort === 'tree' ? 'tree' : st.order,"), 'T139b 平铺把 order 当排序参数传下去');
+  ok(/msg\.sort === 'tree' \|\| msg\.sort === 'dir'/.test(bg8), 'T139c 后台 dir 走树序');
+  ok(sp8.includes('id="bmOrder"'), 'T139d 顶部有「目录/标题」排序开关');
+  ok(bm8.includes("if (orderEl) orderEl.hidden = tree;"), 'T139e 按目录模式下隐藏排序开关');
+}
+
 // T138：下钻只属于"按目录"视图，平铺是全部书签的清单
 {
   const bm7 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');

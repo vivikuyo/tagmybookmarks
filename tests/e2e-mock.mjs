@@ -817,6 +817,24 @@ if (srcId) {
   eq((await call({ type: 'query', expr: '@被排除目录' })).total, 3, 'E204 恢复后又能查询到');
 }
 
+// 45++. 平铺模式按目录排序：全库范围内按书签树深度优先序，同目录相邻
+{
+  const dDir = await call({ type: 'bookmarks:page', sort: 'dir', limit: 900 });
+  const dTree = await call({ type: 'bookmarks:page', sort: 'tree', limit: 900 });
+  eq(dDir.items.map((r) => r.id).join(','), dTree.items.map((r) => r.id).join(','), 'E205 平铺「按目录」= 书签树序（可与按目录模式对齐）');
+  // 树序 = 深度优先：seq 必须单调递增（父目录的书签→其子目录→父目录后续书签，路径会重复出现，
+  // 这是 DFS 的必然，不能按"路径连续"断言）
+  let mono = true;
+  for (let i = 1; i < dDir.items.length; i++) {
+    const a = dDir.items[i - 1].seq;
+    const b = dDir.items[i].seq;
+    if (!(a <= b)) mono = false;
+  }
+  ok(mono, 'E206 平铺「按目录」的行序严格按书签树序（DFS，seq 递增）');
+  const dTitle = await call({ type: 'bookmarks:page', sort: 'title', limit: 900 });
+  eq(dTitle.items.length, dDir.items.length, 'E207 换排序不改变命中数量（只是行序不同）');
+}
+
 // 46. 文件夹名含 / ：目录模式能下钻、按目录查询能命中、排除后整枝消失
 {
   const sf = await chrome.bookmarks.create({ parentId: '1', title: 'program/ff' });

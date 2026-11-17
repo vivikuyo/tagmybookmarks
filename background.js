@@ -1768,8 +1768,9 @@ async function handle(msg) {
         seq: pick.seq ?? Infinity, // 树深度优先序，sort=tree 用
       });
     }
-    if (msg.sort === 'tree') {
+    if (msg.sort === 'tree' || msg.sort === 'dir') {
       // 按书签树默认顺序（与书签管理器一致）；同一目录内保持原有先后
+      // 'dir' 是平铺模式的"按目录排"：全库范围内按树深度优先序，同目录的书签自然相邻
       rows.sort((a, b) => a.seq - b.seq);
     } else {
       rows.sort((a, b) => (a.title || a.url).localeCompare(b.title || b.url, 'zh'));
