@@ -564,6 +564,7 @@ function suggestTagsFor({ url, title, text, limit }) {
 
 async function rebuild() {
   const t0 = Date.now();
+  const countsBefore = index ? JSON.stringify(index.counts) : '';
   if (configFolderId) await scanConfigNodes();
   const tree = await chrome.bookmarks.getTree();
   const exclude = new Set();
@@ -583,6 +584,11 @@ async function rebuild() {
   rebuildPending = false;
   stats.rebuilds++;
   stats.lastBuildMs = Date.now() - t0;
+  // 计数真的变了才广播：侧边栏/管理页的云计数、目录标签计数才能实时跟上。
+  // 覆盖所有写路径（delete/paste/move/标签增删/撤销）与书签事件两条链路。
+  if (countsBefore !== JSON.stringify(index.counts)) {
+    try { await chrome.runtime.sendMessage({ type: 'app:changed', reason: 'index' }); } catch {}
+  }
   return index;
 }
 
@@ -592,12 +598,7 @@ function scheduleRebuild(delay = 250) {
   rebuildTimer = setTimeout(async () => {
     rebuildTimer = null;
     try {
-      const before = index ? JSON.stringify(index.counts) : '';
       await rebuild();
-      // 索引真的变了才广播，让侧边栏/管理页的云计数跟着刷新（无接收者时 sendMessage 会抛，吞掉即可）
-      if (before !== JSON.stringify(index.counts)) {
-        try { await chrome.runtime.sendMessage({ type: 'app:changed', reason: 'index' }); } catch {}
-      }
     } catch (e) {
       console.error('[TagMyBookmarks] 重建索引失败', e);
     }

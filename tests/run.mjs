@@ -1352,8 +1352,10 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   const bg = readFileSync('background.js', 'utf8');
   ok(bg.includes("chrome.runtime.sendMessage({ type: 'app:changed', reason: 'index' })"),
      'T127a rebuild 后广播 app:changed');
-  ok(bg.includes("before !== JSON.stringify(index.counts)"),
-     'T127b 只在计数真的变化时广播（防事件风暴）');
+  ok(bg.includes('if (countsBefore !== JSON.stringify(index.counts))'),
+     'T127b 只在计数真的变化时广播（防事件风暴，广播位于 rebuild 内覆盖全部写路径）');
+  ok(!bg.includes("const before = index ? JSON.stringify(index.counts) : '';\n      await rebuild();"),
+     'T127c scheduleRebuild 不再重复广播');
 }
 
 // 选择控件两页统一：表头复选框 + 「全选全部」+「取消选择」，不再有工具栏文字按钮
