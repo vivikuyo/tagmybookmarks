@@ -282,15 +282,15 @@ async function setColor(tag, value) {
 
 // ------------------------------------------------------------ 详情抽屉
 
-async function openDrawer(tag) {
+async function openDrawer(tag, isDir = false) {
   const drawer = $('#drawer');
-  $('#drawerTitle').textContent = `#${tag}`;
+  $('#drawerTitle').textContent = isDir ? `@${tag}` : `#${tag}`;
   const body = $('#drawerBody');
   body.textContent = '加载中…';
   drawer.hidden = false;
 
   try {
-    const r = await send({ type: 'query', expr: escapeTag(tag) });
+    const r = await send({ type: 'query', expr: (isDir ? '@' : '#') + escapeTag(tag) });
     body.textContent = '';
     const head = document.createElement('p');
     head.className = 'hint';
@@ -558,6 +558,9 @@ function renderDirTags() {
     });
     const name = document.createElement('code');
     name.textContent = '@' + t.tag;
+    name.title = '查看这个目录下的书签';
+    name.style.cursor = 'pointer';
+    name.addEventListener('click', () => openDrawer(t.tag, true));
     const cnt = document.createElement('span');
     cnt.className = 'c';
     cnt.textContent = t.count;

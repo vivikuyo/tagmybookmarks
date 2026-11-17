@@ -1202,6 +1202,18 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(tj.includes("chip.className = 'tagchip'"), 'T125c DOM 根类与 CSS 一致');
 }
 
+// T126：目录标签（@chip）与标签墙同一规格，按钮去边框，名字点开抽屉
+{
+  const cc4 = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(cc4.includes('.dir-chip {') && cc4.includes('height: 26px; box-sizing: border-box;\n  padding: 0 10px;'),
+     'T126a dir-chip 与 tagchip 同高同内边距');
+  ok(cc4.includes('.dir-chip .btn {\n  border: 0; background: transparent; box-shadow: none;'),
+     'T126b dir-chip 内按钮无边框（纯文字）');
+  const tj2 = readFileSync(new URL('../space/tags.js', import.meta.url), 'utf8');
+  ok(tj2.includes("openDrawer(t.tag, true)") && tj2.includes("(isDir ? '@' : '#') + escapeTag(tag)"),
+     'T126c 点目录名打开 @ 抽屉');
+}
+
 
 // 配置缺版本号：空文件不算，有配置组却没 v 才算
 const emptyCfg = [
