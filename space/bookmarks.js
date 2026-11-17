@@ -1532,6 +1532,17 @@ function bind() {
   // 纯查询框（与侧边栏同一套语义）：裸名=标签∪同名目录，#只标签，@只目录，?全文。
   // 不再搜书签标题/网址——全文搜请用 ?词。
   let typing = null;
+  // 双击标签云 chips 区的空白 = 清空查询框（复用 × 按钮同一条 input 事件链路，
+  // 输入框文字、has 态、云高亮、列表一起复位）；点 chip 的双击不算
+  $('#bmCloud').addEventListener('dblclick', (e) => {
+    if (e.target.closest('.bm-cloud-chip')) return;
+    if (!e.target.closest('.bm-cloud-row')) return;
+    const input = $('#bmSearch');
+    if (!input.value) return;
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus();
+  });
   $('#bmSearch').addEventListener('input', (e) => {
     updateSug();
     clearTimeout(typing);

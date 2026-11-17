@@ -826,6 +826,19 @@ input.input, select.input { min-height: 28px; border-radius: 8px; box-sizing: bo
 .bm-cloud-row {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
 }
+/* 区域标识：普通标签 / 目录标签各自冠名，混扫时一眼可辨 */
+.bm-cloud-row::before {
+  content: '# 标签';
+  flex: 0 0 auto;
+  font-size: 11px; line-height: 1;
+  color: var(--text-dim);
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  user-select: none;
+  margin-right: 4px;
+}
+.bm-cloud-row.bm-cloud-dirs::before { content: '@ 目录'; }
 .bm-cloud-row + .bm-cloud-row { margin-top: 6px; }
 .bm-cloud-chip {
   display: inline-flex; align-items: center; gap: 4px;

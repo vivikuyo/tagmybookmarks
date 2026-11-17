@@ -1395,6 +1395,17 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(bm2.includes('paneState[k].anchor = null;'), 'T130e 查询条件变化时锚点作废');
 }
 
+// T131：标签云区域标识 + 双击空白清空查询
+{
+  const bm2 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(css.includes(".bm-cloud-row::before") && css.includes("'# 标签'"), 'T131a 普通标签区有 # 标签徽标（::before 不受 renderCloud 清 DOM 影响）');
+  ok(css.includes(".bm-cloud-row.bm-cloud-dirs::before") && css.includes("'@ 目录'"), 'T131b 目录标签区有 @ 目录徽标');
+  ok(bm2.includes("$('#bmCloud').addEventListener('dblclick'"), 'T131c 双击 chips 区空白清空查询');
+  ok(bm2.includes("if (e.target.closest('.bm-cloud-chip')) return;"), 'T131d 点 chip 的双击不触发清空（chip 双击=两次 toggle）');
+  ok(bm2.includes("input.dispatchEvent(new Event('input', { bubbles: true }));"), 'T131e 复用 × 按钮同一条 input 链路（文字/has 态/云高亮/列表一起复位）');
+}
+
 // 选择控件两页统一：表头复选框 + 「全选全部」+「取消选择」，不再有工具栏文字按钮
 ok(spHtml.includes('id="tagAllPage"'), 'T66 标签页的全选在常驻操作带里');
 ok(spHtml.includes('id="bmAllPage"'), 'T67 书签页的全选在常驻操作带里');
