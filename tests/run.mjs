@@ -1347,6 +1347,15 @@ ok(popMissing.length === 0, `T65 弹窗引用的 id 都存在（缺 ${popMissing
 ok(!popHtml.includes('btnAdd') && !popSrc.includes('btnAdd'), 'T65b 弹窗标签输入行不再有「加」按钮（Enter 提交）');
 ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下拉加载失败有重试占位');
 
+// T127：索引重建完成后必须广播 app:changed（否则侧边栏目录标签计数停在旧快照）
+{
+  const bg = readFileSync('background.js', 'utf8');
+  ok(bg.includes("chrome.runtime.sendMessage({ type: 'app:changed', reason: 'index' })"),
+     'T127a rebuild 后广播 app:changed');
+  ok(bg.includes("before !== JSON.stringify(index.counts)"),
+     'T127b 只在计数真的变化时广播（防事件风暴）');
+}
+
 // 选择控件两页统一：表头复选框 + 「全选全部」+「取消选择」，不再有工具栏文字按钮
 ok(spHtml.includes('id="tagAllPage"'), 'T66 标签页的全选在常驻操作带里');
 ok(spHtml.includes('id="bmAllPage"'), 'T67 书签页的全选在常驻操作带里');

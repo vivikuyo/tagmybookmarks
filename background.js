@@ -592,7 +592,12 @@ function scheduleRebuild(delay = 250) {
   rebuildTimer = setTimeout(async () => {
     rebuildTimer = null;
     try {
+      const before = index ? JSON.stringify(index.counts) : '';
       await rebuild();
+      // 索引真的变了才广播，让侧边栏/管理页的云计数跟着刷新（无接收者时 sendMessage 会抛，吞掉即可）
+      if (before !== JSON.stringify(index.counts)) {
+        try { await chrome.runtime.sendMessage({ type: 'app:changed', reason: 'index' }); } catch {}
+      }
     } catch (e) {
       console.error('[TagMyBookmarks] 重建索引失败', e);
     }
