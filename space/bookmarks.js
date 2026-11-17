@@ -765,8 +765,12 @@ function render() {
 /** 按目录模式：记录每栏视口顶部的第一行（书签或文件夹），重画后靠它恢复视觉位置 */
 function capturePaneAnchors() {
   if (st.sort !== 'tree') return;
-  for (const k of PANE_LIST) {
-    const el = document.querySelector(`.bm-pane[data-pane="${k}"] .bm-pane-rows`);
+  // 单窗：滚动容器是 #bmRows（.bm-rows 62vh overflow-y:auto），.bm-pane-rows 不可滚；
+  // 双窗：#bmRows 不可滚，各栏 .bm-pane-rows 才滚。锚点必须挂在真容器上。
+  for (const k of dual ? PANE_LIST : ['L']) {
+    const el = dual
+      ? document.querySelector(`.bm-pane[data-pane="${k}"] .bm-pane-rows`)
+      : document.querySelector('#bmRows');
     const pane = paneState[k];
     if (!el || !pane) continue;
     const rowsTop = el.getBoundingClientRect().top;
@@ -782,21 +786,21 @@ function capturePaneAnchors() {
 }
 
 /** 重画后把锚点行放回原来的视口偏移；锚点行没了（如懒加载未完）就退回 pane.scroll */
-function restorePaneAnchor(rowsEl, pane) {
+function restorePaneAnchor(scroller, pane) {
   const a = pane.anchor;
   if (a) {
-    const el = rowsEl.querySelector(`[data-id="${CSS.escape(a.id)}"]`);
+    const el = scroller.querySelector(`[data-id="${CSS.escape(a.id)}"]`);
     if (el) {
       // 锚点行上方可能还有目录在懒加载：它们从占位膨胀成真行会把锚点行推下去，
       // 所以锚点必须活到全部懒加载结束——每轮 render 都重新对位，最后消费
-      rowsEl.scrollTop += el.getBoundingClientRect().top - rowsEl.getBoundingClientRect().top - a.off;
+      scroller.scrollTop += el.getBoundingClientRect().top - scroller.getBoundingClientRect().top - a.off;
       if (!dirLoading.size) pane.anchor = null;
       return;
     }
     if (dirLoading.size) return; // 锚点行还没渲染出来（其目录仍在加载），等下一轮
     pane.anchor = null; // 全部载入完仍没有该行（被删/被过滤）→ 放弃锚点
   }
-  rowsEl.scrollTop = pane.scroll;
+  scroller.scrollTop = pane.scroll;
 }
 
 /** 双窗里的一栏：头部（来源/目标 + 面包屑）+ 可滚动行区 */
@@ -812,8 +816,14 @@ function buildPane(paneKey) {
   renderTreeMode(rowsEl, pane);
   // 恢复滚动位置：渲染会整块重画，别让用户每次操作都跳回顶部。
   // 按目录模式行数会变（懒加载、行被删），scrollTop 恢复会漂移，用锚点行定位。
-  restorePaneAnchor(rowsEl, pane);
-  rowsEl.addEventListener('scroll', () => (pane.scroll = rowsEl.scrollTop));
+  // 单窗的真滚动容器是 #bmRows（pane-rows overflow:visible），双窗才是 rowsEl；
+  // #bmRows 跨 render 常驻，滚动监听只挂一次防叠加。
+  const scroller = dual ? rowsEl : document.querySelector('#bmRows');
+  restorePaneAnchor(scroller, pane);
+  if (scroller && !scroller.dataset.scrollBound) {
+    scroller.dataset.scrollBound = '1';
+    scroller.addEventListener('scroll', () => (pane.scroll = scroller.scrollTop));
+  }
   // 栏内空白投放 = 移到本栏下钻的目录（没下钻则提示拖到具体文件夹）
   bindDropTarget(rowsEl, () => pane.folderId);
   if (dual) {
