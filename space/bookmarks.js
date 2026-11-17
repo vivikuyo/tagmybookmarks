@@ -704,7 +704,10 @@ async function refresh() {
     filter: st.filter,
     text: st.text,
     query: st.query,
-    folderId: st.sort === 'tree' ? '' : st.folderId, // 树模式行数据按目录懒加载，主查询不按下钻收窄
+    // 主查询永远不按下钻收窄：树模式的行是按目录懒加载的，
+    // 而平铺是"全部书签"的清单——下钻只是按目录视图里的浏览位置，
+    // 不该变成一个看不见的全局筛选条件（切到平铺仍然只剩这个目录曾是 bug）
+    folderId: '',
     sort: st.sort,
   });
   st.items = r.items || [];
@@ -1778,7 +1781,8 @@ function bind() {
         filter: st.filter,
         text: st.text,
         query: st.query,
-        folderId: st.folderId,
+        // 平铺是全库范围：全选全部不该被"上次下钻的目录"偷偷限制
+        folderId: st.sort === 'tree' ? st.folderId : '',
         subtree: st.sort === 'tree', // 树模式下钻 = 整棵子树
       });
       for (const id of r.ids || []) selected.add(id);

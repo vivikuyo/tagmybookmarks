@@ -1429,6 +1429,14 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(tg.includes('if (drawerTag) openDrawer(drawerTag, drawerIsDir);'), 'T133e 操作后重开抽屉刷新内容');
 }
 
+// T138：下钻只属于"按目录"视图，平铺是全部书签的清单
+{
+  const bm7 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  ok(/bookmarks:page[\s\S]{0,400}folderId: '',/.test(bm7), 'T138a 主查询不按下钻收窄（平铺=全库）');
+  ok(bm7.includes("folderId: st.sort === 'tree' ? st.folderId : ''"), 'T138b 平铺的「全选全部」也不被下钻目录偷偷限制');
+  ok(/type: 'bookmarks:page',[\s\S]{0,300}folderId: st\.folderId/.test(bm7) === false, 'T138c 主查询不再把下钻目录当筛选条件');
+}
+
 // T137：删除按钮就地二次确认（不再弹 window.confirm）
 {
   const bm6 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
