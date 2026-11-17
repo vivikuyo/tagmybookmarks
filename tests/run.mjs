@@ -1418,6 +1418,16 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(css.includes('#dirExcluded .hint { flex-basis: 100%; }'), 'T132f 已排除目录提示占满整行，chips 另起一行');
 }
 
+// T133：抽屉点击外部关闭 + 抽屉内书签右键菜单
+{
+  const tg = readFileSync(new URL('../space/tags.js', import.meta.url), 'utf8');
+  ok(tg.includes("document.addEventListener('mousedown'") && tg.includes('!drawer.contains(e.target)'), 'T133a mousedown 抽屉外自动关闭（不会刚开就被 chip 的 click 误关）');
+  ok(tg.includes("li.addEventListener('contextmenu'"), 'T133b 抽屉书签可右键');
+  ok(tg.includes('function openDrawerCtx') && tg.includes("el.className = 'bm-ctx'"), 'T133c 右键菜单复用书签页 .bm-ctx 样式');
+  ok(tg.includes("type: 'node:rename', id: item.nodeIds[0]") && tg.includes("type: 'delete', ids: [item.nodeIds[0]]"), 'T133d 重命名/删除走 node:rename 与 delete（nodeIds[0]，多位置书签取最前位置）');
+  ok(tg.includes('if (drawerTag) openDrawer(drawerTag, drawerIsDir);'), 'T133e 操作后重开抽屉刷新内容');
+}
+
 // 选择控件两页统一：表头复选框 + 「全选全部」+「取消选择」，不再有工具栏文字按钮
 ok(spHtml.includes('id="tagAllPage"'), 'T66 标签页的全选在常驻操作带里');
 ok(spHtml.includes('id="bmAllPage"'), 'T67 书签页的全选在常驻操作带里');

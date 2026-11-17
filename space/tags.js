@@ -282,8 +282,13 @@ async function setColor(tag, value) {
 
 // ------------------------------------------------------------ 详情抽屉
 
+let drawerTag = null;
+let drawerIsDir = false;
+
 async function openDrawer(tag, isDir = false) {
   const drawer = $('#drawer');
+  drawerTag = tag; // 右键操作后按它重开抽屉刷新
+  drawerIsDir = isDir;
   $('#drawerTitle').textContent = isDir ? `@${tag}` : `#${tag}`;
   const body = $('#drawerBody');
   body.textContent = '加载中…';
@@ -309,6 +314,10 @@ async function openDrawer(tag, isDir = false) {
       meta.textContent = `${item.tags.map((x) => '#' + x).join(' ')}${item.tags.length ? ' · ' : ''}${item.tags.length ? '' : ''}${item.url}`;
       li.append(t, meta);
       li.addEventListener('click', () => chrome.tabs.create({ url: item.url }));
+      li.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        openDrawerCtx(e.clientX, e.clientY, item);
+      });
       ul.append(li);
     }
     body.append(ul);
@@ -320,6 +329,86 @@ async function openDrawer(tag, isDir = false) {
     }
   } catch (e) {
     body.textContent = e.message;
+  }
+}
+
+/** 抽屉内右键菜单：复制网址 / 重命名 / 删除（.bm-ctx 与书签页同一套样式） */
+function closeDrawerCtx() {
+  const el = document.querySelector('.bm-ctx');
+  if (el) el.remove();
+}
+
+function openDrawerCtx(x, y, item) {
+  closeDrawerCtx();
+  const el = document.createElement('div');
+  el.className = 'bm-ctx';
+  const items = [
+    { label: '复制网址', run: () => copyDrawerUrl(item.url) },
+    { label: '重命名（标签保留）', run: () => renameDrawerItem(item) },
+    '-',
+    { label: '删除（进回收站）', danger: true, run: () => deleteDrawerItem(item) },
+  ];
+  for (const it of items) {
+    if (it === '-') {
+      const hr = document.createElement('div');
+      hr.className = 'bm-ctx-sep';
+      el.append(hr);
+      continue;
+    }
+    const b = document.createElement('button');
+    b.textContent = it.label;
+    if (it.danger) b.classList.add('danger');
+    b.addEventListener('click', () => {
+      closeDrawerCtx();
+      it.run();
+    });
+    el.append(b);
+  }
+  document.body.append(el);
+  const r = el.getBoundingClientRect();
+  el.style.left = `${Math.max(4, Math.min(x, innerWidth - r.width - 8))}px`;
+  el.style.top = `${Math.max(4, Math.min(y, innerHeight - r.height - 8))}px`;
+}
+
+async function copyDrawerUrl(url) {
+  try {
+    await navigator.clipboard.writeText(url);
+    toast('已复制网址');
+  } catch {
+    toast('复制失败，请手动复制', true);
+  }
+}
+
+async function renameDrawerItem(item) {
+  const v = await modal({
+    title: '重命名书签',
+    desc: '只改标题，标签保留。多个位置时改的是最靠前的那条。',
+    input: item.title || '',
+    okText: '确定',
+  });
+  if (v === null || !v.trim() || v.trim() === item.title) return;
+  try {
+    await send({ type: 'node:rename', id: item.nodeIds[0], title: v.trim() });
+    toast('已重命名（标签保留）');
+    await refresh();
+    if (drawerTag) openDrawer(drawerTag, drawerIsDir);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function deleteDrawerItem(item) {
+  try {
+    const r = await send({ type: 'delete', ids: [item.nodeIds[0]] });
+    if (r && r.needTrash) {
+      toast('先到「书签」页设置回收站，再回来删除', true);
+      return;
+    }
+    toast('已删除（进回收站，可撤销）');
+    await refresh();
+    if (drawerTag) openDrawer(drawerTag, drawerIsDir);
+  } catch (e) {
+    toast(e.message, true);
   }
 }
 
@@ -908,6 +997,16 @@ export function init() {
   });
 
   $('#drawerClose').addEventListener('click', () => ($('#drawer').hidden = true));
+  // 点击抽屉外空白自动关闭：用 mousedown（chip 的 click 开抽屉发生在 mousedown 之后，不会刚开就关）
+  document.addEventListener('mousedown', (e) => {
+    const drawer = $('#drawer');
+    if (!drawer.hidden && !drawer.contains(e.target)) drawer.hidden = true;
+  });
+  // 右键菜单开着时，点别处收起
+  document.addEventListener('mousedown', (e) => {
+    const ctx = document.querySelector('.bm-ctx');
+    if (ctx && !ctx.contains(e.target)) closeDrawerCtx();
+  });
 
   $('#modalCancel').addEventListener('click', () => closeModal(null));
   $('#modalOk').addEventListener('click', () => {
