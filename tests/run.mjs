@@ -1382,6 +1382,17 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
      'T129d 剪切粘贴移走后 offset 回正');
 }
 
+// T130：按目录模式重画后按锚点行恢复视觉位置（scrollTop 会因行数变化漂移）
+{
+  const bm2 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  ok(bm2.includes('function capturePaneAnchors()'), 'T130a 视口首行锚点抓取');
+  ok(bm2.includes('function restorePaneAnchor(rowsEl, pane)') && bm2.includes('restorePaneAnchor(rowsEl, pane);'),
+     'T130b buildPane 用锚点恢复滚动');
+  ok(bm2.includes('div.dataset.id = node.id;'), 'T130c 文件夹行有 data-id 可锚定');
+  ok(bm2.includes('capturePaneAnchors(); // 按目录模式：抓每栏视口首行锚点'), 'T130d 重画清空前抓锚点');
+  ok(bm2.includes('paneState[k].anchor = null;'), 'T130e 查询条件变化时锚点作废');
+}
+
 // 选择控件两页统一：表头复选框 + 「全选全部」+「取消选择」，不再有工具栏文字按钮
 ok(spHtml.includes('id="tagAllPage"'), 'T66 标签页的全选在常驻操作带里');
 ok(spHtml.includes('id="bmAllPage"'), 'T67 书签页的全选在常驻操作带里');

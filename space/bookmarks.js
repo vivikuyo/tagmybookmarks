@@ -687,6 +687,7 @@ function render() {
   const rows = $('#bmRows');
   if (!rows) return;
   // 重画前记忆滚动与焦点：删除/移动后列表整块重建，不记忆就会跳顶、焦点丢到 body
+  capturePaneAnchors(); // 按目录模式：抓每栏视口首行锚点（须在清 DOM 前做）
   const prevScroll = rows.scrollTop;
   const prevFocusId = document.activeElement && document.activeElement.closest
     ? document.activeElement.closest('.bm-row')?.dataset.id || ''
@@ -761,6 +762,39 @@ function render() {
   requestAnimationFrame(compensateScrollbar); // 表头补滚动条宽度，逐列对齐
 }
 
+/** 按目录模式：记录每栏视口顶部的第一行（书签或文件夹），重画后靠它恢复视觉位置 */
+function capturePaneAnchors() {
+  if (st.sort !== 'tree') return;
+  for (const k of PANE_LIST) {
+    const el = document.querySelector(`.bm-pane[data-pane="${k}"] .bm-pane-rows`);
+    const pane = paneState[k];
+    if (!el || !pane) continue;
+    const rowsTop = el.getBoundingClientRect().top;
+    pane.anchor = null;
+    for (const row of el.querySelectorAll('.bm-row[data-id], .bm-folder-row[data-id]')) {
+      const top = row.getBoundingClientRect().top;
+      if (top >= rowsTop - 1) {
+        pane.anchor = { id: row.dataset.id, off: top - rowsTop };
+        break;
+      }
+    }
+  }
+}
+
+/** 重画后把锚点行放回原来的视口偏移；锚点行没了（如懒加载未完）就退回 pane.scroll */
+function restorePaneAnchor(rowsEl, pane) {
+  const a = pane.anchor;
+  if (a) {
+    const el = rowsEl.querySelector(`[data-id="${CSS.escape(a.id)}"]`);
+    if (el) {
+      pane.anchor = null; // 成功才消费，懒加载多轮 render 会反复重试
+      rowsEl.scrollTop += el.getBoundingClientRect().top - rowsEl.getBoundingClientRect().top - a.off;
+      return;
+    }
+  }
+  rowsEl.scrollTop = pane.scroll;
+}
+
 /** 双窗里的一栏：头部（来源/目标 + 面包屑）+ 可滚动行区 */
 function buildPane(paneKey) {
   const pane = paneState[paneKey];
@@ -772,8 +806,9 @@ function buildPane(paneKey) {
   const rowsEl = document.createElement('div');
   rowsEl.className = 'bm-pane-rows';
   renderTreeMode(rowsEl, pane);
-  // 恢复滚动位置：渲染会整块重画，别让用户每次操作都跳回顶部
-  rowsEl.scrollTop = pane.scroll;
+  // 恢复滚动位置：渲染会整块重画，别让用户每次操作都跳回顶部。
+  // 按目录模式行数会变（懒加载、行被删），scrollTop 恢复会漂移，用锚点行定位。
+  restorePaneAnchor(rowsEl, pane);
   rowsEl.addEventListener('scroll', () => (pane.scroll = rowsEl.scrollTop));
   // 栏内空白投放 = 移到本栏下钻的目录（没下钻则提示拖到具体文件夹）
   bindDropTarget(rowsEl, () => pane.folderId);
@@ -948,6 +983,7 @@ function renderFolderRow(node, open, isRoot, pane) {
   const isCur = dirIsOpen(pane, node.id);
   const sel = pane.selected;
   div.className = 'bm-group bm-folder-row' + (isCur ? ' cur' : '') + (sel.has(node.id) ? ' on' : '');
+  div.dataset.id = node.id; // 锚点恢复用：删除/移动重画后回到原来的视觉位置
   // 文件夹也有复选框：复制/剪切/粘贴的对象可以是文件夹
   const cb = document.createElement('input');
   cb.type = 'checkbox';
@@ -1081,6 +1117,7 @@ function invalidateTree() {
   if (treeCache.query === st.query && treeCache.filter === st.filter && treeCache.text === st.text) return;
   treeCache = { query: st.query, filter: st.filter, text: st.text, rows: new Map() };
   dirLoading.clear();
+  for (const k of PANE_LIST) paneState[k].anchor = null; // 条件变了，旧位置没有意义
 }
 
 /** 下钻后的面包屑：所有目录 / 书签栏 / AI ✕，点任何一级跳回（单窗：内嵌表头） */
