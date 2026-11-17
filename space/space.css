@@ -545,7 +545,7 @@ textarea:focus { border-color: var(--accent); }
 .dir-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   height: 26px; box-sizing: border-box;
   padding: 0 10px;
   border: 1px solid var(--line);
@@ -556,16 +556,18 @@ textarea:focus { border-color: var(--accent); }
 }
 
 .dir-chip .dir-dot {
+  margin-right: 4px;
   width: 11px; height: 11px; border-radius: 50%;
   border: 1px solid rgba(0,0,0,.15);
   padding: 0; cursor: pointer; flex: 0 0 auto;
 }
 
-.dir-chip code { color: var(--text); font-size: 12px; font-weight: 500; }
+.dir-chip code { color: var(--text); font-size: 12px; font-weight: 500; margin-right: 4px; }
 .dir-chip code:hover { color: var(--accent); text-decoration: underline; }
 .dir-chip .c { color: var(--text-dim); font-size: 10.5px; line-height: 1; }
-.dir-chip .btn:first-of-type {
-  padding-left: 6px; border-left: 1px solid var(--line);
+.dir-chip .btn { margin: 0; padding: 0 3px; }
+.dir-chip .btn.sep {
+  padding-left: 6px; margin-left: 3px; border-left: 1px solid var(--line);
 }
 /* 目录标签内按钮：无边框文字按钮，与 tagchip 的就地操作一致 */
 .dir-chip .btn {

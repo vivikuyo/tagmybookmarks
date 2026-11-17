@@ -565,7 +565,7 @@ function renderDirTags() {
     cnt.className = 'c';
     cnt.textContent = t.count;
     const blk = document.createElement('button');
-    blk.className = 'btn ghost small';
+    blk.className = 'btn ghost small sep';
     blk.textContent = '隐藏';
     blk.title = '只隐藏这个目录名；@查询仍然有效';
     blk.addEventListener('click', async (e) => {
