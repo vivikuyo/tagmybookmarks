@@ -1168,7 +1168,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
     && tg.includes('doReplace([t.tag])') && tg.includes('doPurge([t.tag])');
   ok(usesStop, 'T122c 点击动作不透传到 chip，避免同时触发查询');
   ok(tg.includes("chip.append(ck, dot, name, n, chipActions(t));"), 'T122d chip 结构：勾选 + 颜色点 + 名字 + 计数 + 就地操作');
-  ok(!tg.includes("'big'") && !tg.includes("'mid'") && tg.includes("chip.className = 'chip';"), 'T122e chip 统一尺寸（不再按书签数分档）');
+  ok(!tg.includes("'big'") && !tg.includes("'mid'") && tg.includes("chip.className = 'tagchip';"), 'T122e chip 统一尺寸（不再按书签数分档）');
 }
 
 // T123：chip 与「目录标签」云 chip 同一套视觉规格
@@ -1176,11 +1176,11 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   const cc = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
   ok(cc.includes('font-size: 12px; line-height: 1.4;') && cc.includes('padding: 2px 8px;'),
      'T123a chip 字号与内边距与云 chip 一致');
-  ok(cc.includes('.chip:hover { border-color: var(--accent); color: var(--accent); }'),
+  ok(cc.includes('.tagchip:hover { border-color: var(--accent); color: var(--accent); }'),
      'T123b 悬停同为描边+文字变 accent');
-  ok(cc.includes('.chip.on { border-color: var(--accent); background: var(--accent); color: #fff; }'),
+  ok(cc.includes('.tagchip.on { border-color: var(--accent); background: var(--accent); color: #fff; }'),
      'T123c 选中同为反白实底');
-  ok(cc.includes('.chip.on .chip-acts button') && cc.includes('.chip.on .chip-n'),
+  ok(cc.includes('.tagchip.on .chip-acts button') && cc.includes('.tagchip.on .chip-n'),
      'T123d 反白态下计数与就地按钮一起转白（可读性）');
 }
 
@@ -1190,6 +1190,16 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(cc2.includes('height: 24px; box-sizing: border-box; padding: 0 8px;'), 'T124a chip 高度统一 24px（含描边）');
   ok(cc2.includes('display: inline-flex; align-items: center; gap: 4px;'), 'T124b 勾选框/色点/文字之间 4px 缝');
   ok(cc2.includes('line-height: 20px;'), 'T124c chip 内按钮行高受限，不撑出 pill');
+}
+
+// T125：标签墙根类必须独立命名（书签页 .chip 定义在本文件更后面，同名会被整块覆盖）
+{
+  const cc3 = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  const wall = cc3.slice(cc3.indexOf('/* ---------------- 标签墙'), cc3.indexOf('.chipwall-empty'));
+  ok(/^\.tagchip {/m.test(wall), 'T125a 标签墙根类为 .tagchip');
+  ok(!/^\.chip[ .,{]/m.test(wall), 'T125b 标签墙内不出现裸 .chip 选择器（防被书签页同名规则覆盖）');
+  const tj = readFileSync(new URL('../space/tags.js', import.meta.url), 'utf8');
+  ok(tj.includes("chip.className = 'tagchip'"), 'T125c DOM 根类与 CSS 一致');
 }
 
 
@@ -1345,9 +1355,9 @@ ok(!cssSrc.includes('.tagtable'), 'T75 旧的表格样式已清干净');
 // chip 内部件与兜底样式
 ok(readFileSync('space/tags.js', 'utf8').includes("ck.className = 'bm-cb chip-ck'"), 'T76 chip 内复选框与表头同款');
 ok(readFileSync('space/bookmarks.js', 'utf8').includes("cb.className = 'bm-cb'"), 'T77 书签行内复选框与表头同款');
-ok(cssSrc.includes('.chip .chip-acts button.danger-text'), 'T78 chip 内危险操作有独立配色');
-ok(cssSrc.includes('.chip input[type="checkbox"]'), 'T79 标签 chip 复选框有兜底样式');
-ok(cssSrc.includes('.chip .chip-name') && cssSrc.includes('max-width: 220px'), 'T80 长标签名省略号截断，不撑破 chip');
+ok(cssSrc.includes('.tagchip .chip-acts button.danger-text'), 'T78 chip 内危险操作有独立配色');
+ok(cssSrc.includes('.tagchip input[type="checkbox"]'), 'T79 标签 chip 复选框有兜底样式');
+ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px'), 'T80 长标签名省略号截断，不撑破 chip');
 
 // ---------------------------------------------------------------- 汇总
 

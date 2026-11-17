@@ -110,7 +110,7 @@ export function render() {
 
   for (const t of list) {
     const chip = document.createElement('div');
-    chip.className = 'chip';
+    chip.className = 'tagchip';
     if (selected.has(t.tag)) chip.classList.add('on');
     chip.title = `${t.tag}：${t.count} 条书签`;
 

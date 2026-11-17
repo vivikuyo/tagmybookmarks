@@ -241,12 +241,12 @@ textarea:focus { border-color: var(--accent); }
 /* ---------------- 标签墙（标签页主列表） ----------------
    视觉与书签页「目录标签（云 chip）」同一套：12px、2px 8px 内边距、
    透明底 1px 描边、选中反白实底。chip 内额外承载勾选框、色点与就地操作。
-   所有 chip 同一尺寸，不按书签数分档。 */
+   所有 tagchip 同一尺寸，不按书签数分档。 */
 .tagwall-panel { border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
 .tagwall { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
 .tagwall.busy { opacity: .6; pointer-events: none; }
 
-.chip {
+.tagchip {
   display: inline-flex; align-items: center; gap: 4px;
   height: 24px; box-sizing: border-box; padding: 0 8px;
   border: 1px solid var(--line); border-radius: 999px;
@@ -254,41 +254,41 @@ textarea:focus { border-color: var(--accent); }
   font-size: 12px; line-height: 1;
   max-width: 100%;
 }
-.chip:hover { border-color: var(--accent); color: var(--accent); }
-.chip.on { border-color: var(--accent); background: var(--accent); color: #fff; }
+.tagchip:hover { border-color: var(--accent); color: var(--accent); }
+.tagchip.on { border-color: var(--accent); background: var(--accent); color: #fff; }
 
-.chip .chip-ck { width: 13px; height: 13px; margin: 0; flex: 0 0 auto; cursor: pointer; }
-.chip .dot {
+.tagchip .chip-ck { width: 13px; height: 13px; margin: 0; flex: 0 0 auto; cursor: pointer; }
+.tagchip .dot {
   width: 11px; height: 11px; border-radius: 50%; border: 0; padding: 0; flex: 0 0 auto;
 }
-.chip .chip-name {
+.tagchip .chip-name {
   border: 0; background: none; padding: 0; font: inherit; color: inherit;
   cursor: pointer; text-align: left;
   max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.chip .chip-name:hover { text-decoration: underline; }
-.chip .chip-n {
+.tagchip .chip-name:hover { text-decoration: underline; }
+.tagchip .chip-n {
   font-size: 10.5px; line-height: 1; opacity: .65; font-variant-numeric: tabular-nums;
 }
-.chip .chip-acts {
+.tagchip .chip-acts {
   display: inline-flex; align-items: center; gap: 1px;
   height: 100%; padding-left: 5px; border-left: 1px solid var(--line);
 }
-.chip .chip-acts button {
+.tagchip .chip-acts button {
   border: 0; background: transparent; font: inherit; font-size: 11.5px; line-height: 20px;
   cursor: pointer; color: var(--accent); padding: 0 3px; border-radius: 4px;
 }
-.chip .chip-acts button:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.chip .chip-acts button.danger-text { color: var(--danger); }
-.chip .chip-acts button.danger-text:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.tagchip .chip-acts button:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.tagchip .chip-acts button.danger-text { color: var(--danger); }
+.tagchip .chip-acts button.danger-text:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
 
 /* 选中态（反白实底）：chip 内文字、计数、分隔线、两个按钮一起转白 */
-.chip.on .chip-name:hover { color: #fff; }
-.chip.on .chip-n { opacity: .85; color: #fff; }
-.chip.on .chip-acts { border-left-color: rgba(255, 255, 255, .35); }
-.chip.on .chip-acts button,
-.chip.on .chip-acts button.danger-text { color: #fff; }
-.chip.on .chip-acts button:hover { background: rgba(255, 255, 255, .2); }
+.tagchip.on .chip-name:hover { color: #fff; }
+.tagchip.on .chip-n { opacity: .85; color: #fff; }
+.tagchip.on .chip-acts { border-left-color: rgba(255, 255, 255, .35); }
+.tagchip.on .chip-acts button,
+.tagchip.on .chip-acts button.danger-text { color: #fff; }
+.tagchip.on .chip-acts button:hover { background: rgba(255, 255, 255, .2); }
 
 .chipwall-empty { flex: 1 1 100%; }
 
@@ -753,7 +753,7 @@ input.input, select.input { min-height: 28px; border-radius: 8px; box-sizing: bo
 .bm-head, .bm-row { gap: 8px; }
 
 /* 兜底：标签 chip 里的复选框同款（哪怕忘了挂 .chip-ck） */
-.chip input[type="checkbox"] {
+.tagchip input[type="checkbox"] {
   width: 13px; height: 13px; margin: 0; vertical-align: middle;
   accent-color: var(--accent); cursor: pointer;
 }
