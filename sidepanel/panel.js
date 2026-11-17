@@ -1,5 +1,5 @@
 import { colorFor } from '../lib/palette.js';
-import { insertTag, escapeTag } from '../lib/query.js';
+import { insertTag, quoteTag } from '../lib/query.js';
 import { splitTagInput, normalizeTagOrNull } from '../lib/title.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -133,6 +133,9 @@ function bind() {
 
   const clearQuery = () => {
     qEl.value = '';
+    // 编程式赋值不触发 input 事件，必须手动清掉云区收窄用的过滤词，
+    // 否则清空输入后两朵云还按残留关键字过滤（表现为"没重置"）
+    app.filterText = '';
     run();
     qEl.focus();
   };
@@ -939,7 +942,7 @@ function acceptSuggest() {
 
 function insertSuggestion(tag, start, kind = 'both') {
   const prefix = kind === 'dir' ? '@' : kind === 'tagOnly' ? '#' : '';
-  qEl.value = qEl.value.slice(0, start) + prefix + escapeTag(tag) + ' ';
+  qEl.value = qEl.value.slice(0, start) + prefix + quoteTag(tag) + ' ';
   suggestEl.hidden = true;
   qEl.focus();
   run();

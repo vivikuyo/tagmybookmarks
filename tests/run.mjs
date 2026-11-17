@@ -1210,7 +1210,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(cc4.includes('.dir-chip .btn {\n  border: 0; background: transparent; box-shadow: none;'),
      'T126b dir-chip 内按钮无边框（纯文字）');
   const tj2 = readFileSync(new URL('../space/tags.js', import.meta.url), 'utf8');
-  ok(tj2.includes("openDrawer(t.tag, true)") && tj2.includes("(isDir ? '@' : '#') + escapeTag(tag)"),
+  ok(tj2.includes("openDrawer(t.tag, true)") && tj2.includes("(isDir ? '@' : '#') + quoteTag(tag)"),
      'T126c 点目录名打开 @ 抽屉');
 }
 
@@ -1356,6 +1356,17 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
      'T127b 只在计数真的变化时广播（防事件风暴，广播位于 rebuild 内覆盖全部写路径）');
   ok(!bg.includes("const before = index ? JSON.stringify(index.counts) : '';\n      await rebuild();"),
      'T127c scheduleRebuild 不再重复广播');
+}
+
+// T128：带空格的目录/标签（如 web skill）整词查询，清除输入必须重置云
+{
+  const qq = readFileSync(new URL('../lib/query.js', import.meta.url), 'utf8');
+  ok(qq.includes("export function quoteTag(name)"), 'T128a quoteTag 存在');
+  ok(qq.includes("if (ch === '"')"), 'T128b 词法器支持引号包裹的词（@/# 后亦生效）');
+  ok(qq.includes('const t = prefix + quoteTag(tag);'), 'T128c insertTag 走 quoteTag');
+  const pp = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  ok(pp.includes("app.filterText = '';\n    run();"), 'T128d 清除输入时同步重置云区过滤词');
+  ok(pp.includes("prefix + quoteTag(tag)"), 'T128e 建议插入带空格标签也包引号');
 }
 
 // 选择控件两页统一：表头复选框 + 「全选全部」+「取消选择」，不再有工具栏文字按钮

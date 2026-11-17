@@ -1,6 +1,6 @@
 // 标签管理视图：全量标签表 + 批量重命名/合并/删除 + 颜色 + 撤销
 import { PALETTE, colorFor, isExplicitColor } from '../lib/palette.js';
-import { escapeTag } from '../lib/query.js';
+import { escapeTag, quoteTag } from '../lib/query.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -290,7 +290,7 @@ async function openDrawer(tag, isDir = false) {
   drawer.hidden = false;
 
   try {
-    const r = await send({ type: 'query', expr: (isDir ? '@' : '#') + escapeTag(tag) });
+    const r = await send({ type: 'query', expr: (isDir ? '@' : '#') + quoteTag(tag) });
     body.textContent = '';
     const head = document.createElement('p');
     head.className = 'hint';
