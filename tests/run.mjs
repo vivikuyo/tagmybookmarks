@@ -1362,7 +1362,7 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
 {
   const qq = readFileSync(new URL('../lib/query.js', import.meta.url), 'utf8');
   ok(qq.includes("export function quoteTag(name)"), 'T128a quoteTag 存在');
-  ok(qq.includes("if (ch === '"')"), 'T128b 词法器支持引号包裹的词（@/# 后亦生效）');
+  ok(qq.includes(String.raw`if (ch === '"')`), 'T128b 词法器支持引号包裹的词（@/# 后亦生效）');
   ok(qq.includes('const t = prefix + quoteTag(tag);'), 'T128c insertTag 走 quoteTag');
   const pp = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   ok(pp.includes("app.filterText = '';\n    run();"), 'T128d 清除输入时同步重置云区过滤词');
