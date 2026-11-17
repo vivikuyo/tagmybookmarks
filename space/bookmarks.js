@@ -765,7 +765,11 @@ function render() {
     // 展开的目录懒加载直属书签（受查询/快筛约束）；无分页。
     // 双窗：两栏各自导航；单窗：一栏占满（面包屑仍内嵌表头）
     st.hiddenRows = 0;
-    $('#bmCrumb').hidden = dual;
+    // 双窗：外层表头退役，各栏用自己的面包屑；
+    // 单窗：可见性交给 renderCrumb() 判断（没下钻就隐藏）——
+    // 这里若写成 hidden = dual，会把刚被 renderCrumb 藏起来的面包屑又亮出来，
+    // 结果"退出下钻"后列表回到了所有目录、面包屑却还挂在表头（看着像退不出去）
+    if (dual) $('#bmCrumb').hidden = true;
     rows.classList.toggle('bm-tree-host', true);
     const outerHead = document.querySelector('.bm-table .bm-head');
     if (outerHead) outerHead.hidden = dual; // 双窗：外层表头退役，每栏有自己的列头+面包屑
@@ -1194,6 +1198,7 @@ function renderCrumb() {
   if (!el) return;
   if (!st.folderId || st.sort !== 'tree') {
     el.hidden = true;
+    el.textContent = ''; // 藏起来的同时清空：免得残留的分段在别的时机又露出来
     return;
   }
   el.hidden = false;
@@ -1216,6 +1221,7 @@ function resetQueryBox() {
 function renderCrumbInto(el, pane) {
   if (!pane.folderId) {
     el.hidden = true;
+    el.textContent = '';
     return;
   }
   el.hidden = false;

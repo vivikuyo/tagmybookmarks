@@ -1429,6 +1429,15 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(tg.includes('if (drawerTag) openDrawer(drawerTag, drawerIsDir);'), 'T133e 操作后重开抽屉刷新内容');
 }
 
+// T142：退出下钻后面包屑必须真的消失（列表回到所有目录，表头不许残留旧分段）
+{
+  const bm11 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  ok(!bm11.includes("$('#bmCrumb').hidden = dual;"), 'T142a 不再有"按 dual 强制 set hidden"把面包屑亮回来');
+  ok(bm11.includes("if (dual) $('#bmCrumb').hidden = true;"), 'T142b 单窗可见性交给 renderCrumb() 判断');
+  ok(/function renderCrumb\(\)[\s\S]{0,400}el\.hidden = true;\s*el\.textContent = '';/.test(bm11), 'T142c 隐藏时顺带清空旧分段');
+  ok(/function renderCrumbInto\(el, pane\)[\s\S]{0,300}el\.hidden = true;\s*el\.textContent = '';/.test(bm11), 'T142d 双窗每栏同样隐藏即清空');
+}
+
 // T141：目录标签 = 导航（下钻跳转 / 未下钻展开定位），退出面包屑复位查询
 {
   const bm10 = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
