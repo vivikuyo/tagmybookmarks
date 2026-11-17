@@ -561,7 +561,7 @@ textarea:focus { border-color: var(--accent); }
   padding: 0; cursor: pointer; flex: 0 0 auto;
 }
 
-.dir-chip code { color: var(--accent); font-size: 12px; }
+.dir-chip code { color: var(--text); font-size: 12px; font-weight: 500; }
 .dir-chip .c { color: var(--text-dim); font-size: 10.5px; line-height: 1; }
 /* 目录标签内按钮：无边框文字按钮，与 tagchip 的就地操作一致 */
 .dir-chip .btn {

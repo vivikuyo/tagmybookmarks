@@ -583,7 +583,7 @@ function renderDirTags() {
     });
 
     const ex = document.createElement('button');
-    ex.className = 'btn ghost small';
+    ex.className = 'btn ghost small danger-text';
     ex.textContent = '排除';
     ex.title = '整棵子树都不进索引（搜不到、不统计），适合回收站这类不想被检索的目录';
     ex.addEventListener('click', async (e) => {
