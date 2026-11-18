@@ -689,7 +689,7 @@ function renderFolderHead(node) {
   const id = String(node.id);
   const collapsed = app.grpCollapsed.has(id);
   const head = document.createElement('div');
-  head.className = 'grp' + (collapsed ? ' collapsed' : '');
+  head.className = 'grp' + (collapsed ? ' collapsed' : '') + (node.depth === 0 ? ' grp-top' : '');
   head.dataset.folder = id;
   head.style.paddingLeft = '6px'; // 不做层级缩进，层级由路径标签体现
   head.title = `${folderLabel(node)} · ${node.total ?? 0} 条（右键可重命名）`;

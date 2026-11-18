@@ -1718,6 +1718,17 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes('app.foldIds = [];') && pn.includes('const ids = app.foldIds || [];') && pn.includes('const ids = app.foldIds;'), 'T150h 折叠全部的 id 只取显示层里的文件夹');
 }
 
+
+// T151：目录模式顶层目录组头变色（与下级区分）
+{
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  ok(pn.includes("(node.depth === 0 ? ' grp-top' : '')"), 'T151a depth 0 的组头加 grp-top');
+  ok(pc.includes('.grp.grp-top {') && pc.includes('color: var(--accent);'), 'T151b 顶层组头用主题强调色');
+  ok(pc.includes('.grp.grp-top .grp-n {'), 'T151c 顶层组头的条数也跟随强调色');
+  ok(pc.includes('color-mix(in srgb'), 'T151d 底色用 accent 与 bg-soft 混色，深浅主题自适应');
+}
+
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);
