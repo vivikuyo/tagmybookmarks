@@ -167,20 +167,20 @@ body[data-density="ultra"] .list { padding-bottom: 10px; }
 /* 两朵云共用同一套 chip 度量：字号不随频次缩放，只靠颜色/计数表达热度 */
 .tag {
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 8px;
-  min-height: 24px;
+  padding: 1px 8px;
+  min-height: 20px;
   box-sizing: border-box;
   border: 1px solid currentColor;
   border-radius: 999px;
   background: transparent;
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.45;
   opacity: .92;
 }
 .tag:hover { opacity: 1; background: var(--bg-hover); }
-.tag .c { align-self: center; font-size: 10.5px; line-height: 1; opacity: .7; font-variant-numeric: tabular-nums; }
+.tag .c { align-self: center; font-size: 9.5px; line-height: 1; opacity: .7; font-variant-numeric: tabular-nums; }
 .tag.active { background: currentColor; }
 .tag.active span { color: var(--bg); filter: invert(0); }
 .tag.virtual { border-style: dashed; }
@@ -316,19 +316,9 @@ body[data-density="ultra"] .list { padding-bottom: 10px; }
 /* ---------- 目录标签一栏 ---------- */
 
 .dir-pane { border-top: 1px solid var(--line); }
-.dir-pane.off .dir-cloud,
-.dir-pane.off .dir-hint { display: none; }
+.dir-pane.off .dir-cloud { display: none; }
 .pane-sub { color: var(--text-dim); font-weight: 400; font-size: 11px; }
 .dir-cloud { padding: 8px 10px 10px; overflow-y: auto; }
-
-.dir-hint {
-  margin: 0;
-  padding: 4px 10px 8px;
-  font-size: 10.5px;
-  color: var(--text-dim);
-  line-height: 1.6;
-}
-.dir-hint code { font-size: 10.5px; }
 
 /* 首次删除：回收站位置询问 */
 .trash-ask {

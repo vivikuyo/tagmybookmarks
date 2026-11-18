@@ -1415,7 +1415,12 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(/\.bm-cloud-chip \{[\s\S]*?font-size: 14px;/.test(css), 'T132c 书签页云 chip 字号 12→14');
   ok(css.includes('#undoBox { border-top: 1px solid var(--line); padding-top: 12px; }'), 'T132d 最近操作（可撤销）上方分隔线');
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
-  ok(pc.includes('font-size: 13px;'), 'T132e 侧边栏云 chip 字号 13px');
+  const panelHtml = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
+  ok(/\.tag \{[\s\S]*?font-size: 12px;/.test(pc) && pc.includes('.tag .c { align-self: center; font-size: 9.5px;'), 'T132e 侧边栏两朵云 chip 字号整体 -1px（正文 12、计数 9.5）');
+  ok(/\.tag \{[\s\S]*?padding: 1px 8px;[\s\S]*?min-height: 20px;/.test(pc), 'T132g chip 上下内边距 3→1px（外框与文字的上下空隙各缩 2px）');
+  ok(!panelHtml.includes('dir-hint') && !pc.includes('.dir-hint'), 'T132h 侧边栏目录说明文字已移除（结构+样式都不留）');
+  const spaceHtml = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  ok(spaceHtml.includes('文件夹层级的投影：改文件夹名、挪书签即改即生效，不写入标题；查询语法 <code>@文件夹</code>。'), 'T132i 提示语并入标签管理页「目录标签」说明');
   ok(css.includes('#dirExcluded .hint { flex-basis: 100%; }'), 'T132f 已排除目录提示占满整行，chips 另起一行');
 }
 
