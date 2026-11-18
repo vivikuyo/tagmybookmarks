@@ -1629,26 +1629,23 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
 }
 
 
-// T146：侧边栏「分组视图」（A 方案）——清单按目录插组头、可折叠、无作用域
+// T146：侧边栏「目录模式」——全库按文件夹树铺开（文件夹在前、书签在后）
 {
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   const ph = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
-  ok(ph.includes('id="groupBtn"') && pn.includes("group: 'flat'"), 'T146a 操作带加「清单/分组」切换，默认平铺');
+  ok(ph.includes('id="groupBtn"') && pn.includes("group: 'flat'"), 'T146a 操作带加「清单/目录」切换，默认平铺');
   ok(pn.includes("chrome.storage.local.set({ 'panel.group': app.group })") && pn.includes("chrome.storage.local.get('panel.group')"), 'T146b 显示方式只存本机、重开沿用');
-  ok(pn.includes("if (app.group === 'dir') {\n    const rows = app.allRows;") && pn.includes('renderGrouped(rows);'), 'T146c 目录模式渲染全量行（app.allRows），不是命中行');
-  ok(!pn.includes('renderGrouped(data.items)'), 'T146c2 不再用命中清单渲染分组（查询不过滤列表）');
+  ok(pn.includes("const rows = app.allRows;") && pn.includes('if (app.foldersTree) renderTreeRows();'), 'T146c 目录模式渲染全库 + 文件夹树');
   ok(pn.includes('const PATH_SEP = String.fromCharCode(31);'), 'T146d 路径按后台 PATH_SEP 切（文件夹名里的 / 不算层级）');
-  ok(pn.includes('const pid = String(it.parentId ?? \'\');') && pn.includes('const segs = path ? String(path).split(PATH_SEP) : [];')
-     && pn.includes('name: segs.length ? segs[segs.length - 1] : \'根目录\''), 'T146e 按 parentId 分组、组名取路径末段');
-  ok(pn.includes('const cmpSeg = (a, b) => {') && pn.includes('.sort((a, b) => cmpSeg(a.path, b.path))'), 'T146f 组间按目录树先序（逐段比，不是字符串比）');
-  ok(pn.includes("head.textContent = collapsed ? '▸' : '▾'") === false && pn.includes("caret.textContent = collapsed ? '▸' : '▾'"), 'T146g 组头带折叠箭头');
-  ok(pn.includes("n.textContent = `${g.items.length} 条`") && pn.includes('app.grpCollapsed.add(g.pid)') && pn.includes('app.grpCollapsed.delete(g.pid)'), 'T146h 组头显示本组条数，点击折叠/展开并只重画列表');
-  ok(pn.includes("if (app.grpCollapsed.has(g.pid)) continue;"), 'T146i 折叠后跳过该组行');
+  ok(pn.includes('function renderFolderNode(node)') && pn.includes('const rows = (app.rowsByParent && app.rowsByParent.get(id)) || [];'), 'T146e 按文件夹节点递归，书签按 parentId 归堆');
+  ok(pn.indexOf('for (const child of node.children || []) renderFolderNode(child);')
+     < pn.indexOf('const rows = (app.rowsByParent && app.rowsByParent.get(id)) || [];', pn.indexOf('function renderFolderNode(node)')), 'T146f 每个文件夹先列下级文件夹、再列自己的书签');
+  ok(pn.includes("n.textContent = `${node.total ?? 0} 条`") && pn.includes('function toggleFolder(id)'), 'T146h 组头显示条数，点击折叠/展开');
+  ok(pn.includes("head.className = 'grp' + (collapsed ? ' collapsed' : '')") && pn.includes('if (app.grpCollapsed.has(id)) return;'), 'T146i 折叠后不再渲染子文件夹与书签');
   ok(pc.includes('.grp {') && pc.includes('.grp .grp-n {') && pc.includes('body[data-density="ultra"] .grp {'), 'T146j 组头样式含三档密度');
-  ok(!pn.includes('folderId') && !pn.includes("type: 'cloud:scope'"), 'T146k 分组视图不带作用域（查询结果仍是全量命中）');
+  ok(!pn.includes('renderGrouped(') && !pn.includes('renderGroupHead('), 'T146k 旧的平铺分组实现已完全移除（不并存两套渲染）');
 }
-
 
 // T147：目录模式 = 全量清单 + 查询只跳转（不过滤）
 {
@@ -1659,11 +1656,11 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(bg.includes('const queryKeys = allMode ? null : await queryKeySet(msg.query);') && bg.includes("const limit = allMode ? 20000 :"), 'T147b 全量通道不套查询、上限放宽到 2 万');
   ok(bg.includes("const filter = allMode ? 'all'") && bg.includes("const q = allMode ? '' :") && bg.includes('const folderId = allMode ? null :'), 'T147c 全量通道不做筛选/不限定目录');
   ok(bg.includes("if (allMode || msg.sort === 'tree' || msg.sort === 'dir') {"), 'T147d 全量按书签树序（同目录书签相邻）');
-  ok(pn.includes("const r = await send({ type: 'bookmarks:all' });") && pn.includes('app.allRows = r.items || [];'), 'T147e 侧边栏取一份全库清单并缓存');
+  ok(pn.includes("send({ type: 'bookmarks:all' })") && pn.includes('app.allRows = r.items || [];') && pn.includes("send({ type: 'folders:list' })"), 'T147e 一次取全库清单 + 文件夹树并缓存');
   ok(pn.includes("if (app.group === 'dir') await loadAllRows();") && pn.includes('jumpToFirstHit();'), 'T147f 每次查询后：先保全量、再跳转');
   ok(pn.includes('const hit = new Set(app.data.items.map((i) => i.key));')
      && pn.includes('if (!target || (r.seq ?? Infinity) < (target.seq ?? Infinity)) target = r;'), 'T147g 跳转目标 = 命中里树序最靠前的那一行');
-  ok(pn.includes("app.grpCollapsed.delete(pid); // 命中的组收着就先展开"), 'T147h 目标组折叠时先展开再跳');
+  ok(pn.includes('let pid = String(target.parentId ?? \'\');') && pn.includes("pid = (app.folderParent && app.folderParent.get(pid)) || '';"), 'T147h 跳转时把目标所在目录的祖先链全部展开再跳');
   ok(pn.includes("row.scrollIntoView({ block: 'center' })") && pn.includes("row.classList.add('flash')") && pn.includes("setTimeout(() => row.classList.remove('flash'), 900)"), 'T147i 滚到位置并闪 0.9s 自动收');
   ok(pc.includes('.row.flash {'), 'T147j 闪烁样式');
   ok(pn.includes('`${app.allTotal} 条（全部）') && pn.includes('查询只跳转'), 'T147k 计数如实标「全部」，并提示查询只跳转');
@@ -1683,6 +1680,28 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes('const items = viewRows();') && pn.includes('const total = viewRows().length;'), 'T148h 全选与计数按当前视图');
   ok(pn.includes("const aliveRows = app.group === 'dir' ? (app.allRows || []) : data.items;"), 'T148i 查询后清理选中不再误删全库里的勾选');
   ok(pn.includes('app.selected.clear(); // 换视图清空选择'), 'T148j 切换显示方式清空选择');
+}
+
+
+// T149：目录模式的四项增强（折叠全部 / 路径标签 / 文件夹在前+拖放 / 右键重命名）
+{
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const ph = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  ok(ph.includes('id="foldBtn"'), 'T149a 操作带加「折叠全部 / 展开全部」按钮');
+  ok(pn.includes("const anyOpen = ids.some((id) => !app.grpCollapsed.has(id));")
+     && pn.includes('app.grpCollapsed = anyOpen ? new Set(ids) : new Set();'), 'T149b 一键：有展开就全折叠，全折叠就全展开');
+  ok(pn.includes('function applyFoldBtn()') && pn.includes("btn.textContent = anyOpen ? '折叠全部' : '展开全部'"), 'T149c 按钮文案随状态切换');
+  ok(pn.includes('function folderLabel(node)') && pn.includes('String(node.path).split(PATH_SEP).join('), 'T149d 组头带完整路径（上级\\上级\\自己）');
+  ok(pn.includes("name.textContent = folderLabel(node);"), 'T149e 组头显示路径标签而不是只有末段名');
+  ok(pn.includes('for (const child of node.children || []) renderFolderNode(child);') && pn.includes('for (const row of rows) listEl.append(renderRow(row));'), 'T149f 文件夹在前、书签在后');
+  ok(pn.includes('li.draggable = true;') && pn.includes("li.addEventListener('dragstart'") && pn.includes('app.dragKey = item.key;'), 'T149g 书签行可拖');
+  ok(pn.includes("head.addEventListener('drop', async (e) => {") && pn.includes('await moveDragged({ parentId: id });'), 'T149h 拖到文件夹组头 = 移进该文件夹');
+  ok(pn.includes('index: childFolderCount(pid) + Math.max(pos, 0)'), 'T149i 拖到某条书签上 = 插到它前面（index 扣掉子文件夹数）');
+  ok(pn.includes("type: 'bookmarks:move'") && pn.includes('await refreshAll();'), 'T149j 移动走后台 bookmarks:move，成功后重取整份数据');
+  ok(pn.includes("{ label: '重命名文件夹'") && pn.includes("await send({ type: 'node:rename', id: String(node.id), title: v });"), 'T149k 文件夹右键可重命名（走 node:rename）');
+  ok(pn.includes("input.className = 'grp-rename'") && pc.includes('.grp-rename {') && pc.includes('.row.dragging {'), 'T149l 重命名输入框与拖动态样式');
+  ok(pn.includes("if (opened) {") && pn.includes('applyFoldBtn();'), 'T149m 跳转展开祖先链后同步刷新按钮文案');
 }
 
 console.log(`\n通过 ${pass} 项`);

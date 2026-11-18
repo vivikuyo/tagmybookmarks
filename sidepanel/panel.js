@@ -28,6 +28,11 @@ const app = {
   group: 'flat',        // 显示方式：'flat' 清单 / 'dir' 目录模式（全量分组 + 点标签跳转）
   allRows: null,        // 目录模式下的一份全库清单（不做任何筛选）
   allTotal: 0,
+  foldersTree: null,    // 目录模式的文件夹树（folders:list）
+  folderById: null,     // id → 节点
+  folderParent: null,   // id → 上级 id
+  rowsByParent: null,   // parentId → 该书签（按 seq 序）
+  dragKey: null,        // 正在拖的书签 key
   grpCollapsed: new Set(), // 折叠的组（会话内有效，不落盘）
 };
 
@@ -59,6 +64,7 @@ async function boot() {
   await loadDensity();
   await loadGroup();
   app.allRows = null; // app:changed 会重新 boot，全量清单跟着重建
+  app.foldersTree = null;
   try {
     const st = await send({ type: 'state' });
     app.colors = st.config.colors || {};
@@ -83,6 +89,15 @@ async function boot() {
 function bind() {
   if (app.bound) return; // app:changed 会反复 boot()，监听只能挂一次
   app.bound = true;
+
+  $('#foldBtn').addEventListener('click', () => {
+    if (!app.folderById) return;
+    const ids = [...app.folderById.keys()];
+    const anyOpen = ids.some((id) => !app.grpCollapsed.has(id));
+    app.grpCollapsed = anyOpen ? new Set(ids) : new Set();
+    applyFoldBtn();
+    renderList();
+  });
 
   $('#groupBtn').addEventListener('click', () => {
     app.group = app.group === 'dir' ? 'flat' : 'dir';
@@ -463,10 +478,45 @@ function renderDirPane(enabled) {
 }
 
 async function loadAllRows() {
-  if (app.allRows) return;
-  const r = await send({ type: 'bookmarks:all' });
+  if (app.allRows && app.foldersTree) return;
+  const [r, f] = await Promise.all([
+    send({ type: 'bookmarks:all' }),
+    send({ type: 'folders:list' }),
+  ]);
   app.allRows = r.items || [];
   app.allTotal = r.total || app.allRows.length;
+  app.foldersTree = f.tree || [];
+  buildFolderIndex();
+}
+
+function buildFolderIndex() {
+  app.folderById = new Map();
+  app.folderParent = new Map();
+  const walk = (nodes, parentId) => {
+    for (const n of nodes || []) {
+      const id = String(n.id);
+      app.folderById.set(id, n);
+      app.folderParent.set(id, parentId ? String(parentId) : '');
+      walk(n.children || [], id);
+    }
+  };
+  walk(app.foldersTree, '');
+  buildRowIndex();
+  const btn = $('#foldBtn');
+  if (btn) btn.hidden = app.group !== 'dir';
+  applyFoldBtn();
+}
+
+/** 书签按父目录归堆，组内按书签树序（seq） */
+function buildRowIndex() {
+  const m = new Map();
+  for (const r of app.allRows || []) {
+    const pid = String(r.parentId ?? '');
+    if (!m.has(pid)) m.set(pid, []);
+    m.get(pid).push(r);
+  }
+  for (const arr of m.values()) arr.sort((a, b) => (a.seq ?? Infinity) - (b.seq ?? Infinity));
+  app.rowsByParent = m;
 }
 
 /** 目录模式：查询只用来"定位"，不去过滤列表 —— 滚到第一处命中（书签树里最靠前的那个）并闪一下 */
@@ -483,9 +533,15 @@ function jumpToFirstHit() {
   }
   if (!target) return;
 
-  const pid = String(target.parentId ?? '');
-  if (app.grpCollapsed.has(pid)) {
-    app.grpCollapsed.delete(pid); // 命中的组收着就先展开
+  // 目标所在的目录链（含各级上级）全部展开，否则这一行根本没渲染
+  let pid = String(target.parentId ?? '');
+  let opened = false;
+  while (pid) {
+    if (app.grpCollapsed.has(pid)) { app.grpCollapsed.delete(pid); opened = true; }
+    pid = (app.folderParent && app.folderParent.get(pid)) || '';
+  }
+  if (opened) {
+    applyFoldBtn();
     renderList();
   }
 
@@ -518,9 +574,14 @@ function renderList() {
       listEl.append(div);
       return;
     }
-    renderGrouped(rows);
+    const foldBtn = $('#foldBtn');
+    if (foldBtn) foldBtn.hidden = false;
+    if (app.foldersTree) renderTreeRows();
     return;
   }
+
+  const foldBtn0 = $('#foldBtn');
+  if (foldBtn0) foldBtn0.hidden = true;
 
   if (!data) {
     countEl.textContent = '加载中…';
@@ -545,74 +606,165 @@ function renderList() {
 }
 
 /**
- * 目录模式：列表永远是全库清单（按目录分段、组头可折叠）。
+ * 目录模式：全库按文件夹树铺开。每个文件夹先出自己的下级文件夹，再出自己的书签；
+ * 组头可折叠、可右键重命名，书签行可拖放到文件夹或另一条书签上。
  * 查询不参与过滤，只用来"跳到第一处命中"（见 jumpToFirstHit）。
  */
-function renderGrouped(items) {
-  const groups = new Map(); // parentId → { pid, path, name, items }
-  for (const it of items) {
-    const pid = String(it.parentId ?? '');
-    let g = groups.get(pid);
-    if (!g) {
-      const path = it.path || '';
-      const segs = path ? String(path).split(PATH_SEP) : [];
-      g = {
-        pid,
-        path,
-        name: segs.length ? segs[segs.length - 1] : '根目录',
-        crumbs: segs.join(' / ') || '书签栏',
-        items: [],
-      };
-      groups.set(pid, g);
-    }
-    g.items.push(it);
-  }
-
-  // 组间按目录树的先序排：逐段比，避免 "A/B" 与 "A2" 这类字符串序错位
-  const cmpSeg = (a, b) => {
-    const x = a ? String(a).split(PATH_SEP) : [];
-    const y = b ? String(b).split(PATH_SEP) : [];
-    for (let i = 0; i < Math.min(x.length, y.length); i++) {
-      const c = x[i].localeCompare(y[i], 'zh');
-      if (c) return c;
-    }
-    return x.length - y.length;
-  };
-  const list = [...groups.values()].sort((a, b) => cmpSeg(a.path, b.path));
-
-  for (const g of list) {
-    listEl.append(renderGroupHead(g));
-    if (app.grpCollapsed.has(g.pid)) continue;
-    for (const it of g.items) listEl.append(renderRow(it));
-  }
+function renderTreeRows() {
+  for (const node of app.foldersTree || []) renderFolderNode(node);
 }
 
-function renderGroupHead(g) {
-  const collapsed = app.grpCollapsed.has(g.pid);
-  const head = document.createElement('button');
-  head.type = 'button';
-  head.className = 'grp' + (collapsed ? ' collapsed' : '');
-  head.title = `${g.crumbs} · ${g.items.length} 条（点击${collapsed ? '展开' : '折叠'}）`;
+function renderFolderNode(node) {
+  listEl.append(renderFolderHead(node));
+  const id = String(node.id);
+  if (app.grpCollapsed.has(id)) return;
+  for (const child of node.children || []) renderFolderNode(child); // 文件夹在前
+  const rows = (app.rowsByParent && app.rowsByParent.get(id)) || [];
+  for (const row of rows) listEl.append(renderRow(row));            // 书签在后
+}
 
-  const caret = document.createElement('span');
+/** 组头文字：下级文件夹带上级路径，用反斜杠分隔（xx\xx\xx） */
+function folderLabel(node) {
+  const p = node.path ? String(node.path).split(PATH_SEP).join('\\') : node.title || '';
+  return p || node.title || '（未命名）';
+}
+
+function renderFolderHead(node) {
+  const id = String(node.id);
+  const collapsed = app.grpCollapsed.has(id);
+  const head = document.createElement('div');
+  head.className = 'grp' + (collapsed ? ' collapsed' : '');
+  head.dataset.folder = id;
+  head.style.paddingLeft = `${6 + Math.min(Number(node.depth) || 0, 6) * 10}px`;
+  head.title = `${folderLabel(node)} · ${node.total ?? 0} 条（右键可重命名）`;
+
+  const caret = document.createElement('button');
+  caret.type = 'button';
   caret.className = 'grp-caret';
   caret.textContent = collapsed ? '▸' : '▾';
+  caret.title = collapsed ? '展开' : '折叠';
+  caret.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleFolder(id);
+  });
 
   const name = document.createElement('span');
   name.className = 'grp-name';
-  name.textContent = g.name;
+  name.textContent = folderLabel(node);
 
   const n = document.createElement('span');
   n.className = 'grp-n';
-  n.textContent = `${g.items.length} 条`;
+  n.textContent = `${node.total ?? 0} 条`;
 
   head.append(caret, name, n);
-  head.addEventListener('click', () => {
-    if (collapsed) app.grpCollapsed.delete(g.pid);
-    else app.grpCollapsed.add(g.pid);
-    renderList();
+  head.addEventListener('click', () => toggleFolder(id));
+
+  // 右键：重命名文件夹（就地改，Enter 提交、Esc 取消）
+  head.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openCtx(e.clientX, e.clientY, [{ label: '重命名文件夹', run: () => renameFolder(head, name, node) }]);
+  });
+
+  // 拖放：书签拖到这个文件夹上 = 移进去（追加到末尾）
+  head.addEventListener('dragover', (e) => {
+    if (!app.dragKey) return;
+    e.preventDefault();
+    head.classList.add('drop');
+  });
+  head.addEventListener('dragleave', () => head.classList.remove('drop'));
+  head.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    head.classList.remove('drop');
+    await moveDragged({ parentId: id });
   });
   return head;
+}
+
+function toggleFolder(id) {
+  if (app.grpCollapsed.has(id)) app.grpCollapsed.delete(id);
+  else app.grpCollapsed.add(id);
+  applyFoldBtn();
+  renderList();
+}
+
+/** 折叠全部 / 展开全部 */
+function applyFoldBtn() {
+  const btn = $('#foldBtn');
+  if (!btn || !app.folderById) return;
+  const ids = [...app.folderById.keys()];
+  const anyOpen = ids.some((id) => !app.grpCollapsed.has(id));
+  btn.textContent = anyOpen ? '折叠全部' : '展开全部';
+  btn.hidden = app.group !== 'dir';
+}
+
+function renameFolder(head, nameEl, node) {
+  const input = document.createElement('input');
+  input.className = 'grp-rename';
+  input.value = node.title || '';
+  nameEl.replaceWith(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const restore = () => {
+    if (done) return;
+    done = true;
+    input.replaceWith(nameEl);
+  };
+  const commit = async () => {
+    if (done) return;
+    done = true;
+    const v = input.value.trim();
+    input.replaceWith(nameEl);
+    if (!v || v === node.title) return;
+    try {
+      await send({ type: 'node:rename', id: String(node.id), title: v });
+      await refreshAll();
+      toast('已重命名文件夹');
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    else if (e.key === 'Escape') { e.preventDefault(); restore(); }
+  });
+  input.addEventListener('blur', restore);
+  input.addEventListener('click', (e) => e.stopPropagation());
+}
+
+/** 某个目录下已有几个子文件夹（Chrome 的 index 把文件夹排在书签前面） */
+function childFolderCount(parentId) {
+  const node = app.folderById && app.folderById.get(String(parentId));
+  return node && node.children ? node.children.length : 0;
+}
+
+async function moveDragged(target) {
+  const key = app.dragKey;
+  app.dragKey = null;
+  if (!key) return;
+  const row = (app.allRows || []).find((r) => r.key === key);
+  if (!row) return;
+  try {
+    await send({
+      type: 'bookmarks:move',
+      ids: nodeIdsOf(row),
+      parentId: target.parentId,
+      ...(target.index == null ? {} : { index: target.index }),
+    });
+    await refreshAll();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+/** 拖放后重取整份数据（书签树变了，索引/文件夹计数都要重算） */
+async function refreshAll() {
+  app.allRows = null;
+  app.foldersTree = null;
+  app.selected.clear();
+  await run();
 }
 
 // ---------------------------------------------------------------- 右键菜单（复制网址 / 重命名）
@@ -783,6 +935,39 @@ function renderRow(item) {
 
   main.append(title, url, chips);
   li.append(pick, main);
+  // 拖放：自身可拖；拖到另一条书签上 = 插到它前面（同目录内排序 / 跨目录移动）
+  li.draggable = true;
+  li.addEventListener('dragstart', (e) => {
+    app.dragKey = item.key;
+    li.classList.add('dragging');
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', item.key);
+    }
+  });
+  li.addEventListener('dragend', () => {
+    app.dragKey = null;
+    li.classList.remove('dragging');
+    for (const el of listEl.querySelectorAll('.drop')) el.classList.remove('drop');
+  });
+  li.addEventListener('dragover', (e) => {
+    if (!app.dragKey || app.dragKey === item.key) return;
+    e.preventDefault();
+    li.classList.add('drop');
+  });
+  li.addEventListener('dragleave', () => li.classList.remove('drop'));
+  li.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation(); // 别让文件夹组头也收到
+    li.classList.remove('drop');
+    if (!app.dragKey || app.dragKey === item.key) return;
+    const pid = String(item.parentId ?? '');
+    const arr = (app.rowsByParent && app.rowsByParent.get(pid)) || [];
+    const pos = arr.findIndex((r) => r.key === item.key);
+    // Chrome 的 index 把子文件夹排在书签前，所以要加上本目录的子文件夹数
+    await moveDragged({ parentId: pid, index: childFolderCount(pid) + Math.max(pos, 0) });
+  });
+
   // 右键：复制网址 / 重命名（标签保留）
   li.addEventListener('contextmenu', (e) => {
     e.preventDefault();
