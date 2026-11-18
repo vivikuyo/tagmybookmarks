@@ -1533,7 +1533,7 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(bg5.includes('let rawTree = null;'), 'T136a rebuuild 时缓存原始树');
   ok(bg5.includes('rawTree = tree;'), 'T136b 重建时刷新原始树快照');
   ok(bg5.includes('function treeScopeRows('), 'T136c 按目录从真实树组行');
-  ok(/bookmarks:page[\s\S]{0,900}if \(folderId\) \{[\s\S]{0,600}treeScopeRows/.test(bg5), 'T136d bookmarks:page 带到目录就走真实树');
+    ok(/bookmarks:page[\s\S]{0,1400}if \(folderId\) \{[\s\S]{0,600}treeScopeRows/.test(bg5), 'T136d bookmarks:page 带到目录就走真实树');
   const idsIdx = bg5.indexOf("type === 'bookmarks:ids'");
   ok(idsIdx > 0 && bg5.indexOf('treeScopeRows(folderId, { subtree', idsIdx) > 0, 'T136e bookmarks:ids 同样按真实树');
   ok(bg5.includes('folderExcluded,'), 'T136f 回包带 folderExcluded');
@@ -1728,6 +1728,19 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pc.includes('.grp.grp-open {') && pc.includes('color: var(--accent);'), 'T151c 展开态用强调色 + 左侧竖条');
   ok(!pc.includes('.grp.grp-top {') || !pc.includes('.grp.grp-top .grp-n'), 'T151d 不再按层级无条件上色');
   ok(pc.includes('color-mix(in srgb'), 'T151d 底色用 accent 与 bg-soft 混色，深浅主题自适应');
+}
+
+
+// T152：目录模式的全库行必须走真实树（排除目录里的书签也要出现）
+{
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  ok(bg.includes('function allTreeRows(skipIds)') && bg.includes('})(rawTree);'), 'T152a 新增 allTreeRows：递归真实树组行');
+  ok(bg.includes('const parsed = parseTitle(n.title || \'\');') && bg.includes('tags: tagsOf(key, parsed),'), 'T152b 行内的标题/标签从书签题解出，不依赖索引');
+  ok(bg.includes('rows.push(...allTreeRows(skip));') && bg.includes('cAll = rows.length;'), 'T152c allMode 直接吃真实树的行与计数');
+  ok(bg.includes("} else if (folderId) {") && bg.includes('} else for (const [key, nodes] of index.keyToNodes) {'), 'T152d 索引循环只在非 allMode 分支里跑');
+  ok(bg.includes('if (trashNow) skip.add(String(trashNow.id));'), 'T152e 回收站与配置目录不进目录模式');
+  ok(pn.includes("send({ type: 'bookmarks:all' })"), 'T152f 侧边栏仍走同一个 bookmarks:all 通道');
 }
 
 console.log(`\n通过 ${pass} 项`);

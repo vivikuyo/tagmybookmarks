@@ -592,6 +592,45 @@ function treeMaps() {
   return rawMaps;
 }
 
+/**
+ * 全库书签行：直接走真实树（treeMaps 的路径/树序），不读索引。
+ * 目录模式要"所有书签都列出来"，而索引是按排除名单构建的——
+ * 被排除目录里的书签在索引里根本不存在，用它拼行会出现"组头写着 309 条、展开却是空的"。
+ */
+function allTreeRows(skipIds) {
+  const maps = treeMaps();
+  const rows = [];
+  if (!rawTree) return rows;
+  const tagsOf = (key, parsed) => {
+    const set = new Set(parsed.tags);
+    for (const t of (index && index.keyToTags && index.keyToTags.get(key)) || []) set.add(t);
+    return [...set].sort(cpCompare);
+  };
+  (function walk(nodes) {
+    for (const n of nodes || []) {
+      if (skipIds && skipIds.has(String(n.id))) continue;
+      if (n.url) {
+        const key = canonicalUrl(n.url);
+        const parsed = parseTitle(n.title || '');
+        rows.push({
+          id: n.id,
+          key,
+          parentId: n.parentId,
+          title: parsed.text || n.title || n.url,
+          url: n.url,
+          tags: tagsOf(key, parsed),
+          path: (maps && maps.pathOf.get(String(n.parentId))) || '',
+          locations: 1,
+          seq: (maps && maps.seqOf.get(String(n.id))) ?? Infinity,
+        });
+        continue;
+      }
+      walk(n.children);
+    }
+  })(rawTree);
+  return rows;
+}
+
 /** 某个文件夹（或整棵子树）里的书签行：完全按真实树组装，不经索引 */
 function treeScopeRows(folderId, opts) {
   const maps = treeMaps();
@@ -1736,7 +1775,17 @@ async function handle(msg) {
     let cAll = 0;
     let cUntagged = 0;
     let folderExcluded = false;
-    if (folderId) {
+    if (allMode) {
+      // 目录模式：整棵真实树，跳过配置目录 / 回收站（它们不是书签内容）
+      const skip = new Set();
+      if (configFolderId) skip.add(String(configFolderId));
+      for (const n of Object.values(configNodes)) if (n && n.id) skip.add(String(n.id));
+      const trashNow = await resolveTrash(false);
+      if (trashNow) skip.add(String(trashNow.id));
+      rows.push(...allTreeRows(skip));
+      cAll = rows.length;
+      cUntagged = rows.filter((r) => !r.tags || !r.tags.length).length;
+    } else if (folderId) {
       // 按目录：直接读真实树。目录被"排除"只是从标签/查询体系里摘掉，
       // 管理页仍要能看到内容（否则树上显示 58 条、列表却是空白）
       const scoped = treeScopeRows(folderId, { queryKeys, filter, q });
