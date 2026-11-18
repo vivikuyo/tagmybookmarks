@@ -210,7 +210,7 @@ function bind() {
   $('#bulkAll').addEventListener('change', (e) => {
     const items = viewRows();
     app.selected.clear();
-    if (e.target.checked) items.forEach((i) => app.selected.add(i.key));
+    if (e.target.checked) items.forEach((i) => app.selected.add(rowKey(i)));
     render();
   });
 
@@ -268,7 +268,7 @@ async function run() {
     // 选中集合跟着结果走：消失的 key 自动丢弃（目录模式按全库清，命中外的不算消失）
     const aliveRows = app.group === 'dir' ? (app.allRows || []) : data.items;
     if (aliveRows.length) {
-      const alive = new Set(aliveRows.map((i) => i.key));
+      const alive = new Set(aliveRows.map((i) => rowKey(i)));
       for (const k of [...app.selected]) if (!alive.has(k)) app.selected.delete(k);
     }
 
@@ -942,6 +942,17 @@ function renameRow(li, item) {
   input.addEventListener('click', (e) => e.stopPropagation());
 }
 
+/**
+ * 行在选择集里的身份。
+ * 目录模式一行 = 一个书签节点，必须用节点 id：同一个网址存在多个文件夹时，
+ * key（规范化 URL）相同，按 key 选会把"别的文件夹里的同一条"一起选上、
+ * 一起删掉 —— 这就是"勾一条删掉好几条"的原因。
+ * 清单模式一行 = 一个网址（一条 URL 只出现一次），沿用 key。
+ */
+function rowKey(item) {
+  return app.group === 'dir' ? `d:${item.id}` : `k:${item.key}`;
+}
+
 /** 取这一行的书签节点 id：命中清单给的是 nodeIds，全库清单只有单个 id */
 function nodeIdsOf(item) {
   if (item && item.nodeIds && item.nodeIds.length) return item.nodeIds;
@@ -950,19 +961,19 @@ function nodeIdsOf(item) {
 
 function renderRow(item) {
   const li = document.createElement('li');
-  li.className = 'row' + (app.selected.has(item.key) ? ' selected' : '');
+  li.className = 'row' + (app.selected.has(rowKey(item)) ? ' selected' : '');
   li.dataset.key = item.key;
 
   const pick = document.createElement('input');
   pick.type = 'checkbox';
   pick.className = 'pick';
-  pick.checked = app.selected.has(item.key);
+  pick.checked = app.selected.has(rowKey(item));
 
   // 勾选统一走这里：点复选框、或点这一条的空白区，效果一致
   const setSelected = (on) => {
     pick.checked = on;
-    if (on) app.selected.add(item.key);
-    else app.selected.delete(item.key);
+    if (on) app.selected.add(rowKey(item));
+    else app.selected.delete(rowKey(item));
     li.classList.toggle('selected', on);
     updateBulk();
   };
@@ -974,7 +985,7 @@ function renderRow(item) {
   li.addEventListener('click', (e) => {
     if (e.target.closest('input, button, .chip, .badge')) return;
     if (String(window.getSelection())) return; // 正在选文字时不误触
-    setSelected(!app.selected.has(item.key));
+    setSelected(!app.selected.has(rowKey(item)));
   });
 
   const main = document.createElement('div');
@@ -1094,7 +1105,7 @@ function viewRows() {
 }
 
 function selectedItems() {
-  return viewRows().filter((i) => app.selected.has(i.key));
+  return viewRows().filter((i) => app.selected.has(rowKey(i)));
 }
 
 function selectedIds() {

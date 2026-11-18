@@ -1676,7 +1676,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes('ids: nodeIdsOf(item), tags: [tag]'), 'T148d chip 上的 × 摘标签也走 nodeIdsOf');
   ok(!pn.includes('item.nodeIds[0]') && !pn.includes('ids: item.nodeIds'), 'T148e 不再直接下标 nodeIds（目录模式下会是 undefined）');
   ok(pn.includes('function viewRows()') && pn.includes("if (app.group === 'dir') return app.allRows || [];"), 'T148f 当前视图行 = 目录模式全库 / 清单模式命中');
-  ok(pn.includes('return viewRows().filter((i) => app.selected.has(i.key));'), 'T148g 选中项按当前视图算（否则批量动作对全库行无效）');
+  ok(pn.includes('return viewRows().filter((i) => app.selected.has(rowKey(i)));'), 'T148g 选中项按当前视图算（否则批量动作对全库行无效）');
   ok(pn.includes('const items = viewRows();') && pn.includes('const total = viewRows().length;'), 'T148h 全选与计数按当前视图');
   ok(pn.includes("const aliveRows = app.group === 'dir' ? (app.allRows || []) : data.items;"), 'T148i 查询后清理选中不再误删全库里的勾选');
   ok(pn.includes('app.selected.clear(); // 换视图清空选择'), 'T148j 切换显示方式清空选择');
@@ -1753,6 +1753,19 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes("qEl.value = insertTag(qEl.value, tag, mode, prefix);\n  app.jumpOnce = true;"), 'T153d 点标签 chip 写查询时置位');
   ok(pn.includes("app.jumpOnce = true; // 切进目录模式时按当前查询跳一次"), 'T153e 切进目录模式时跳一次');
   ok(!/async function refreshAll\(\)[\s\S]{0,200}jumpOnce = true/.test(pn), 'T153f 拖放/删除后的 refreshAll 不置位');
+}
+
+// T154：目录模式的勾选按「书签节点」而不是「网址」，勾一条只删那一条
+{
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  ok(pn.includes('function rowKey(item) {'), 'T154a 新增 rowKey：行的选择身份');
+  ok(pn.includes("return app.group === 'dir' ? `d:${item.id}` : `k:${item.key}`;"), 'T154b 目录模式按节点 id、清单模式按 URL key');
+  ok(pn.includes("li.className = 'row' + (app.selected.has(rowKey(item)) ? ' selected' : '');") && pn.includes('pick.checked = app.selected.has(rowKey(item));'), 'T154c 选中态与复选框都用 rowKey 判定');
+  ok(pn.includes('if (on) app.selected.add(rowKey(item));') && pn.includes('else app.selected.delete(rowKey(item));'), 'T154d 勾选写入/移除也走 rowKey');
+  ok(pn.includes('items.forEach((i) => app.selected.add(rowKey(i)));'), 'T154e 全选按行身份，不是按网址');
+  ok(pn.includes('const alive = new Set(aliveRows.map((i) => rowKey(i)));'), 'T154f 查询后清理失效选择也按 rowKey 对齐');
+  ok(pn.includes('return viewRows().filter((i) => app.selected.has(rowKey(i)));'), 'T154g selectedItems 按 rowKey 取行，重复网址不再连带');
+  ok(!pn.includes('app.selected.has(item.key)') && !pn.includes('app.selected.add(item.key)'), 'T154h 旧的按 key 勾选彻底移除');
 }
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
