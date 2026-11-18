@@ -86,6 +86,7 @@ function bind() {
 
   $('#groupBtn').addEventListener('click', () => {
     app.group = app.group === 'dir' ? 'flat' : 'dir';
+    app.selected.clear(); // 换视图清空选择（与管理页同一条规则）
     applyGroupBtn();
     chrome.storage.local.set({ 'panel.group': app.group });
     if (app.group === 'dir') {
@@ -187,7 +188,7 @@ function bind() {
   $('#relatedOnly').addEventListener('change', run);
   // 全选 = 操作带勾选框：勾上选满当前列表，取消清空；半选状态由 updateBulk 维护
   $('#bulkAll').addEventListener('change', (e) => {
-    const items = app.data ? app.data.items : [];
+    const items = viewRows();
     app.selected.clear();
     if (e.target.checked) items.forEach((i) => app.selected.add(i.key));
     render();
@@ -244,9 +245,12 @@ async function run() {
     app.data = data;
     if (data.allTags) app.allTags = data.allTags;
 
-    // 选中集合跟着结果走：消失的 key 自动丢弃
-    const alive = new Set(data.items.map((i) => i.key));
-    for (const k of [...app.selected]) if (!alive.has(k)) app.selected.delete(k);
+    // 选中集合跟着结果走：消失的 key 自动丢弃（目录模式按全库清，命中外的不算消失）
+    const aliveRows = app.group === 'dir' ? (app.allRows || []) : data.items;
+    if (aliveRows.length) {
+      const alive = new Set(aliveRows.map((i) => i.key));
+      for (const k of [...app.selected]) if (!alive.has(k)) app.selected.delete(k);
+    }
 
     if (app.group === 'dir') await loadAllRows();
     render();
@@ -694,7 +698,7 @@ function renameRow(li, item) {
     input.replaceWith(t);
     if (!v || v === item.title) return;
     try {
-      await send({ type: 'node:rename', id: item.nodeIds[0], title: v });
+      await send({ type: 'node:rename', id: nodeIdsOf(item)[0], title: v });
       await run(); // 重查一遍：标题/标签按新标题重建
       toast('已重命名（标签保留）');
     } catch (e) {
@@ -712,6 +716,12 @@ function renameRow(li, item) {
   });
   input.addEventListener('blur', commit);
   input.addEventListener('click', (e) => e.stopPropagation());
+}
+
+/** 取这一行的书签节点 id：命中清单给的是 nodeIds，全库清单只有单个 id */
+function nodeIdsOf(item) {
+  if (item && item.nodeIds && item.nodeIds.length) return item.nodeIds;
+  return item && item.id ? [item.id] : [];
 }
 
 function renderRow(item) {
@@ -751,7 +761,9 @@ function renderRow(item) {
   title.textContent = item.title || item.url;
   title.title = item.url;
   title.addEventListener('click', () => {
-    send({ type: 'open', ids: [item.nodeIds[0]] });
+    const id = nodeIdsOf(item)[0];
+    if (id) send({ type: 'open', ids: [id] });
+    else if (item.url) chrome.tabs.create({ url: item.url }); // 兜底：直接按网址开
   });
 
   const url = document.createElement('div');
@@ -796,7 +808,7 @@ function renderChip(item, tag) {
   x.title = '摘掉这个标签';
   x.addEventListener('click', async (e) => {
     e.stopPropagation();
-    await send({ type: 'tags:remove', ids: item.nodeIds, tags: [tag] });
+    await send({ type: 'tags:remove', ids: nodeIdsOf(item), tags: [tag] });
     await run();
     toast(`已摘掉 #${tag}`);
   });
@@ -818,18 +830,24 @@ function prettyUrl(raw) {
 
 // ---------------------------------------------------------------- 批量
 
+/** 当前视图里的行：目录模式是全库清单，清单模式是命中清单 */
+function viewRows() {
+  if (app.group === 'dir') return app.allRows || [];
+  return app.data ? app.data.items : [];
+}
+
 function selectedItems() {
-  const items = app.data ? app.data.items : [];
-  return items.filter((i) => app.selected.has(i.key));
+  return viewRows().filter((i) => app.selected.has(i.key));
 }
 
 function selectedIds() {
-  return selectedItems().flatMap((i) => i.nodeIds);
+  // 全库通道的行只带 id（没有 nodeIds），两种都要能取到
+  return selectedItems().flatMap((i) => nodeIdsOf(i));
 }
 
 function updateBulk() {
   const n = app.selected.size;
-  const total = app.data ? app.data.items.length : 0;
+  const total = viewRows().length;
   bulkCountEl.textContent = `已选 ${n}`;
   // 操作带常驻：无选中时动作按钮置灰，全选框反映当前选择状态
   for (const b of bulkEl.querySelectorAll('[data-act]')) b.disabled = !n;

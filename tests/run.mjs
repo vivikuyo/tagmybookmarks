@@ -1669,6 +1669,22 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes('`${app.allTotal} 条（全部）') && pn.includes('查询只跳转'), 'T147k 计数如实标「全部」，并提示查询只跳转');
 }
 
+
+// T148：目录模式的行必须能打开/改名/摘标签（全库行只有 id，没有 nodeIds）
+{
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  ok(pn.includes('function nodeIdsOf(item)') && pn.includes('return item && item.id ? [item.id] : [];'), 'T148a 统一取节点 id：nodeIds 优先，退回单 id');
+  ok(pn.includes('const id = nodeIdsOf(item)[0];') && pn.includes("else if (item.url) chrome.tabs.create({ url: item.url });"), 'T148b 单条打开走 nodeIdsOf，取不到就用网址兜底');
+  ok(pn.includes('id: nodeIdsOf(item)[0], title: v'), 'T148c 右键重命名也走 nodeIdsOf');
+  ok(pn.includes('ids: nodeIdsOf(item), tags: [tag]'), 'T148d chip 上的 × 摘标签也走 nodeIdsOf');
+  ok(!pn.includes('item.nodeIds[0]') && !pn.includes('ids: item.nodeIds'), 'T148e 不再直接下标 nodeIds（目录模式下会是 undefined）');
+  ok(pn.includes('function viewRows()') && pn.includes("if (app.group === 'dir') return app.allRows || [];"), 'T148f 当前视图行 = 目录模式全库 / 清单模式命中');
+  ok(pn.includes('return viewRows().filter((i) => app.selected.has(i.key));'), 'T148g 选中项按当前视图算（否则批量动作对全库行无效）');
+  ok(pn.includes('const items = viewRows();') && pn.includes('const total = viewRows().length;'), 'T148h 全选与计数按当前视图');
+  ok(pn.includes("const aliveRows = app.group === 'dir' ? (app.allRows || []) : data.items;"), 'T148i 查询后清理选中不再误删全库里的勾选');
+  ok(pn.includes('app.selected.clear(); // 换视图清空选择'), 'T148j 切换显示方式清空选择');
+}
+
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);
