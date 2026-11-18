@@ -1704,6 +1704,20 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes("if (opened) {") && pn.includes('applyFoldBtn();'), 'T149m 跳转展开祖先链后同步刷新按钮文案');
 }
 
+
+// T150：显示层从「书签栏」的内容起算（去掉未命名根与容器层），且不做层级缩进
+{
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  ok(pn.includes('function buildDisplayTree()'), 'T150a 有独立的显示层构建，不改后台原始树');
+  ok(pn.includes('app.transparentIds.add(cid);'), 'T150b 书签栏 / 其他书签这两层容器透明化');
+  ok(pn.includes('for (const child of cont.children || []) {') && pn.includes('const node = cloneNode(child, 0, \'\');'), 'T150c 直接从容器孩子开始铺，depth 归零');
+  ok(pn.includes("const path = n.title ? (parentPath ? `${parentPath}${PATH_SEP}${n.title}` : n.title) : parentPath;"), 'T150d 路径也从容器孩子起算（不再带书签栏前缀）');
+  ok(pn.includes('app.looseRows = loose;') && pn.includes('if (app.transparentIds.has(pid) || !app.folderById.has(pid) || !seen.has(pid)) loose.push(row);'), 'T150e 容器直属书签收进 looseRows，不会凭空消失');
+  ok(pn.includes('for (const node of app.displayNodes || []) renderFolderNode(node);') && pn.includes('for (const row of app.looseRows || []) listEl.append(renderRow(row));'), 'T150f 渲染顺序：显示层文件夹 → 容器直属书签');
+  ok(pn.includes("head.style.paddingLeft = '6px';"), 'T150g 组头固定 6px，不做层级缩进');
+  ok(pn.includes('app.foldIds = [];') && pn.includes('const ids = app.foldIds || [];') && pn.includes('const ids = app.foldIds;'), 'T150h 折叠全部的 id 只取显示层里的文件夹');
+}
+
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);

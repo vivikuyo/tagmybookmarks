@@ -91,8 +91,8 @@ function bind() {
   app.bound = true;
 
   $('#foldBtn').addEventListener('click', () => {
-    if (!app.folderById) return;
-    const ids = [...app.folderById.keys()];
+    if (!app.foldIds) return;
+    const ids = app.foldIds;
     const anyOpen = ids.some((id) => !app.grpCollapsed.has(id));
     app.grpCollapsed = anyOpen ? new Set(ids) : new Set();
     applyFoldBtn();
@@ -502,9 +502,64 @@ function buildFolderIndex() {
   };
   walk(app.foldersTree, '');
   buildRowIndex();
+  buildDisplayTree();
   const btn = $('#foldBtn');
   if (btn) btn.hidden = app.group !== 'dir';
   applyFoldBtn();
+}
+
+/**
+ * 显示层：Chrome 的书签树是 (未命名根) → [书签栏, 其他书签] → 真正的文件夹。
+ * 这里把根节点和这两个容器层"透明化"，直接从它们的孩子开始铺，路径也从这里起算。
+ * 容器自己的直属书签收集到 looseRows，放在所有顶层文件夹之后渲染。
+ */
+function buildDisplayTree() {
+  const cloneNode = (n, depth, parentPath) => {
+    const path = n.title ? (parentPath ? `${parentPath}${PATH_SEP}${n.title}` : n.title) : parentPath;
+    return {
+      id: String(n.id),
+      title: n.title || '',
+      depth,
+      path,
+      count: n.count,
+      total: n.total,
+      children: (n.children || []).map((c) => cloneNode(c, depth + 1, path)),
+    };
+  };
+  app.transparentIds = new Set();
+  app.displayNodes = [];
+  app.foldIds = [];
+  for (const root of app.foldersTree || []) {
+    for (const cont of root.children || []) {
+      const cid = String(cont.id);
+      app.transparentIds.add(cid);
+      for (const child of cont.children || []) {
+        const node = cloneNode(child, 0, '');
+        app.displayNodes.push(node);
+        collectIds(node);
+      }
+    }
+  }
+  function collectIds(node) {
+    app.foldIds.push(String(node.id));
+    for (const c of node.children || []) collectIds(c);
+  }
+
+  const seen = new Set();
+  const collect = (node) => {
+    seen.add(String(node.id));
+    for (const c of node.children || []) collect(c);
+  };
+  for (const n of app.displayNodes) collect(n);
+
+  // 没有被任何显示节点容纳的书签（容器直属 / 边角位置）也要露出来，不能凭空消失
+  const loose = [];
+  for (const row of app.allRows || []) {
+    const pid = String(row.parentId ?? '');
+    if (app.transparentIds.has(pid) || !app.folderById.has(pid) || !seen.has(pid)) loose.push(row);
+  }
+  loose.sort((a, b) => (a.seq ?? Infinity) - (b.seq ?? Infinity));
+  app.looseRows = loose;
 }
 
 /** 书签按父目录归堆，组内按书签树序（seq） */
@@ -611,7 +666,8 @@ function renderList() {
  * 查询不参与过滤，只用来"跳到第一处命中"（见 jumpToFirstHit）。
  */
 function renderTreeRows() {
-  for (const node of app.foldersTree || []) renderFolderNode(node);
+  for (const node of app.displayNodes || []) renderFolderNode(node);
+  for (const row of app.looseRows || []) listEl.append(renderRow(row));
 }
 
 function renderFolderNode(node) {
@@ -635,7 +691,7 @@ function renderFolderHead(node) {
   const head = document.createElement('div');
   head.className = 'grp' + (collapsed ? ' collapsed' : '');
   head.dataset.folder = id;
-  head.style.paddingLeft = `${6 + Math.min(Number(node.depth) || 0, 6) * 10}px`;
+  head.style.paddingLeft = '6px'; // 不做层级缩进，层级由路径标签体现
   head.title = `${folderLabel(node)} · ${node.total ?? 0} 条（右键可重命名）`;
 
   const caret = document.createElement('button');
@@ -691,8 +747,8 @@ function toggleFolder(id) {
 /** 折叠全部 / 展开全部 */
 function applyFoldBtn() {
   const btn = $('#foldBtn');
-  if (!btn || !app.folderById) return;
-  const ids = [...app.folderById.keys()];
+  if (!btn || !app.displayNodes) return;
+  const ids = app.foldIds || [];
   const anyOpen = ids.some((id) => !app.grpCollapsed.has(id));
   btn.textContent = anyOpen ? '折叠全部' : '展开全部';
   btn.hidden = app.group !== 'dir';
