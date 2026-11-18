@@ -1083,6 +1083,11 @@ async function doQuery(expr, opts = {}) {
 async function handle(msg) {
   const type = msg.type;
 
+  // 打开面板：弹窗按钮等前端统一走这里，内部决定侧边栏还是小窗
+  if (type === 'panel:open') {
+    return { ok: true, mode: await openPanelBestEffort() };
+  }
+
   if (type === 'tags:merge' || type === 'tags:rename') {
     await ready;
     if (rebuildPending) await rebuild();
@@ -2014,11 +2019,39 @@ chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
 
 // ---------------------------------------------------------------- 其他入口
 
+/**
+ * 打开面板：优先浏览器原生侧边栏；没有 sidePanel 宿主（Vivaldi 等 Chromium 分支）时，
+ * 退化成独立小窗（type: 'popup'），窗口里只有扩展自己的界面，不带浏览器工具条。
+ */
+function openPanelWindow() {
+  return chrome.windows.create({
+    url: chrome.runtime.getURL(PANEL_PAGE),
+    type: 'popup',
+    width: 420,
+    height: 760,
+    focused: true,
+  });
+}
+
+async function openPanelBestEffort() {
+  try {
+    if (chrome.sidePanel && chrome.sidePanel.open) {
+      const win = await chrome.windows.getCurrent();
+      await chrome.sidePanel.open({ windowId: win.id });
+      return 'sidepanel';
+    }
+  } catch (e) {
+    // Vivaldi / 部分分支未实现 chrome.sidePanel，或宿主拒绝打开：不报错，改走小窗
+    console.warn('[TagMyBookmarks] 原生侧边栏不可用，改用独立窗口', e);
+  }
+  await openPanelWindow();
+  return 'window';
+}
+
 chrome.commands.onCommand.addListener(async (cmd) => {
   try {
     if (cmd === 'open-panel') {
-      const win = await chrome.windows.getCurrent();
-      await chrome.sidePanel.open({ windowId: win.id });
+      await openPanelBestEffort();
     } else if (cmd === 'open-space') {
       await chrome.tabs.create({ url: chrome.runtime.getURL(SPACE_PAGE) });
     }

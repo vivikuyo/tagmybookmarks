@@ -1614,6 +1614,20 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
 
 
 
+
+// T145：打开面板的入口在无 sidePanel 宿主时退化为独立小窗（Vivaldi / 部分 Chromium 分支）
+{
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  const pop = readFileSync(new URL('../popup/popup.js', import.meta.url), 'utf8');
+  ok(bg.includes('function openPanelWindow()') && bg.includes("type: 'popup'") && bg.includes('width: 420'), 'T145a 独立小窗入口（popup 窗口 + 固定宽高）');
+  ok(bg.indexOf('async function openPanelBestEffort()') > 0
+     && bg.indexOf('chrome.sidePanel.open({ windowId: win.id })') > bg.indexOf('async function openPanelBestEffort()'), 'T145b 先试原生侧边栏');
+  ok(bg.includes("console.warn('[TagMyBookmarks] 原生侧边栏不可用，改用独立窗口'") && bg.includes('await openPanelWindow();') && bg.includes("return 'window';"), 'T145c 侧边栏不可用不报错，退化小窗并回报 mode');
+  ok(bg.includes("if (cmd === 'open-panel') {\n      await openPanelBestEffort();"), 'T145d 快捷键 ⌘⇧Y 也走统一入口（Vivaldi 里不再是死路）');
+  ok(bg.includes("if (type === 'panel:open')") && bg.includes('mode: await openPanelBestEffort()'), 'T145e 前端统一入口 panel:open');
+  ok(pop.includes("send({ type: 'panel:open' })") && !pop.includes('无法打开侧边栏，试试浏览器工具栏的侧边栏按钮'), 'T145f 弹窗按钮改走统一入口，去掉旧的失败提示');
+}
+
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);

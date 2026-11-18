@@ -284,9 +284,11 @@ $('#btnSpace').addEventListener('click', () => {
 
 $('#btnPanel').addEventListener('click', async () => {
   try {
-    await chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
-  } catch {
-    toast('无法打开侧边栏，试试浏览器工具栏的侧边栏按钮', true);
+    // 原生侧边栏优先，Vivaldi 等没有 sidePanel 宿主的浏览器由后台改成独立小窗
+    await send({ type: 'panel:open' });
+  } catch (e) {
+    toast(e.message || '打开面板失败', true);
+    return;
   }
   window.close();
 });
