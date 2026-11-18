@@ -3,6 +3,7 @@ import { insertTag, quoteTag } from '../lib/query.js';
 import { splitTagInput, normalizeTagOrNull } from '../lib/title.js';
 
 const $ = (sel) => document.querySelector(sel);
+const PATH_SEP = String.fromCharCode(31); // 后台的目录路径分隔符（文件夹名里的 / 不会被当层级）
 const qEl = $('#q');
 const listEl = $('#list');
 const cloudEl = $('#cloud');
@@ -24,6 +25,8 @@ const app = {
   dirTags: [],
   filterText: '',
   suggestIdx: -1,
+  group: 'flat',        // 显示方式：'flat' 清单 / 'dir' 按目录分组
+  grpCollapsed: new Set(), // 折叠的组（会话内有效，不落盘）
 };
 
 function send(msg) {
@@ -52,6 +55,7 @@ chrome.runtime.onMessage.addListener((m) => {
 async function boot() {
   bindSplitters();
   await loadDensity();
+  await loadGroup();
   try {
     const st = await send({ type: 'state' });
     app.colors = st.config.colors || {};
@@ -76,6 +80,13 @@ async function boot() {
 function bind() {
   if (app.bound) return; // app:changed 会反复 boot()，监听只能挂一次
   app.bound = true;
+
+  $('#groupBtn').addEventListener('click', () => {
+    app.group = app.group === 'dir' ? 'flat' : 'dir';
+    applyGroupBtn();
+    chrome.storage.local.set({ 'panel.group': app.group });
+    renderList();
+  });
 
   $('#densityBtn').addEventListener('click', () => {
     const i = DENSITY.indexOf(app.density);
@@ -460,7 +471,82 @@ function renderList() {
     return;
   }
 
+  if (app.group === 'dir') {
+    renderGrouped(data.items);
+    return;
+  }
   for (const item of data.items) listEl.append(renderRow(item));
+}
+
+/**
+ * A 方案：分组视图 = 仍是这一条命中清单，只在每个目录前插一条可折叠组头。
+ * 不做作用域、不做下钻——看到的永远是当前查询的全部命中，只是按目录排好队。
+ */
+function renderGrouped(items) {
+  const groups = new Map(); // parentId → { pid, path, name, items }
+  for (const it of items) {
+    const pid = String(it.parentId ?? '');
+    let g = groups.get(pid);
+    if (!g) {
+      const path = it.path || '';
+      const segs = path ? String(path).split(PATH_SEP) : [];
+      g = {
+        pid,
+        path,
+        name: segs.length ? segs[segs.length - 1] : '根目录',
+        crumbs: segs.join(' / ') || '书签栏',
+        items: [],
+      };
+      groups.set(pid, g);
+    }
+    g.items.push(it);
+  }
+
+  // 组间按目录树的先序排：逐段比，避免 "A/B" 与 "A2" 这类字符串序错位
+  const cmpSeg = (a, b) => {
+    const x = a ? String(a).split(PATH_SEP) : [];
+    const y = b ? String(b).split(PATH_SEP) : [];
+    for (let i = 0; i < Math.min(x.length, y.length); i++) {
+      const c = x[i].localeCompare(y[i], 'zh');
+      if (c) return c;
+    }
+    return x.length - y.length;
+  };
+  const list = [...groups.values()].sort((a, b) => cmpSeg(a.path, b.path));
+
+  for (const g of list) {
+    listEl.append(renderGroupHead(g));
+    if (app.grpCollapsed.has(g.pid)) continue;
+    for (const it of g.items) listEl.append(renderRow(it));
+  }
+}
+
+function renderGroupHead(g) {
+  const collapsed = app.grpCollapsed.has(g.pid);
+  const head = document.createElement('button');
+  head.type = 'button';
+  head.className = 'grp' + (collapsed ? ' collapsed' : '');
+  head.title = `${g.crumbs} · ${g.items.length} 条（点击${collapsed ? '展开' : '折叠'}）`;
+
+  const caret = document.createElement('span');
+  caret.className = 'grp-caret';
+  caret.textContent = collapsed ? '▸' : '▾';
+
+  const name = document.createElement('span');
+  name.className = 'grp-name';
+  name.textContent = g.name;
+
+  const n = document.createElement('span');
+  n.className = 'grp-n';
+  n.textContent = `${g.items.length} 条`;
+
+  head.append(caret, name, n);
+  head.addEventListener('click', () => {
+    if (collapsed) app.grpCollapsed.delete(g.pid);
+    else app.grpCollapsed.add(g.pid);
+    renderList();
+  });
+  return head;
 }
 
 // ---------------------------------------------------------------- 右键菜单（复制网址 / 重命名）
@@ -829,6 +915,27 @@ async function loadDensity() {
   } catch {}
   app.density = DENSITY.includes(saved) ? saved : 'normal';
   applyDensity();
+}
+
+// ---------------------------------------------------------------- 显示方式（清单 / 分组）
+
+function applyGroupBtn() {
+  const btn = $('#groupBtn');
+  if (!btn) return;
+  btn.textContent = app.group === 'dir' ? '分组' : '清单';
+  btn.title = app.group === 'dir'
+    ? '当前：按目录分组（点目录组头折叠/展开，点此切回平铺清单）'
+    : '当前：平铺清单（点此改为按目录分组）';
+}
+
+async function loadGroup() {
+  let saved = 'flat';
+  try {
+    const o = await chrome.storage.local.get('panel.group');
+    saved = o && o['panel.group'];
+  } catch {}
+  app.group = saved === 'dir' ? 'dir' : 'flat';
+  applyGroupBtn();
 }
 
 function inputEmpty() {

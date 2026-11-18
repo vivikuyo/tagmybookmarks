@@ -1628,6 +1628,26 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pop.includes("send({ type: 'panel:open' })") && !pop.includes('无法打开侧边栏，试试浏览器工具栏的侧边栏按钮'), 'T145f 弹窗按钮改走统一入口，去掉旧的失败提示');
 }
 
+
+// T146：侧边栏「分组视图」（A 方案）——清单按目录插组头、可折叠、无作用域
+{
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const ph = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  ok(ph.includes('id="groupBtn"') && pn.includes("group: 'flat'"), 'T146a 操作带加「清单/分组」切换，默认平铺');
+  ok(pn.includes("chrome.storage.local.set({ 'panel.group': app.group })") && pn.includes("chrome.storage.local.get('panel.group')"), 'T146b 显示方式只存本机、重开沿用');
+  ok(pn.includes("if (app.group === 'dir') {\n    renderGrouped(data.items);"), 'T146c 清单渲染按模式分流');
+  ok(pn.includes('const PATH_SEP = String.fromCharCode(31);'), 'T146d 路径按后台 PATH_SEP 切（文件夹名里的 / 不算层级）');
+  ok(pn.includes('const pid = String(it.parentId ?? \'\');') && pn.includes('const segs = path ? String(path).split(PATH_SEP) : [];')
+     && pn.includes('name: segs.length ? segs[segs.length - 1] : \'根目录\''), 'T146e 按 parentId 分组、组名取路径末段');
+  ok(pn.includes('const cmpSeg = (a, b) => {') && pn.includes('.sort((a, b) => cmpSeg(a.path, b.path))'), 'T146f 组间按目录树先序（逐段比，不是字符串比）');
+  ok(pn.includes("head.textContent = collapsed ? '▸' : '▾'") === false && pn.includes("caret.textContent = collapsed ? '▸' : '▾'"), 'T146g 组头带折叠箭头');
+  ok(pn.includes("n.textContent = `${g.items.length} 条`") && pn.includes('app.grpCollapsed.add(g.pid)') && pn.includes('app.grpCollapsed.delete(g.pid)'), 'T146h 组头显示本组条数，点击折叠/展开并只重画列表');
+  ok(pn.includes("if (app.grpCollapsed.has(g.pid)) continue;"), 'T146i 折叠后跳过该组行');
+  ok(pc.includes('.grp {') && pc.includes('.grp .grp-n {') && pc.includes('body[data-density="ultra"] .grp {'), 'T146j 组头样式含三档密度');
+  ok(!pn.includes('folderId') && !pn.includes("type: 'cloud:scope'"), 'T146k 分组视图不带作用域（查询结果仍是全量命中）');
+}
+
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);
