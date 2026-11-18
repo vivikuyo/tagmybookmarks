@@ -1642,7 +1642,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.indexOf('for (const child of node.children || []) renderFolderNode(child);')
      < pn.indexOf('const rows = (app.rowsByParent && app.rowsByParent.get(id)) || [];', pn.indexOf('function renderFolderNode(node)')), 'T146f 每个文件夹先列下级文件夹、再列自己的书签');
   ok(pn.includes("n.textContent = `${node.total ?? 0} 条`") && pn.includes('function toggleFolder(id)'), 'T146h 组头显示条数，点击折叠/展开');
-  ok(pn.includes("head.className = 'grp' + (collapsed ? ' collapsed' : '')") && pn.includes('if (app.grpCollapsed.has(id)) return;'), 'T146i 折叠后不再渲染子文件夹与书签');
+  ok(pn.includes("+ (collapsed ? ' collapsed' : '')") && pn.includes('if (app.grpCollapsed.has(id)) return;'), 'T146i 折叠后不再渲染子文件夹与书签');
   ok(pc.includes('.grp {') && pc.includes('.grp .grp-n {') && pc.includes('body[data-density="ultra"] .grp {'), 'T146j 组头样式含三档密度');
   ok(!pn.includes('renderGrouped(') && !pn.includes('renderGroupHead('), 'T146k 旧的平铺分组实现已完全移除（不并存两套渲染）');
 }
@@ -1723,9 +1723,10 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
 {
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
-  ok(pn.includes("(node.depth === 0 ? ' grp-top' : '')"), 'T151a depth 0 的组头加 grp-top');
-  ok(pc.includes('.grp.grp-top {') && pc.includes('color: var(--accent);'), 'T151b 顶层组头用主题强调色');
-  ok(pc.includes('.grp.grp-top .grp-n {'), 'T151c 顶层组头的条数也跟随强调色');
+  ok(pn.includes("(node.depth === 0 ? ' grp-top' : '')"), 'T151a depth 0 的组头仍标 grp-top（仅加粗）');
+  ok(pn.includes("const open = !collapsed && ((node.children || []).length > 0 || hasRows);"), 'T151b 只有展开且有内容的目录才亮');
+  ok(pc.includes('.grp.grp-open {') && pc.includes('color: var(--accent);'), 'T151c 展开态用强调色 + 左侧竖条');
+  ok(!pc.includes('.grp.grp-top {') || !pc.includes('.grp.grp-top .grp-n'), 'T151d 不再按层级无条件上色');
   ok(pc.includes('color-mix(in srgb'), 'T151d 底色用 accent 与 bg-soft 混色，深浅主题自适应');
 }
 
