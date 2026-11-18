@@ -1636,7 +1636,8 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
   ok(ph.includes('id="groupBtn"') && pn.includes("group: 'flat'"), 'T146a 操作带加「清单/分组」切换，默认平铺');
   ok(pn.includes("chrome.storage.local.set({ 'panel.group': app.group })") && pn.includes("chrome.storage.local.get('panel.group')"), 'T146b 显示方式只存本机、重开沿用');
-  ok(pn.includes("if (app.group === 'dir') {\n    renderGrouped(data.items);"), 'T146c 清单渲染按模式分流');
+  ok(pn.includes("if (app.group === 'dir') {\n    const rows = app.allRows;") && pn.includes('renderGrouped(rows);'), 'T146c 目录模式渲染全量行（app.allRows），不是命中行');
+  ok(!pn.includes('renderGrouped(data.items)'), 'T146c2 不再用命中清单渲染分组（查询不过滤列表）');
   ok(pn.includes('const PATH_SEP = String.fromCharCode(31);'), 'T146d 路径按后台 PATH_SEP 切（文件夹名里的 / 不算层级）');
   ok(pn.includes('const pid = String(it.parentId ?? \'\');') && pn.includes('const segs = path ? String(path).split(PATH_SEP) : [];')
      && pn.includes('name: segs.length ? segs[segs.length - 1] : \'根目录\''), 'T146e 按 parentId 分组、组名取路径末段');
@@ -1646,6 +1647,26 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes("if (app.grpCollapsed.has(g.pid)) continue;"), 'T146i 折叠后跳过该组行');
   ok(pc.includes('.grp {') && pc.includes('.grp .grp-n {') && pc.includes('body[data-density="ultra"] .grp {'), 'T146j 组头样式含三档密度');
   ok(!pn.includes('folderId') && !pn.includes("type: 'cloud:scope'"), 'T146k 分组视图不带作用域（查询结果仍是全量命中）');
+}
+
+
+// T147：目录模式 = 全量清单 + 查询只跳转（不过滤）
+{
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  ok(bg.includes("if (type === 'bookmarks:page' || type === 'bookmarks:all')") && bg.includes("const allMode = type === 'bookmarks:all';"), 'T147a 后台新增 bookmarks:all 通道');
+  ok(bg.includes('const queryKeys = allMode ? null : await queryKeySet(msg.query);') && bg.includes("const limit = allMode ? 20000 :"), 'T147b 全量通道不套查询、上限放宽到 2 万');
+  ok(bg.includes("const filter = allMode ? 'all'") && bg.includes("const q = allMode ? '' :") && bg.includes('const folderId = allMode ? null :'), 'T147c 全量通道不做筛选/不限定目录');
+  ok(bg.includes("if (allMode || msg.sort === 'tree' || msg.sort === 'dir') {"), 'T147d 全量按书签树序（同目录书签相邻）');
+  ok(pn.includes("const r = await send({ type: 'bookmarks:all' });") && pn.includes('app.allRows = r.items || [];'), 'T147e 侧边栏取一份全库清单并缓存');
+  ok(pn.includes("if (app.group === 'dir') await loadAllRows();") && pn.includes('jumpToFirstHit();'), 'T147f 每次查询后：先保全量、再跳转');
+  ok(pn.includes('const hit = new Set(app.data.items.map((i) => i.key));')
+     && pn.includes('if (!target || (r.seq ?? Infinity) < (target.seq ?? Infinity)) target = r;'), 'T147g 跳转目标 = 命中里树序最靠前的那一行');
+  ok(pn.includes("app.grpCollapsed.delete(pid); // 命中的组收着就先展开"), 'T147h 目标组折叠时先展开再跳');
+  ok(pn.includes("row.scrollIntoView({ block: 'center' })") && pn.includes("row.classList.add('flash')") && pn.includes("setTimeout(() => row.classList.remove('flash'), 900)"), 'T147i 滚到位置并闪 0.9s 自动收');
+  ok(pc.includes('.row.flash {'), 'T147j 闪烁样式');
+  ok(pn.includes('`${app.allTotal} 条（全部）') && pn.includes('查询只跳转'), 'T147k 计数如实标「全部」，并提示查询只跳转');
 }
 
 console.log(`\n通过 ${pass} 项`);

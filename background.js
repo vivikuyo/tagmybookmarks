@@ -1719,16 +1719,18 @@ async function handle(msg) {
   }
 
   // ------------------------------------------------ 书签视图（M1/M2）
-  if (type === 'bookmarks:page') {
+  if (type === 'bookmarks:page' || type === 'bookmarks:all') {
     await ready;
     if (rebuildPending) await rebuild(); // 刚增删的书签要先重建索引，否则查不到
+    const allMode = type === 'bookmarks:all'; // 侧边栏「目录模式」：不做任何筛选，全库一份清单
     // 查询语法（#标签 @目录 ?关键词，与侧边栏一致）：与文字筛选、目录筛选求交集
-    const queryKeys = await queryKeySet(msg.query);
-    const limit = Math.min(Math.max(Number(msg.limit) || 200, 1), 500);
+    const queryKeys = allMode ? null : await queryKeySet(msg.query);
+    const limit = allMode ? 20000 : Math.min(Math.max(Number(msg.limit) || 200, 1), 500);
     const offset = Math.max(Number(msg.offset) || 0, 0);
-    const filter = msg.filter === 'untagged' || msg.filter === 'tagged' ? msg.filter : 'all';
-    const q = String(msg.text || '').trim().toLowerCase();
-    const folderId = msg.folderId || null;
+    const filter = allMode ? 'all'
+      : (msg.filter === 'untagged' || msg.filter === 'tagged' ? msg.filter : 'all');
+    const q = allMode ? '' : String(msg.text || '').trim().toLowerCase();
+    const folderId = allMode ? null : (msg.folderId || null);
 
     const rows = [];
     let cAll = 0;
@@ -1773,7 +1775,7 @@ async function handle(msg) {
         seq: pick.seq ?? Infinity, // 树深度优先序，sort=tree 用
       });
     }
-    if (msg.sort === 'tree' || msg.sort === 'dir') {
+    if (allMode || msg.sort === 'tree' || msg.sort === 'dir') {
       // 按书签树默认顺序（与书签管理器一致）；同一目录内保持原有先后
       // 'dir' 是平铺模式的"按目录排"：全库范围内按树深度优先序，同目录的书签自然相邻
       rows.sort((a, b) => a.seq - b.seq);

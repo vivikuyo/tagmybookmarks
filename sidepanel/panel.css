@@ -220,6 +220,8 @@ body[data-density="ultra"] .grp .grp-n { font-size: 10px; }
 }
 .row:hover { background: var(--bg-hover); }
 .row.selected { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+/* 目录模式：跳到命中位置时闪一下（约 0.9s 自动收回） */
+.row.flash { background: color-mix(in srgb, var(--accent) 26%, transparent); transition: background .18s ease-out; }
 
 .row .pick { margin: 1px 0 0; flex: 0 0 auto; }
 

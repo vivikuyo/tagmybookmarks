@@ -25,7 +25,9 @@ const app = {
   dirTags: [],
   filterText: '',
   suggestIdx: -1,
-  group: 'flat',        // 显示方式：'flat' 清单 / 'dir' 按目录分组
+  group: 'flat',        // 显示方式：'flat' 清单 / 'dir' 目录模式（全量分组 + 点标签跳转）
+  allRows: null,        // 目录模式下的一份全库清单（不做任何筛选）
+  allTotal: 0,
   grpCollapsed: new Set(), // 折叠的组（会话内有效，不落盘）
 };
 
@@ -56,6 +58,7 @@ async function boot() {
   bindSplitters();
   await loadDensity();
   await loadGroup();
+  app.allRows = null; // app:changed 会重新 boot，全量清单跟着重建
   try {
     const st = await send({ type: 'state' });
     app.colors = st.config.colors || {};
@@ -85,7 +88,12 @@ function bind() {
     app.group = app.group === 'dir' ? 'flat' : 'dir';
     applyGroupBtn();
     chrome.storage.local.set({ 'panel.group': app.group });
-    renderList();
+    if (app.group === 'dir') {
+      renderList(); // 先占位
+      run();        // 取全量清单 + 按当前查询跳转
+    } else {
+      renderList();
+    }
   });
 
   $('#densityBtn').addEventListener('click', () => {
@@ -240,7 +248,9 @@ async function run() {
     const alive = new Set(data.items.map((i) => i.key));
     for (const k of [...app.selected]) if (!alive.has(k)) app.selected.delete(k);
 
+    if (app.group === 'dir') await loadAllRows();
     render();
+    jumpToFirstHit();
   } catch (e) {
     toast(e.message, true);
   }
@@ -448,9 +458,65 @@ function renderDirPane(enabled) {
   });
 }
 
+async function loadAllRows() {
+  if (app.allRows) return;
+  const r = await send({ type: 'bookmarks:all' });
+  app.allRows = r.items || [];
+  app.allTotal = r.total || app.allRows.length;
+}
+
+/** 目录模式：查询只用来"定位"，不去过滤列表 —— 滚到第一处命中（书签树里最靠前的那个）并闪一下 */
+function jumpToFirstHit() {
+  if (app.group !== 'dir') return;
+  if (!app.allRows || !app.data || !app.data.items.length) return;
+
+  // 命中的 key → 在全书签清单里找 seq 最小的那一行（树序最靠前，而不是标题序）
+  const hit = new Set(app.data.items.map((i) => i.key));
+  let target = null;
+  for (const r of app.allRows) {
+    if (!hit.has(r.key)) continue;
+    if (!target || (r.seq ?? Infinity) < (target.seq ?? Infinity)) target = r;
+  }
+  if (!target) return;
+
+  const pid = String(target.parentId ?? '');
+  if (app.grpCollapsed.has(pid)) {
+    app.grpCollapsed.delete(pid); // 命中的组收着就先展开
+    renderList();
+  }
+
+  let row = null;
+  for (const li of listEl.querySelectorAll('.row')) {
+    if (li.dataset.key === target.key) { row = li; break; }
+  }
+  if (!row) return;
+  row.scrollIntoView({ block: 'center' });
+  row.classList.add('flash');
+  setTimeout(() => row.classList.remove('flash'), 900);
+}
+
 function renderList() {
   const data = app.data;
   listEl.textContent = '';
+
+  // 目录模式：永远展示全部书签，查询只负责"跳到哪一行"
+  if (app.group === 'dir') {
+    const rows = app.allRows;
+    if (!rows) {
+      countEl.textContent = '加载全部书签…';
+      return;
+    }
+    countEl.textContent = `${app.allTotal} 条（全部）${app.expr ? ' · 查询只跳转' : ''}`;
+    if (!rows.length) {
+      const div = document.createElement('div');
+      div.className = 'empty';
+      div.textContent = '书签树是空的。';
+      listEl.append(div);
+      return;
+    }
+    renderGrouped(rows);
+    return;
+  }
 
   if (!data) {
     countEl.textContent = '加载中…';
@@ -471,16 +537,12 @@ function renderList() {
     return;
   }
 
-  if (app.group === 'dir') {
-    renderGrouped(data.items);
-    return;
-  }
   for (const item of data.items) listEl.append(renderRow(item));
 }
 
 /**
- * A 方案：分组视图 = 仍是这一条命中清单，只在每个目录前插一条可折叠组头。
- * 不做作用域、不做下钻——看到的永远是当前查询的全部命中，只是按目录排好队。
+ * 目录模式：列表永远是全库清单（按目录分段、组头可折叠）。
+ * 查询不参与过滤，只用来"跳到第一处命中"（见 jumpToFirstHit）。
  */
 function renderGrouped(items) {
   const groups = new Map(); // parentId → { pid, path, name, items }
@@ -922,10 +984,10 @@ async function loadDensity() {
 function applyGroupBtn() {
   const btn = $('#groupBtn');
   if (!btn) return;
-  btn.textContent = app.group === 'dir' ? '分组' : '清单';
+  btn.textContent = app.group === 'dir' ? '目录' : '清单';
   btn.title = app.group === 'dir'
-    ? '当前：按目录分组（点目录组头折叠/展开，点此切回平铺清单）'
-    : '当前：平铺清单（点此改为按目录分组）';
+    ? '当前：目录模式（全部书签按目录分段；点标签只是跳到位置，不过滤）'
+    : '当前：平铺清单（只显示命中；点此改为目录模式）';
 }
 
 async function loadGroup() {
