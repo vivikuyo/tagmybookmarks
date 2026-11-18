@@ -33,6 +33,7 @@ const app = {
   folderParent: null,   // id → 上级 id
   rowsByParent: null,   // parentId → 该书签（按 seq 序）
   dragKey: null,        // 正在拖的书签 key
+  jumpOnce: true,       // 下一次 run() 是否要"跳到第一处命中"（只有用户改查询时才置 true）
   grpCollapsed: new Set(), // 折叠的组（会话内有效，不落盘）
 };
 
@@ -105,8 +106,9 @@ function bind() {
     applyGroupBtn();
     chrome.storage.local.set({ 'panel.group': app.group });
     if (app.group === 'dir') {
-      renderList(); // 先占位
-      run();        // 取全量清单 + 按当前查询跳转
+      app.jumpOnce = true; // 切进目录模式时按当前查询跳一次
+      renderList();        // 先占位
+      run();               // 取全量清单 + 按当前查询跳转
     } else {
       renderList();
     }
@@ -128,6 +130,7 @@ function bind() {
       renderDirPane(app.dirEnabled !== false);
     }
     updateSuggest();
+    app.jumpOnce = true;
     clearTimeout(typing);
     typing = setTimeout(run, 160);
   });
@@ -160,6 +163,7 @@ function bind() {
       if (!v) return;
       const cut = v.replace(/\s*(?:[,+&|]|-(?=\s|$))?\s*[^\s,+\-|&()!~?]+$/, '').trim();
       qEl.value = cut.replace(/[,+&|]$/, '').trim();
+      app.jumpOnce = true;
       run();
     }
   });
@@ -171,6 +175,7 @@ function bind() {
     // 编程式赋值不触发 input 事件，必须手动清掉云区收窄用的过滤词，
     // 否则清空输入后两朵云还按残留关键字过滤（表现为"没重置"）
     app.filterText = '';
+    app.jumpOnce = true;
     run();
     qEl.focus();
   };
@@ -269,7 +274,11 @@ async function run() {
 
     if (app.group === 'dir') await loadAllRows();
     render();
-    jumpToFirstHit();
+    // 只在"用户改了查询"那一次跳转。删除/移动/打标签后的重查若也跳，
+    // 列表会突然展开并滚到别处（表现为"删一条就自动展开某个目录"）
+    const doJump = app.jumpOnce;
+    app.jumpOnce = false;
+    if (doJump) jumpToFirstHit();
   } catch (e) {
     toast(e.message, true);
   }
@@ -371,6 +380,7 @@ function renderCloud() {
 
 function applyTag(tag, mode, prefix = '') {
   qEl.value = insertTag(qEl.value, tag, mode, prefix);
+  app.jumpOnce = true;
   run();
 }
 

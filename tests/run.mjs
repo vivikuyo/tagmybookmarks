@@ -1366,7 +1366,7 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(qq.includes(String.raw`if (ch === '"')`), 'T128b 词法器支持引号包裹的词（@/# 后亦生效）');
   ok(qq.includes('const t = prefix + quoteTag(tag);'), 'T128c insertTag 走 quoteTag');
   const pp = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
-  ok(pp.includes("app.filterText = '';\n    run();"), 'T128d 清除输入时同步重置云区过滤词');
+  ok(pp.includes("app.filterText = '';\n    app.jumpOnce = true;\n    run();"), 'T128d 清除输入时同步重置云区过滤词');
   ok(pp.includes("prefix + quoteTag(tag)"), 'T128e 建议插入带空格标签也包引号');
 }
 
@@ -1743,6 +1743,17 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes("send({ type: 'bookmarks:all' })"), 'T152f 侧边栏仍走同一个 bookmarks:all 通道');
 }
 
+
+// T153：目录模式的"跳转"只在用户改查询时发生，删除/移动后的重查不再乱跳
+{
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  ok(pn.includes('jumpOnce: true,'), 'T153a app 里加一次性跳转标记');
+  ok(pn.includes('const doJump = app.jumpOnce;\n    app.jumpOnce = false;\n    if (doJump) jumpToFirstHit();'), 'T153b run() 只在标记为真时跳，用完立刻清');
+  ok(pn.includes("app.filterText = cur ? cur.token.replace(/^[@#]/, '') : '';") && pn.includes("app.jumpOnce = true;\n    clearTimeout(typing);"), 'T153c 打字改查询时置位');
+  ok(pn.includes("qEl.value = insertTag(qEl.value, tag, mode, prefix);\n  app.jumpOnce = true;"), 'T153d 点标签 chip 写查询时置位');
+  ok(pn.includes("app.jumpOnce = true; // 切进目录模式时按当前查询跳一次"), 'T153e 切进目录模式时跳一次');
+  ok(!/async function refreshAll\(\)[\s\S]{0,200}jumpOnce = true/.test(pn), 'T153f 拖放/删除后的 refreshAll 不置位');
+}
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);
