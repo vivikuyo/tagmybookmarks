@@ -1839,6 +1839,18 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(tg.includes("{ label: '编辑网址', run: () => editDrawerUrl(li, item) }") && tg.includes('function editDrawerUrl(li, item)'), 'T159h 抽屉里右键也能编辑网址');
   ok(tg.includes('openDrawer(drawerTag, drawerIsDir, drawerDirKey)'), 'T159i 刷新抽屉时保留 dirKey');
 }
+
+// T160：名称搜索也自动展开；命中词着色
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const sc = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(bm.includes('if (!st.query && !st.text) return;'), 'T160a 文本搜索也会自动展开命中目录');
+  ok(bm.includes('function matchTerms()') && bm.includes("String(st.text || '')"), 'T160b 匹配词同时取查询表达式与文本搜索');
+  ok(bm.includes('function paintMatch(el, text)') && bm.includes('paintMatch(t, row.title || row.url);'), 'T160c 标题按命中词着色');
+  ok(bm.includes('paintMatch(u, row.url);'), 'T160d 网址行也着色（只命中网址时看得出来）');
+  ok(bm.includes('if (last && a <= last[1]) last[1] = Math.max(last[1], b);'), 'T160e 多个词的重叠区间会合并');
+  ok(sc.includes('.bm-hit { color: var(--accent); font-weight: 600; }'), 'T160f 命中词样式');
+}
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);

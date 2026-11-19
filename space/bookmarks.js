@@ -254,7 +254,8 @@ function dirIsOpen(pane, id) {
 function updateAutoOpen(pane, matchPaths) {
   pane.autoOpen = new Set();
   pane.autoCollapsed = new Set();
-  if (!st.query) return;
+  // 查询表达式和"搜书签/网址"的文本搜索都要能自动展开
+  if (!st.query && !st.text) return;
   const next = new Set();
   for (const path of matchPaths) {
     const segs = path.split(PATH_SEP).filter(Boolean);
@@ -1335,6 +1336,63 @@ function renderCrumbInto(el, pane) {
   el.append(x);
 }
 
+/** 当前生效的匹配词：查询表达式里去掉 #@!~? 与引号，加上文本搜索的每个词 */
+function matchTerms() {
+  const out = [];
+  const push = (w) => {
+    const v = String(w || '').replace(/^[@#!~?]+/, '').replace(/^["']+|["']+$/g, '').trim();
+    if (v && !/^[,+\-|&]$/.test(v)) out.push(v);
+  };
+  for (const w of String(st.query || '').split(/\s+/)) push(w);
+  for (const w of String(st.text || '').split(/\s+/)) push(w);
+  // 长词优先，避免"前端"先命中把"前端工程"截断
+  return [...new Set(out)].sort((a, b) => b.length - a.length);
+}
+
+/** 把命中词染成强调色；没命中就原样纯文本 */
+function paintMatch(el, text) {
+  const src = String(text || '');
+  const terms = matchTerms();
+  el.textContent = '';
+  if (!terms.length) {
+    el.textContent = src;
+    return;
+  }
+  const lower = src.toLowerCase();
+  const marks = [];
+  for (const term of terms) {
+    const t = term.toLowerCase();
+    if (!t) continue;
+    let i = lower.indexOf(t);
+    while (i !== -1) {
+      marks.push([i, i + t.length]);
+      i = lower.indexOf(t, i + t.length);
+    }
+  }
+  if (!marks.length) {
+    el.textContent = src;
+    return;
+  }
+  marks.sort((a, b) => a[0] - b[0]);
+  // 合并重叠区间
+  const merged = [];
+  for (const [a, b] of marks) {
+    const last = merged[merged.length - 1];
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b);
+    else merged.push([a, b]);
+  }
+  let at = 0;
+  for (const [a, b] of merged) {
+    if (a > at) el.append(document.createTextNode(src.slice(at, a)));
+    const hit = document.createElement('span');
+    hit.className = 'bm-hit';
+    hit.textContent = src.slice(a, b);
+    el.append(hit);
+    at = b;
+  }
+  if (at < src.length) el.append(document.createTextNode(src.slice(at)));
+}
+
 function setSelected(id, on, line, cb, sel = selected) {
   if (on) {
     sel.add(id);
@@ -1395,7 +1453,7 @@ function renderRow(row, pane, depth = 0) {
   t.className = 'bm-title';
   main.style.paddingLeft = `${10 + depth * 12}px`; // 10=格子基础左内距（与表头列名一致），缩进按层级叠加：两行左缘对齐
   t.href = '#';
-  t.textContent = row.title || row.url;
+  paintMatch(t, row.title || row.url); // 命中的词变色
   t.title = row.title || row.url;
   t.addEventListener('click', (e) => {
     e.preventDefault();
@@ -1403,7 +1461,7 @@ function renderRow(row, pane, depth = 0) {
   });
   const u = document.createElement('div');
   u.className = 'bm-url';
-  u.textContent = row.url;
+  paintMatch(u, row.url);
   main.append(t, u);
   if (row.locations > 1) {
     const badge = document.createElement('span');
