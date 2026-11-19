@@ -322,6 +322,22 @@ function renderCloud() {
     ? data.allTags
     : (!relatedOnly && data.allTags && data.allTags.length ? data.allTags : data.related)) || [];
   const untaggedTotal = data.untaggedTotal || 0;
+  const allTotal = (data.counts && data.counts.all) || 0;
+
+  // 「全部书签」= 清空查询（虚线样式，与「未打标签」同一套外观）
+  const allBtn = document.createElement('button');
+  allBtn.className = 'tag virtual';
+  allBtn.style.color = '#8a8f98';
+  allBtn.title = '清空查询，列出全部书签';
+  allBtn.textContent = allTotal ? `全部书签 ${allTotal}` : '全部书签';
+  allBtn.addEventListener('click', () => {
+    qEl.value = '';
+    app.filterText = '';
+    app.jumpOnce = false; // 只是回到全量，不用跳转
+    run();
+  });
+  cloudEl.append(allBtn);
+
   if (!list.length && !untaggedTotal) {
     const p = document.createElement('div');
     p.className = 'empty';

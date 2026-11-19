@@ -1107,6 +1107,7 @@ async function doQuery(expr, opts = {}) {
     related,
     untaggedCount,
     untaggedTotal: index.untaggedKeys.size,
+    counts: { all: index.counts.keys, untagged: index.untaggedKeys.size },
     queryTags: [...queryTags],
     queryDirs,
     dirRelated,

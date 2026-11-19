@@ -1767,6 +1767,17 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes('return viewRows().filter((i) => app.selected.has(rowKey(i)));'), 'T154g selectedItems 按 rowKey 取行，重复网址不再连带');
   ok(!pn.includes('app.selected.has(item.key)') && !pn.includes('app.selected.add(item.key)'), 'T154h 旧的按 key 勾选彻底移除');
 }
+
+// T155：普通标签云加「全部书签」虚线标签
+{
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  ok(pn.includes("allBtn.textContent = allTotal ? `全部书签 ${allTotal}` : '全部书签';"), 'T155a 标签文字为「全部书签 N」');
+  ok(pn.includes("allBtn.className = 'tag virtual';") && pn.includes("allBtn.style.color = '#8a8f98';"), 'T155b 复用「未打标签」的虚线外观');
+  ok(pn.includes('const allTotal = (data.counts && data.counts.all) || 0;'), 'T155c 计数取 counts.all');
+  ok(pn.includes("qEl.value = '';\n    app.filterText = '';\n    app.jumpOnce = false;"), 'T155d 点击即清空查询回到全量（不跳转）');
+  ok(bg.includes('counts: { all: index.counts.keys, untagged: index.untaggedKeys.size },'), 'T155e query 回包补 counts.all');
+}
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);
