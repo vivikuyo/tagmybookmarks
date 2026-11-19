@@ -184,6 +184,9 @@ body[data-density="ultra"] .list { padding-bottom: 10px; }
 .tag.active { background: currentColor; }
 .tag.active span { color: var(--bg); filter: invert(0); }
 .tag.virtual { border-style: dashed; }
+/* 虚拟标签的"已选中"态：别用 .tag.active 的实心填充（字会和底色同色看不见），
+   改用实线边框 + 主题色文字表达 */
+.tag.virtual.active { background: transparent; border-style: solid; border-color: currentColor; color: var(--text) !important; }
 
 .list {
   list-style: none; margin: 0; padding: 0 6px 14px;

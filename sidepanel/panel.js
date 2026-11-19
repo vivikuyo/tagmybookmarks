@@ -34,6 +34,7 @@ const app = {
   rowsByParent: null,   // parentId → 该书签（按 seq 序）
   dragKey: null,        // 正在拖的书签 key
   jumpOnce: true,       // 下一次 run() 是否要"跳到第一处命中"（只有用户改查询时才置 true）
+  showAll: false,       // 「全部书签」模式：空查询时也把未打标签的算进来
   grpCollapsed: new Set(), // 折叠的组（会话内有效，不落盘）
 };
 
@@ -125,6 +126,7 @@ function bind() {
     // 边打字边收窄两朵云：不等后台查询回来，纯前端过滤
     const cur = currentToken();
     app.filterText = cur ? cur.token.replace(/^[@#]/, '') : '';
+    app.showAll = false;
     if (app.data) {
       renderCloud();
       renderDirPane(app.dirEnabled !== false);
@@ -163,6 +165,7 @@ function bind() {
       if (!v) return;
       const cut = v.replace(/\s*(?:[,+&|]|-(?=\s|$))?\s*[^\s,+\-|&()!~?]+$/, '').trim();
       qEl.value = cut.replace(/[,+&|]$/, '').trim();
+      app.showAll = false;
       app.jumpOnce = true;
       run();
     }
@@ -175,6 +178,7 @@ function bind() {
     // 编程式赋值不触发 input 事件，必须手动清掉云区收窄用的过滤词，
     // 否则清空输入后两朵云还按残留关键字过滤（表现为"没重置"）
     app.filterText = '';
+    app.showAll = false;
     app.jumpOnce = true;
     run();
     qEl.focus();
@@ -260,6 +264,7 @@ async function run() {
     const data = await send({
       type: 'query',
       expr: app.expr,
+      includeUntagged: app.showAll, // 只有「全部书签」被点开时才包含未打标签
       allTags: !$('#relatedOnly').checked,
     });
     app.data = data;
@@ -380,13 +385,16 @@ function renderCloud() {
   // 「全部书签」紧挨着「未打标签」：清空查询 = 全部（打标签的 + 没打标签的一起列出来）
   const allTotal = (data.counts && data.counts.all) || 0;
   const allBtn = document.createElement('button');
-  allBtn.className = 'tag virtual' + (inputEmpty() ? ' active' : '');
+  // 与「未打标签」保持同一套外观：虚线空底 + 灰字，默认没有"选中"配色
+  // （带 .active 会被 .tag.active{background:currentColor} 涂成实心灰，字看不见）
+  allBtn.className = 'tag virtual' + (app.showAll ? ' active' : '');
   allBtn.style.color = '#8a8f98';
-  allBtn.title = '清空查询，列出全部书签（含未打标签）';
+  allBtn.title = '列出全部书签（含未打标签）';
   allBtn.textContent = allTotal ? `全部书签 ${allTotal}` : '全部书签';
   allBtn.addEventListener('click', () => {
     qEl.value = '';
     app.filterText = '';
+    app.showAll = true;   // 点开才进入"全部"：打标签的 + 未打标签的都列出来
     app.jumpOnce = false; // 回到全量，不用跳转
     run();
   });
@@ -395,6 +403,7 @@ function renderCloud() {
 
 function applyTag(tag, mode, prefix = '') {
   qEl.value = insertTag(qEl.value, tag, mode, prefix);
+  app.showAll = false;
   app.jumpOnce = true;
   run();
 }

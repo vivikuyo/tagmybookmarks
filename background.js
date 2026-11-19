@@ -1054,10 +1054,13 @@ function dirTagCounts(idx) {
 
 async function doQuery(expr, opts = {}) {
   const { ast, errors } = parseQuery(expr);
+  // 默认空查询 = 已打标签的书签；侧边栏点「全部书签」时传 includeUntagged，才把未打标签的也算进来
+  const taggedKeys = new Set(index.allKeys);
+  for (const k of index.untaggedKeys) taggedKeys.delete(k);
   const dirEnabled = String(config.prefs.folderTags ?? '1') !== '0';
   const keys = ast
     ? evaluate(ast, index, { resolveAlias: (k) => aliasMap.get(k) || k, dirEnabled })
-    : new Set(index.allKeys); // 空查询 = 全部书签（含未打标签），与管理页「全部」同口径
+    : new Set(opts.includeUntagged ? index.allKeys : taggedKeys);
   const queryTags = collectQueryTags(ast);
   const queryDirs = [...collectQueryDirs(ast)];
   // 裸名（mac）会同时命中同名目录，所以目录栏的高亮与「同枝收窄」也要把它算进去。
@@ -1283,7 +1286,10 @@ async function handle(msg) {
     await ready;
     if (rebuildPending) await rebuild();
     stats.queries++;
-    return { ok: true, ...(await doQuery(msg.expr || '', { allTags: !!msg.allTags })) };
+    return {
+      ok: true,
+      ...(await doQuery(msg.expr || '', { allTags: !!msg.allTags, includeUntagged: !!msg.includeUntagged })),
+    };
   }
 
   if (type === 'tags:add') {

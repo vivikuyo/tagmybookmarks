@@ -1366,7 +1366,7 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(qq.includes(String.raw`if (ch === '"')`), 'T128b 词法器支持引号包裹的词（@/# 后亦生效）');
   ok(qq.includes('const t = prefix + quoteTag(tag);'), 'T128c insertTag 走 quoteTag');
   const pp = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
-  ok(pp.includes("app.filterText = '';\n    app.jumpOnce = true;\n    run();"), 'T128d 清除输入时同步重置云区过滤词');
+  ok(pp.includes("app.filterText = '';\n    app.showAll = false;\n    app.jumpOnce = true;\n    run();"), 'T128d 清除输入时同步重置云区过滤词');
   ok(pp.includes("prefix + quoteTag(tag)"), 'T128e 建议插入带空格标签也包引号');
 }
 
@@ -1750,7 +1750,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes('jumpOnce: true,'), 'T153a app 里加一次性跳转标记');
   ok(pn.includes('const doJump = app.jumpOnce;\n    app.jumpOnce = false;\n    if (doJump) jumpToFirstHit();'), 'T153b run() 只在标记为真时跳，用完立刻清');
   ok(pn.includes("app.filterText = cur ? cur.token.replace(/^[@#]/, '') : '';") && pn.includes("app.jumpOnce = true;\n    clearTimeout(typing);"), 'T153c 打字改查询时置位');
-  ok(pn.includes("qEl.value = insertTag(qEl.value, tag, mode, prefix);\n  app.jumpOnce = true;"), 'T153d 点标签 chip 写查询时置位');
+  ok(pn.includes("qEl.value = insertTag(qEl.value, tag, mode, prefix);\n  app.showAll = false;\n  app.jumpOnce = true;"), 'T153d 点标签 chip 写查询时置位');
   ok(pn.includes("app.jumpOnce = true; // 切进目录模式时按当前查询跳一次"), 'T153e 切进目录模式时跳一次');
   ok(!/async function refreshAll\(\)[\s\S]{0,200}jumpOnce = true/.test(pn), 'T153f 拖放/删除后的 refreshAll 不置位');
 }
@@ -1773,19 +1773,21 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
   ok(pn.includes("allBtn.textContent = allTotal ? `全部书签 ${allTotal}` : '全部书签';"), 'T155a 标签文字为「全部书签 N」');
-  ok(pn.includes("allBtn.className = 'tag virtual' + (inputEmpty() ? ' active' : '');") && pn.includes("allBtn.style.color = '#8a8f98';"), 'T155b 复用「未打标签」的虚线外观');
+  ok(pn.includes("allBtn.className = 'tag virtual' + (app.showAll ? ' active' : '');") && pn.includes("allBtn.style.color = '#8a8f98';"), 'T155b 复用「未打标签」的虚线外观');
+  ok(pn.includes(".tag.virtual.active { background: transparent;") || readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8').includes('.tag.virtual.active { background: transparent;'), 'T155h 选中态用实线边框，不再是实心填充（字不再消失）');
   ok(pn.indexOf("`未打标签 ${untaggedTotal}`") < pn.indexOf('allBtn.textContent ='), 'T155f 与「未打标签」相邻（排在它后面一段）');
   ok(pn.indexOf('cloudEl.append(allBtn);') > pn.indexOf("btn.addEventListener('click', () => applyTag('未打标签', 'only'));"), 'T155g 渲染位置紧挨未打标签，不再排在云首');
   ok(pn.includes('const allTotal = (data.counts && data.counts.all) || 0;'), 'T155c 计数取 counts.all');
-  ok(pn.includes("qEl.value = '';\n    app.filterText = '';\n    app.jumpOnce = false;"), 'T155d 点击即清空查询回到全量（不跳转）');
+  ok(pn.includes("qEl.value = '';\n    app.filterText = '';\n    app.showAll = true;") && pn.includes('app.jumpOnce = false; // 回到全量，不用跳转'), 'T155d 点击即清空查询并进入"全部"（含未打标签，不跳转）');
   ok(bg.includes('counts: { all: index.counts.keys, untagged: index.untaggedKeys.size },'), 'T155e query 回包补 counts.all');
 }
 
 // T156：空查询 = 全部书签（含未打标签）
 {
   const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
-  ok(!bg.includes('new Set(taggedKeys)') && !bg.includes('taggedKeys.delete'), 'T156a 去掉"只算已打标签"的中间集合');
-  ok(bg.includes(': new Set(index.allKeys); // 空查询 = 全部书签（含未打标签），与管理页「全部」同口径'), 'T156b 空查询直接取全量键');
+  ok(bg.includes('const taggedKeys = new Set(index.allKeys);') && bg.includes('for (const k of index.untaggedKeys) taggedKeys.delete(k);'), 'T156a 默认空查询仍只算已打标签');
+  ok(bg.includes(': new Set(opts.includeUntagged ? index.allKeys : taggedKeys);'), 'T156b includeUntagged 时才把未打标签算进来');
+  ok(bg.includes("includeUntagged: !!msg.includeUntagged"), 'T156d query 通道透传 includeUntagged');
   ok(bg.includes('counts: { all: index.counts.keys, untagged: index.untaggedKeys.size },'), 'T156c counts 同时给全部与未打标签');
 }
 console.log(`\n通过 ${pass} 项`);
