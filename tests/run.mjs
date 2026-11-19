@@ -1366,7 +1366,7 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(qq.includes(String.raw`if (ch === '"')`), 'T128b 词法器支持引号包裹的词（@/# 后亦生效）');
   ok(qq.includes('const t = prefix + quoteTag(tag);'), 'T128c insertTag 走 quoteTag');
   const pp = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
-  ok(pp.includes("app.filterText = '';\n    app.showAll = false;\n    app.jumpOnce = true;\n    run();"), 'T128d 清除输入时同步重置云区过滤词');
+  ok(pp.includes("app.filterText = '';\n    app.showAll = false;\n    app.pageLimit = 1000;\n    app.jumpOnce = true;\n    run();"), 'T128d 清除输入时同步重置云区过滤词');
   ok(pp.includes("prefix + quoteTag(tag)"), 'T128e 建议插入带空格标签也包引号');
 }
 
@@ -1750,7 +1750,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes('jumpOnce: true,'), 'T153a app 里加一次性跳转标记');
   ok(pn.includes('const doJump = app.jumpOnce;\n    app.jumpOnce = false;\n    if (doJump) jumpToFirstHit();'), 'T153b run() 只在标记为真时跳，用完立刻清');
   ok(pn.includes("app.filterText = cur ? cur.token.replace(/^[@#]/, '') : '';") && pn.includes("app.jumpOnce = true;\n    clearTimeout(typing);"), 'T153c 打字改查询时置位');
-  ok(pn.includes("qEl.value = insertTag(qEl.value, tag, mode, prefix);\n  app.showAll = false;\n  app.jumpOnce = true;"), 'T153d 点标签 chip 写查询时置位');
+  ok(pn.includes("qEl.value = insertTag(qEl.value, tag, mode, prefix);\n  app.showAll = false;\n  app.pageLimit = 1000;\n  app.jumpOnce = true;"), 'T153d 点标签 chip 写查询时置位');
   ok(pn.includes("app.jumpOnce = true; // 切进目录模式时按当前查询跳一次"), 'T153e 切进目录模式时跳一次');
   ok(!/async function refreshAll\(\)[\s\S]{0,200}jumpOnce = true/.test(pn), 'T153f 拖放/删除后的 refreshAll 不置位');
 }
@@ -1789,6 +1789,20 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(bg.includes(': new Set(opts.includeUntagged ? index.allKeys : taggedKeys);'), 'T156b includeUntagged 时才把未打标签算进来');
   ok(bg.includes("includeUntagged: !!msg.includeUntagged"), 'T156d query 通道透传 includeUntagged');
   ok(bg.includes('counts: { all: index.counts.keys, untagged: index.untaggedKeys.size },'), 'T156c counts 同时给全部与未打标签');
+}
+
+// T157：列表不再固定 1000 条（可「显示更多」），标签框没勾选时不吞输入
+{
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  ok(bg.includes('const LIMIT = Math.min(Math.max(Number(opts.limit) || 1000, 1), 20000);'), 'T157a doQuery 的 limit 可传、上限 2 万');
+  ok(bg.includes('limit: msg.limit,'), 'T157b query 通道透传 limit');
+  ok(pn.includes('pageLimit: 1000,') && pn.includes("limit: app.group === 'dir' ? 20000 : app.pageLimit,"), 'T157c 侧边栏按页取数（目录模式直接 2 万）');
+  ok(pn.includes('if (data.truncated) {') && pn.includes('app.pageLimit += 1000;'), 'T157d 截断时出「显示更多」并加一页');
+  ok(pc.includes('.more-row {'), 'T157e 显示更多的样式');
+  ok(pn.includes("toast('先勾选书签，再加标签', true);") && pn.includes('if (!app.selected.size) {'), 'T157f 没勾选时按 Enter 不吃掉输入');
+  ok(pn.includes('app.pageLimit = 1000;'), 'T157g 改查询/清空后回到第一页');
 }
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {

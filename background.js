@@ -1098,7 +1098,8 @@ async function doQuery(expr, opts = {}) {
   const untaggedCount = [...keys].filter((k) => index.untaggedKeys.has(k)).length;
 
   const items = buildItems(keys, !!ast);
-  const LIMIT = 1000;
+  // 默认一次给 1000 条；侧边栏「显示更多」会带着更大的 limit 再来一次
+  const LIMIT = Math.min(Math.max(Number(opts.limit) || 1000, 1), 20000);
 
   return {
     total: items.length,
@@ -1288,7 +1289,11 @@ async function handle(msg) {
     stats.queries++;
     return {
       ok: true,
-      ...(await doQuery(msg.expr || '', { allTags: !!msg.allTags, includeUntagged: !!msg.includeUntagged })),
+      ...(await doQuery(msg.expr || '', {
+        allTags: !!msg.allTags,
+        includeUntagged: !!msg.includeUntagged,
+        limit: msg.limit,
+      })),
     };
   }
 

@@ -35,6 +35,7 @@ const app = {
   dragKey: null,        // 正在拖的书签 key
   jumpOnce: true,       // 下一次 run() 是否要"跳到第一处命中"（只有用户改查询时才置 true）
   showAll: false,       // 「全部书签」模式：空查询时也把未打标签的算进来
+  pageLimit: 1000,      // 一次取多少条（「显示更多」往上加 1000）
   grpCollapsed: new Set(), // 折叠的组（会话内有效，不落盘）
 };
 
@@ -127,6 +128,7 @@ function bind() {
     const cur = currentToken();
     app.filterText = cur ? cur.token.replace(/^[@#]/, '') : '';
     app.showAll = false;
+    app.pageLimit = 1000;
     if (app.data) {
       renderCloud();
       renderDirPane(app.dirEnabled !== false);
@@ -179,6 +181,7 @@ function bind() {
     // 否则清空输入后两朵云还按残留关键字过滤（表现为"没重置"）
     app.filterText = '';
     app.showAll = false;
+    app.pageLimit = 1000;
     app.jumpOnce = true;
     run();
     qEl.focus();
@@ -234,6 +237,11 @@ function bind() {
     e.preventDefault();
     const tags = tagList(tagInput.value);
     if (!tags.length) return;
+    if (!app.selected.size) {
+      // 没有勾选时按 Enter 什么都不会发生，但也别把已经打好的字吃掉
+      toast('先勾选书签，再加标签', true);
+      return;
+    }
     await send({ type: 'tags:add', ids: selectedIds(), tags });
     tagInput.value = '';
     syncTagClear();
@@ -265,6 +273,7 @@ async function run() {
       type: 'query',
       expr: app.expr,
       includeUntagged: app.showAll, // 只有「全部书签」被点开时才包含未打标签
+      limit: app.group === 'dir' ? 20000 : app.pageLimit,
       allTags: !$('#relatedOnly').checked,
     });
     app.data = data;
@@ -404,6 +413,7 @@ function renderCloud() {
 function applyTag(tag, mode, prefix = '') {
   qEl.value = insertTag(qEl.value, tag, mode, prefix);
   app.showAll = false;
+  app.pageLimit = 1000;
   app.jumpOnce = true;
   run();
 }
@@ -692,6 +702,18 @@ function renderList() {
   }
 
   for (const item of data.items) listEl.append(renderRow(item));
+
+  // 被 limit 截断时给一个「显示更多」，别让人以为库里只有 1000 条
+  if (data.truncated) {
+    const more = document.createElement('button');
+    more.className = 'more-row';
+    more.textContent = `显示更多（已 ${data.items.length} / 共 ${data.total} 条）`;
+    more.addEventListener('click', () => {
+      app.pageLimit += 1000;
+      run();
+    });
+    listEl.append(more);
+  }
 }
 
 /**
