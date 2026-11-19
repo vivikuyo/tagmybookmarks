@@ -2032,6 +2032,32 @@ async function handle(msg) {
     return { ok: true, title: next };
   }
 
+  // 改网址：只换 url，标题（含 #标签 后缀）原样保留；文件夹不允许
+  if (type === 'node:url') {
+    await ready;
+    const id = String(msg.id || '');
+    const raw = String(msg.url || '').trim();
+    if (!id) return { error: '缺少节点' };
+    if (!raw) return { error: '网址不能为空' };
+    const [node] = await chrome.bookmarks.get(id).catch(() => [null]);
+    if (!node) return { error: '节点不存在' };
+    if (!node.url) return { error: '文件夹不能改网址' };
+    let next;
+    try {
+      const u = new URL(raw.includes('://') ? raw : `https://${raw}`);
+      if (!['http:', 'https:', 'ftp:', 'file:', 'chrome:', 'chrome-extension:', 'edge:', 'about:'].includes(u.protocol)) {
+        return { error: `不支持的协议：${u.protocol}` };
+      }
+      next = u.href;
+    } catch {
+      return { error: '网址格式不对' };
+    }
+    if (next === node.url) return { ok: true, url: next };
+    await chrome.bookmarks.update(id, { url: next });
+    await rebuild();
+    return { ok: true, url: next };
+  }
+
   if (type === 'page:info') {
     await ready;
     const key = canonicalUrl(msg.url || '');

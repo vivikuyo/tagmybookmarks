@@ -1366,7 +1366,7 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(qq.includes(String.raw`if (ch === '"')`), 'T128b 词法器支持引号包裹的词（@/# 后亦生效）');
   ok(qq.includes('const t = prefix + quoteTag(tag);'), 'T128c insertTag 走 quoteTag');
   const pp = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
-  ok(pp.includes("app.filterText = '';\n    app.showAll = false;\n    app.pageLimit = 1000;\n    app.jumpOnce = true;\n    run();"), 'T128d 清除输入时同步重置云区过滤词');
+  ok(pp.includes("app.filterText = '';\n    app.pageLimit = 1000;\n    app.jumpOnce = true;\n    run();"), 'T128d 清除输入时同步重置云区过滤词');
   ok(pp.includes("prefix + quoteTag(tag)"), 'T128e 建议插入带空格标签也包引号');
 }
 
@@ -1750,7 +1750,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes('jumpOnce: true,'), 'T153a app 里加一次性跳转标记');
   ok(pn.includes('const doJump = app.jumpOnce;\n    app.jumpOnce = false;\n    if (doJump) jumpToFirstHit();'), 'T153b run() 只在标记为真时跳，用完立刻清');
   ok(pn.includes("app.filterText = cur ? cur.token.replace(/^[@#]/, '') : '';") && pn.includes("app.jumpOnce = true;\n    clearTimeout(typing);"), 'T153c 打字改查询时置位');
-  ok(pn.includes("qEl.value = insertTag(qEl.value, tag, mode, prefix);\n  app.showAll = false;\n  app.pageLimit = 1000;\n  app.jumpOnce = true;"), 'T153d 点标签 chip 写查询时置位');
+  ok(pn.includes("qEl.value = insertTag(qEl.value, tag, mode, prefix);\n  app.pageLimit = 1000;\n  app.jumpOnce = true;"), 'T153d 点标签 chip 写查询时置位');
   ok(pn.includes("app.jumpOnce = true; // 切进目录模式时按当前查询跳一次"), 'T153e 切进目录模式时跳一次');
   ok(!/async function refreshAll\(\)[\s\S]{0,200}jumpOnce = true/.test(pn), 'T153f 拖放/删除后的 refreshAll 不置位');
 }
@@ -1773,12 +1773,12 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
   ok(pn.includes("allBtn.textContent = allTotal ? `全部书签 ${allTotal}` : '全部书签';"), 'T155a 标签文字为「全部书签 N」');
-  ok(pn.includes("allBtn.className = 'tag virtual' + (app.showAll ? ' active' : '');") && pn.includes("allBtn.style.color = '#8a8f98';"), 'T155b 复用「未打标签」的虚线外观');
+  ok(pn.includes("allBtn.className = 'tag virtual' + (hasTag(qEl.value, '全部书签', '#') ? ' active' : '');") && pn.includes("allBtn.style.color = '#8a8f98';"), 'T155b 复用「未打标签」的虚线外观');
   ok(pn.includes(".tag.virtual.active { background: transparent;") || readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8').includes('.tag.virtual.active { background: transparent;'), 'T155h 选中态用实线边框，不再是实心填充（字不再消失）');
   ok(pn.indexOf("`未打标签 ${untaggedTotal}`") < pn.indexOf('allBtn.textContent ='), 'T155f 与「未打标签」相邻（排在它后面一段）');
   ok(pn.indexOf('cloudEl.append(allBtn);') > pn.indexOf("btn.addEventListener('click', () => applyTag('未打标签', 'only'));"), 'T155g 渲染位置紧挨未打标签，不再排在云首');
   ok(pn.includes('const allTotal = (data.counts && data.counts.all) || 0;'), 'T155c 计数取 counts.all');
-  ok(pn.includes("qEl.value = '';\n    app.filterText = '';\n    app.showAll = true;") && pn.includes('app.jumpOnce = false; // 回到全量，不用跳转'), 'T155d 点击即清空查询并进入"全部"（含未打标签，不跳转）');
+  ok(pn.includes("applyTag('全部书签', 'only', '#');") && pn.includes("if (allBtn.classList.contains('active') && qEl.value.trim() === '#全部书签') {"), 'T155d 点它写 #全部书签，再点一次取消');
   ok(bg.includes('counts: { all: index.counts.keys, untagged: index.untaggedKeys.size },'), 'T155e query 回包补 counts.all');
 }
 
@@ -1799,10 +1799,25 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(bg.includes('const LIMIT = Math.min(Math.max(Number(opts.limit) || 1000, 1), 20000);'), 'T157a doQuery 的 limit 可传、上限 2 万');
   ok(bg.includes('limit: msg.limit,'), 'T157b query 通道透传 limit');
   ok(pn.includes('pageLimit: 1000,') && pn.includes("limit: app.group === 'dir' ? 20000 : app.pageLimit,"), 'T157c 侧边栏按页取数（目录模式直接 2 万）');
-  ok(pn.includes('if (data.truncated) {') && pn.includes('app.pageLimit += 1000;'), 'T157d 截断时出「显示更多」并加一页');
-  ok(pc.includes('.more-row {'), 'T157e 显示更多的样式');
+  ok(pn.includes('if (data.truncated) {') && pn.includes('app.pendingLoad = true;'), 'T157d 截断时标记 pendingLoad');
+  ok(pn.includes("listEl.addEventListener('scroll'") && pn.includes('app.pageLimit += 1000;'), 'T157h 滚到底自动 +1000 并保持滚动位置');
+  ok(pc.includes('.load-more {') && !pn.includes("显示更多"), 'T157e 滚到底自动加载（无按钮）');
   ok(pn.includes("toast('先勾选书签，再加标签', true);") && pn.includes('if (!app.selected.size) {'), 'T157f 没勾选时按 Enter 不吃掉输入');
   ok(pn.includes('app.pageLimit = 1000;'), 'T157g 改查询/清空后回到第一页');
+}
+
+// T158：#全部书签 虚拟标签 / 滚动加载 / 右键编辑网址
+{
+  const q = readFileSync(new URL('../lib/query.js', import.meta.url), 'utf8');
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  ok((q.match(/k === '全部书签'/g) || []).length >= 2, 'T158a tag 与 tagOnly 都认 #全部书签');
+  ok(q.includes('if (k === \'全部书签\' || k === \'all\') {\n          return new Set(index.allKeys);'), 'T158b 求值 = 全部键（含未打标签）');
+  ok(pn.includes("applyTag('全部书签', 'only', '#')") && pn.includes("hasTag(qEl.value, '全部书签', '#')"), 'T158c chip 写查询框并据查询回显选中态');
+  ok(bg.includes("if (type === 'node:url')") && bg.includes("if (!node.url) return { error: '文件夹不能改网址' };"), 'T158d node:url 通道 + 文件夹拦截');
+  ok(bg.includes("['http:', 'https:', 'ftp:', 'file:', 'chrome:', 'chrome-extension:', 'edge:', 'about:']"), 'T158e 只放行常见协议');
+  ok(pn.includes("function openUrlEditor(item)") && pn.includes("{ label: '编辑网址', run: () => openUrlEditor(item) }"), 'T158f 右键菜单 + 弹窗');
+  ok(pn.includes("await send({ type: 'node:url', id: nodeIdsOf(item)[0], url: input.value.trim() });"), 'T158g 弹窗走 node:url');
 }
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
