@@ -407,21 +407,21 @@ function renderCloud() {
   // 再点一次取消（框里清空，回到默认视图）
   const allTotal = (data.counts && data.counts.all) || 0;
   const allBtn = document.createElement('button');
-  allBtn.className = 'tag virtual' + (hasTag(qEl.value, '全部书签', '#') ? ' active' : '');
+  allBtn.className = 'tag virtual' + (hasTag(qEl.value, '全部书签', '') ? ' active' : '');
   allBtn.style.color = '#8a8f98';
   allBtn.title = '全部书签（含未打标签）；再点一次取消';
   allBtn.textContent = allTotal ? `全部书签 ${allTotal}` : '全部书签';
   allBtn.addEventListener('click', () => {
     app.filterText = '';
-    // 已经是"只有 #全部书签"时再点一次 = 取消，框回到空
-    if (allBtn.classList.contains('active') && qEl.value.trim() === '#全部书签') {
+    // 已经是"只有 全部书签"时再点一次 = 取消，框回到空
+    if (allBtn.classList.contains('active') && qEl.value.trim() === '全部书签') {
       qEl.value = '';
       app.pageLimit = 1000;
       app.jumpOnce = false;
       run();
       return;
     }
-    applyTag('全部书签', 'only', '#');
+    applyTag('全部书签', 'only'); // 写纯文本「全部书签」，不带 #
   });
   cloudEl.append(allBtn);
 }
@@ -938,84 +938,6 @@ document.addEventListener('keydown', (e) => {
 });
 window.addEventListener('blur', closeCtx);
 
-/** 编辑网址：中间弹一个小框，预填当前 URL；回车保存、Esc 取消 */
-function openUrlEditor(item) {
-  closeCtx();
-  const mask = document.createElement('div');
-  mask.className = 'modal-mask';
-  const box = document.createElement('div');
-  box.className = 'modal';
-
-  const title = document.createElement('div');
-  title.className = 'modal-title';
-  title.textContent = '编辑网址';
-
-  const sub = document.createElement('div');
-  sub.className = 'modal-sub';
-  sub.textContent = item.title || '';
-
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'modal-input';
-  input.value = item.url || '';
-  input.spellcheck = false;
-
-  const err = document.createElement('div');
-  err.className = 'modal-err';
-
-  const bar = document.createElement('div');
-  bar.className = 'modal-bar';
-  const cancel = document.createElement('button');
-  cancel.className = 'mini-btn';
-  cancel.textContent = '取消';
-  const ok = document.createElement('button');
-  ok.className = 'mini-btn';
-  ok.textContent = '保存';
-  bar.append(cancel, ok);
-
-  box.append(title, sub, input, err, bar);
-  mask.append(box);
-  document.body.append(mask);
-  input.focus();
-  input.select();
-
-  const close = () => mask.remove();
-  mask.addEventListener('click', (e) => {
-    if (e.target === mask) close();
-  });
-  cancel.addEventListener('click', close);
-  input.addEventListener('keydown', async (e) => {
-    e.stopPropagation();
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      close();
-      return;
-    }
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    await save();
-  });
-
-  let saving = false;
-  async function save() {
-    if (saving) return;
-    saving = true;
-    ok.disabled = true;
-    try {
-      await send({ type: 'node:url', id: nodeIdsOf(item)[0], url: input.value.trim() });
-      close();
-      await run();
-      toast('已更新网址');
-    } catch (e) {
-      err.textContent = e.message || '保存失败';
-      saving = false;
-      ok.disabled = false;
-      input.focus();
-    }
-  }
-  ok.addEventListener('click', save);
-}
-
 /** 复制网址：侧边栏可能没有输入焦点，clipboard API 失败就退回 textarea 选中复制 */
 async function copyUrl(url) {
   try {
@@ -1194,11 +1116,57 @@ function renderRow(item) {
     e.preventDefault();
     openCtx(e.clientX, e.clientY, [
       { label: '复制网址', run: () => copyUrl(item.url) },
-      { label: '编辑网址', run: () => openUrlEditor(item) },
+      { label: '编辑网址', run: () => editRowUrl(li, item) },
       { label: '重命名（标签保留）', run: () => renameRow(li, item) },
     ]);
   });
   return li;
+}
+
+/** 编辑网址：像重命名一样就地替换 .row-url，回车保存、Esc 取消 */
+function editRowUrl(li, item) {
+  const u = li.querySelector('.row-url');
+  if (!u) return;
+  const input = document.createElement('input');
+  input.className = 'row-rename';
+  input.value = item.url || '';
+  input.spellcheck = false;
+  u.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const cancel = () => {
+    if (done) return;
+    done = true;
+    input.replaceWith(u);
+  };
+  const commit = async () => {
+    if (done) return;
+    done = true;
+    const v = input.value.trim();
+    input.replaceWith(u);
+    if (!v || v === item.url) return;
+    try {
+      await send({ type: 'node:url', id: nodeIdsOf(item)[0], url: v });
+      await run();
+      toast('已更新网址');
+    } catch (e) {
+      toast(e.message || '保存失败', true);
+    }
+  };
+
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancel();
+    }
+  });
+  input.addEventListener('blur', cancel);
 }
 
 function renderChip(item, tag) {

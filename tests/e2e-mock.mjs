@@ -248,6 +248,8 @@ eq(q3.total, 1, 'E10 全文检索干净标题');
 const qAll = await call({ type: 'query', expr: '#全部书签' });
 eq(qAll.total, 4, 'E11b #全部书签 = 全部（含未打标签）');
 eq([...qAll.items.map((i) => i.url)].sort(), ['https://design.example.com/', 'https://plain.example.com/', 'https://react.dev/', 'https://vuejs.org/'], 'E11c #全部书签 条目与全量一致');
+const qAll2 = await call({ type: 'query', expr: '全部书签' });
+eq(qAll2.total, 4, 'E11d 裸词「全部书签」也等于全部（含未打标签）');
 const q4 = await call({ type: 'query', expr: '未打标签' });
 eq(q4.total, 2, 'E11 虚拟标签（bm3 与 bm5）');
 

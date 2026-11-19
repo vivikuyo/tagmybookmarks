@@ -1773,12 +1773,12 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
   ok(pn.includes("allBtn.textContent = allTotal ? `全部书签 ${allTotal}` : '全部书签';"), 'T155a 标签文字为「全部书签 N」');
-  ok(pn.includes("allBtn.className = 'tag virtual' + (hasTag(qEl.value, '全部书签', '#') ? ' active' : '');") && pn.includes("allBtn.style.color = '#8a8f98';"), 'T155b 复用「未打标签」的虚线外观');
+  ok(pn.includes("allBtn.className = 'tag virtual' + (hasTag(qEl.value, '全部书签', '') ? ' active' : '');") && pn.includes("allBtn.style.color = '#8a8f98';"), 'T155b 复用「未打标签」的虚线外观');
   ok(pn.includes(".tag.virtual.active { background: transparent;") || readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8').includes('.tag.virtual.active { background: transparent;'), 'T155h 选中态用实线边框，不再是实心填充（字不再消失）');
   ok(pn.indexOf("`未打标签 ${untaggedTotal}`") < pn.indexOf('allBtn.textContent ='), 'T155f 与「未打标签」相邻（排在它后面一段）');
   ok(pn.indexOf('cloudEl.append(allBtn);') > pn.indexOf("btn.addEventListener('click', () => applyTag('未打标签', 'only'));"), 'T155g 渲染位置紧挨未打标签，不再排在云首');
   ok(pn.includes('const allTotal = (data.counts && data.counts.all) || 0;'), 'T155c 计数取 counts.all');
-  ok(pn.includes("applyTag('全部书签', 'only', '#');") && pn.includes("if (allBtn.classList.contains('active') && qEl.value.trim() === '#全部书签') {"), 'T155d 点它写 #全部书签，再点一次取消');
+  ok(pn.includes("applyTag('全部书签', 'only'); // 写纯文本「全部书签」，不带 #") && pn.includes("qEl.value.trim() === '全部书签'"), 'T155d 点它写纯文本「全部书签」，再点一次取消');
   ok(bg.includes('counts: { all: index.counts.keys, untagged: index.untaggedKeys.size },'), 'T155e query 回包补 counts.all');
 }
 
@@ -1811,13 +1811,16 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const q = readFileSync(new URL('../lib/query.js', import.meta.url), 'utf8');
   const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
   ok((q.match(/k === '全部书签'/g) || []).length >= 2, 'T158a tag 与 tagOnly 都认 #全部书签');
   ok(q.includes('if (k === \'全部书签\' || k === \'all\') {\n          return new Set(index.allKeys);'), 'T158b 求值 = 全部键（含未打标签）');
-  ok(pn.includes("applyTag('全部书签', 'only', '#')") && pn.includes("hasTag(qEl.value, '全部书签', '#')"), 'T158c chip 写查询框并据查询回显选中态');
+  ok(pn.includes("applyTag('全部书签', 'only');") && pn.includes("hasTag(qEl.value, '全部书签', '')"), 'T158c chip 往框里写纯文本「全部书签」并按它回显选中态');
+  ok(!pn.includes("qEl.value.trim() === '#全部书签'"), 'T158h 再点取消时按纯文本比对');
   ok(bg.includes("if (type === 'node:url')") && bg.includes("if (!node.url) return { error: '文件夹不能改网址' };"), 'T158d node:url 通道 + 文件夹拦截');
   ok(bg.includes("['http:', 'https:', 'ftp:', 'file:', 'chrome:', 'chrome-extension:', 'edge:', 'about:']"), 'T158e 只放行常见协议');
-  ok(pn.includes("function openUrlEditor(item)") && pn.includes("{ label: '编辑网址', run: () => openUrlEditor(item) }"), 'T158f 右键菜单 + 弹窗');
-  ok(pn.includes("await send({ type: 'node:url', id: nodeIdsOf(item)[0], url: input.value.trim() });"), 'T158g 弹窗走 node:url');
+  ok(pn.includes("function editRowUrl(li, item)") && pn.includes("{ label: '编辑网址', run: () => editRowUrl(li, item) }"), 'T158f 右键菜单 + 行内编辑');
+  ok(pn.includes("await send({ type: 'node:url', id: nodeIdsOf(item)[0], url: v });"), 'T158g 行内编辑走 node:url');
+  ok(!pn.includes('modal-mask') && !pc.includes('.modal-mask'), 'T158i 弹窗相关代码已移除');
 }
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
