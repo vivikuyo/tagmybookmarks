@@ -1054,13 +1054,10 @@ function dirTagCounts(idx) {
 
 async function doQuery(expr, opts = {}) {
   const { ast, errors } = parseQuery(expr);
-  const taggedKeys = new Set(index.allKeys);
-  for (const k of index.untaggedKeys) taggedKeys.delete(k);
-
   const dirEnabled = String(config.prefs.folderTags ?? '1') !== '0';
   const keys = ast
     ? evaluate(ast, index, { resolveAlias: (k) => aliasMap.get(k) || k, dirEnabled })
-    : new Set(taggedKeys);
+    : new Set(index.allKeys); // 空查询 = 全部书签（含未打标签），与管理页「全部」同口径
   const queryTags = collectQueryTags(ast);
   const queryDirs = [...collectQueryDirs(ast)];
   // 裸名（mac）会同时命中同名目录，所以目录栏的高亮与「同枝收窄」也要把它算进去。

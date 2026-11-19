@@ -230,8 +230,10 @@ eq(st.counts.keys, 4, 'E6 书签 URL 去重后 4 条');
 
 // 3. 空查询只显示已标签
 const q0 = await call({ type: 'query', expr: '' });
-eq(q0.total, 2, 'E7 空查询只显示已标签书签（bm3/bm5 未打标签）');
-eq(q0.items.map((i) => i.url), ['https://vuejs.org/', 'https://react.dev/'], 'E7a 空查询按书签树默认顺序（先建在前，不是标题拼音序）');
+eq(q0.total, 4, 'E7 空查询 = 全部书签（含 bm3/bm5 未打标签）');
+eq(q0.items.map((i) => i.url), ['https://vuejs.org/', 'https://react.dev/', 'https://design.example.com/', 'https://plain.example.com/'], 'E7a 空查询按书签树默认顺序（先建在前，不是标题拼音序）');
+eq(q0.counts && q0.counts.all, 4, 'E7b counts.all 给出全量条数');
+eq(q0.counts && q0.counts.untagged, 2, 'E7c counts.untagged 给出未打标签条数');
 
 // 4. 布尔查询
 const q1 = await call({ type: 'query', expr: '前端, Vue' });

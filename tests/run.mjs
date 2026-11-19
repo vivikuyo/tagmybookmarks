@@ -1773,10 +1773,20 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
   ok(pn.includes("allBtn.textContent = allTotal ? `全部书签 ${allTotal}` : '全部书签';"), 'T155a 标签文字为「全部书签 N」');
-  ok(pn.includes("allBtn.className = 'tag virtual';") && pn.includes("allBtn.style.color = '#8a8f98';"), 'T155b 复用「未打标签」的虚线外观');
+  ok(pn.includes("allBtn.className = 'tag virtual' + (inputEmpty() ? ' active' : '');") && pn.includes("allBtn.style.color = '#8a8f98';"), 'T155b 复用「未打标签」的虚线外观');
+  ok(pn.indexOf("`未打标签 ${untaggedTotal}`") < pn.indexOf('allBtn.textContent ='), 'T155f 与「未打标签」相邻（排在它后面一段）');
+  ok(pn.indexOf('cloudEl.append(allBtn);') > pn.indexOf("btn.addEventListener('click', () => applyTag('未打标签', 'only'));"), 'T155g 渲染位置紧挨未打标签，不再排在云首');
   ok(pn.includes('const allTotal = (data.counts && data.counts.all) || 0;'), 'T155c 计数取 counts.all');
   ok(pn.includes("qEl.value = '';\n    app.filterText = '';\n    app.jumpOnce = false;"), 'T155d 点击即清空查询回到全量（不跳转）');
   ok(bg.includes('counts: { all: index.counts.keys, untagged: index.untaggedKeys.size },'), 'T155e query 回包补 counts.all');
+}
+
+// T156：空查询 = 全部书签（含未打标签）
+{
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  ok(!bg.includes('new Set(taggedKeys)') && !bg.includes('taggedKeys.delete'), 'T156a 去掉"只算已打标签"的中间集合');
+  ok(bg.includes(': new Set(index.allKeys); // 空查询 = 全部书签（含未打标签），与管理页「全部」同口径'), 'T156b 空查询直接取全量键');
+  ok(bg.includes('counts: { all: index.counts.keys, untagged: index.untaggedKeys.size },'), 'T156c counts 同时给全部与未打标签');
 }
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
