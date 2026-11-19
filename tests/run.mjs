@@ -1211,8 +1211,8 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(cc4.includes('.dir-chip .btn {\n  border: 0; background: transparent; box-shadow: none;'),
      'T126b dir-chip 内按钮无边框（纯文字）');
   const tj2 = readFileSync(new URL('../space/tags.js', import.meta.url), 'utf8');
-  ok(tj2.includes("openDrawer(t.tag, true)") && tj2.includes("(isDir ? '@' : '#') + quoteTag(tag)"),
-     'T126c 点目录名打开 @ 抽屉');
+  ok(tj2.includes('openDrawer(t.tag, true, t.key)') && tj2.includes("isDir && dirKey") && tj2.includes("type: 'dir:rows'"),
+     'T126c 点目录名打开 @ 抽屉（按 tagKey 直接取行）');
 }
 
 
@@ -1431,7 +1431,7 @@ ok(popSrc.includes('目录加载失败，点此重试'), 'T65c 收藏位置下�
   ok(tg.includes("li.addEventListener('contextmenu'"), 'T133b 抽屉书签可右键');
   ok(tg.includes('function openDrawerCtx') && tg.includes("el.className = 'bm-ctx'"), 'T133c 右键菜单复用书签页 .bm-ctx 样式');
   ok(tg.includes("type: 'node:rename', id: item.nodeIds[0]") && tg.includes("type: 'delete', ids: [item.nodeIds[0]]"), 'T133d 重命名/删除走 node:rename 与 delete（nodeIds[0]，多位置书签取最前位置）');
-  ok(tg.includes('if (drawerTag) openDrawer(drawerTag, drawerIsDir);'), 'T133e 操作后重开抽屉刷新内容');
+  ok(tg.includes('if (drawerTag) openDrawer(drawerTag, drawerIsDir, drawerDirKey);'), 'T133e 操作后重开抽屉刷新内容');
 }
 
 // T142：退出下钻后面包屑必须真的消失（列表回到所有目录，表头不许残留旧分段）
@@ -1821,6 +1821,23 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes("function editRowUrl(li, item)") && pn.includes("{ label: '编辑网址', run: () => editRowUrl(li, item) }"), 'T158f 右键菜单 + 行内编辑');
   ok(pn.includes("await send({ type: 'node:url', id: nodeIdsOf(item)[0], url: v });"), 'T158g 行内编辑走 node:url');
   ok(!pn.includes('modal-mask') && !pc.includes('.modal-mask'), 'T158i 弹窗相关代码已移除');
+}
+
+// T159：管理页右键「打开/编辑网址」、管理页书签抽屉按 tagKey 取行
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const tg = readFileSync(new URL('../space/tags.js', import.meta.url), 'utf8');
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  const sc = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(bm.includes('const ids = selected.size ? [...selected] : [row.id];'), 'T159a 有勾选时右键打开 = 整个选中集');
+  ok(bm.includes("{ label: '打开', run: () => openRow(row) }"), 'T159b 打开走 openRow');
+  ok(bm.includes("{ label: '编辑网址', run: () => editUrlRow(line, row) }") && bm.includes('function editUrlRow(line, row)'), 'T159c 管理页书签可改网址');
+  ok(bm.includes("await send({ type: 'node:url', id: row.id, url: v });"), 'T159d 改网址走后端通道');
+  ok(sc.includes('.bm-url-edit {'), 'T159e 行内编辑网址的样式');
+  ok(bg.includes("if (type === 'dir:rows')") && bg.includes('index.dirTagToKeys.get(key)'), 'T159f 新增 dir:rows 通道（按 tagKey 取行）');
+  ok(tg.includes("await send({ type: 'dir:rows', key: dirKey })") && tg.includes('openDrawer(t.tag, true, t.key)'), 'T159g 目录标签点击按 key 打开抽屉，不再靠 @名 查询');
+  ok(tg.includes("{ label: '编辑网址', run: () => editDrawerUrl(li, item) }") && tg.includes('function editDrawerUrl(li, item)'), 'T159h 抽屉里右键也能编辑网址');
+  ok(tg.includes('openDrawer(drawerTag, drawerIsDir, drawerDirKey)'), 'T159i 刷新抽屉时保留 dirKey');
 }
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {

@@ -285,18 +285,22 @@ async function setColor(tag, value) {
 
 let drawerTag = null;
 let drawerIsDir = false;
+let drawerDirKey = null; // 目录标签的 tagKey：抽屉直接按它取书签，不靠 @名 查询
 
-async function openDrawer(tag, isDir = false) {
+async function openDrawer(tag, isDir = false, dirKey = null) {
   const drawer = $('#drawer');
   drawerTag = tag; // 右键操作后按它重开抽屉刷新
   drawerIsDir = isDir;
+  drawerDirKey = dirKey;
   $('#drawerTitle').textContent = isDir ? `@${tag}` : `#${tag}`;
   const body = $('#drawerBody');
   body.textContent = '加载中…';
   drawer.hidden = false;
 
   try {
-    const r = await send({ type: 'query', expr: (isDir ? '@' : '#') + quoteTag(tag) });
+    const r = isDir && dirKey
+      ? await send({ type: 'dir:rows', key: dirKey })
+      : await send({ type: 'query', expr: (isDir ? '@' : '#') + quoteTag(tag) });
     body.textContent = '';
     const head = document.createElement('p');
     head.className = 'hint';
@@ -317,7 +321,7 @@ async function openDrawer(tag, isDir = false) {
       li.addEventListener('click', () => chrome.tabs.create({ url: item.url }));
       li.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        openDrawerCtx(e.clientX, e.clientY, item);
+        openDrawerCtx(e.clientX, e.clientY, item, li);
       });
       ul.append(li);
     }
@@ -339,12 +343,13 @@ function closeDrawerCtx() {
   if (el) el.remove();
 }
 
-function openDrawerCtx(x, y, item) {
+function openDrawerCtx(x, y, item, li) {
   closeDrawerCtx();
   const el = document.createElement('div');
   el.className = 'bm-ctx';
   const items = [
     { label: '复制网址', run: () => copyDrawerUrl(item.url) },
+    { label: '编辑网址', run: () => editDrawerUrl(li, item) },
     { label: '重命名（标签保留）', run: () => renameDrawerItem(item) },
     '-',
     { label: '删除（进回收站）', danger: true, run: () => deleteDrawerItem(item) },
@@ -371,6 +376,53 @@ function openDrawerCtx(x, y, item) {
   el.style.top = `${Math.max(4, Math.min(y, innerHeight - r.height - 8))}px`;
 }
 
+/** 抽屉里就地改网址：把那一行的 .u 换成输入框，回车保存 / Esc 取消 */
+function editDrawerUrl(li, item) {
+  if (!li) return;
+  const u = li.querySelector('.u');
+  if (!u) return;
+  const input = document.createElement('input');
+  input.className = 'bm-url-edit';
+  input.value = item.url || '';
+  input.spellcheck = false;
+  u.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const cancel = () => {
+    if (done) return;
+    done = true;
+    input.replaceWith(u);
+  };
+  const commit = async () => {
+    if (done) return;
+    done = true;
+    const v = input.value.trim();
+    input.replaceWith(u);
+    if (!v || v === item.url) return;
+    try {
+      await send({ type: 'node:url', id: item.nodeIds[0], url: v });
+      toast('已更新网址');
+      await refresh();
+      if (drawerTag) openDrawer(drawerTag, drawerIsDir, drawerDirKey);
+    } catch (e) {
+      toast(e.message || '保存失败', true);
+    }
+  };
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancel();
+    }
+  });
+  input.addEventListener('blur', cancel);
+}
+
 async function copyDrawerUrl(url) {
   try {
     await navigator.clipboard.writeText(url);
@@ -392,7 +444,7 @@ async function renameDrawerItem(item) {
     await send({ type: 'node:rename', id: item.nodeIds[0], title: v.trim() });
     toast('已重命名（标签保留）');
     await refresh();
-    if (drawerTag) openDrawer(drawerTag, drawerIsDir);
+    if (drawerTag) openDrawer(drawerTag, drawerIsDir, drawerDirKey);
   } catch (e) {
     toast(e.message, true);
   }
@@ -407,7 +459,7 @@ async function deleteDrawerItem(item) {
     }
     toast('已删除（进回收站，可撤销）');
     await refresh();
-    if (drawerTag) openDrawer(drawerTag, drawerIsDir);
+    if (drawerTag) openDrawer(drawerTag, drawerIsDir, drawerDirKey);
   } catch (e) {
     toast(e.message, true);
   }
@@ -650,7 +702,7 @@ function renderDirTags() {
     name.textContent = '@' + t.tag;
     name.title = '查看这个目录下的书签';
     name.style.cursor = 'pointer';
-    name.addEventListener('click', () => openDrawer(t.tag, true));
+    name.addEventListener('click', () => openDrawer(t.tag, true, t.key));
     const cnt = document.createElement('span');
     cnt.className = 'c';
     cnt.textContent = t.count;

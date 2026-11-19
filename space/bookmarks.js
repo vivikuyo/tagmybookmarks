@@ -481,6 +481,61 @@ function ctxClip(mode, fallbackId) {
 }
 
 /** 书签行右键菜单：公开项（打开/复制网址/重命名）+ 按目录模式额外的剪切/复制（进剪贴板）+ 删除 */
+/** 右键「打开」：有勾选就打开整个选中集（含跨窗格的当前窗格），没勾选只开这一条 */
+function openRow(row) {
+  const ids = selected.size ? [...selected] : [row.id];
+  if (ids.length === 1 && !selected.size) {
+    chrome.tabs.create({ url: row.url });
+    return;
+  }
+  send({ type: 'open', ids }).catch((e) => toast(e.message, true));
+}
+
+/** 编辑网址：和重命名同款，就地替换 .bm-url，回车保存、Esc 或失焦取消 */
+function editUrlRow(line, row) {
+  const u = line.querySelector('.bm-url');
+  if (!u) return;
+  const input = document.createElement('input');
+  input.className = 'bm-url-edit';
+  input.value = row.url || '';
+  input.spellcheck = false;
+  u.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const cancel = () => {
+    if (done) return;
+    done = true;
+    input.replaceWith(u);
+  };
+  const commit = async () => {
+    if (done) return;
+    done = true;
+    const v = input.value.trim();
+    input.replaceWith(u);
+    if (!v || v === row.url) return;
+    try {
+      await send({ type: 'node:url', id: row.id, url: v });
+      toast('已更新网址');
+      await refresh();
+    } catch (e) {
+      toast(e.message || '保存失败', true);
+    }
+  };
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancel();
+    }
+  });
+  input.addEventListener('blur', cancel);
+}
+
 function bookmarkCtxItems(line, row, withClip) {
   const items = [];
   if (withClip && clip) {
@@ -490,8 +545,9 @@ function bookmarkCtxItems(line, row, withClip) {
     items.push({ label: `粘贴到「${parentName}」`, run: () => pasteInto(parentId, parentName) }, '-');
   }
   items.push(
-    { label: '打开', run: () => chrome.tabs.create({ url: row.url }) },
+    { label: '打开', run: () => openRow(row) },
     { label: '复制网址', run: () => copyUrl(row.url) },
+    { label: '编辑网址', run: () => editUrlRow(line, row) },
     { label: '重命名（标签保留）', run: () => renameRow(line, row) },
   );
   if (withClip) {

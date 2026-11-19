@@ -882,6 +882,18 @@ if (srcId) {
      && !st3.excludedDirs.includes(['书签栏', 'program/ff'].join(PATH_SEP)), 'E196 取消排除后恢复');
 }
 
+
+// 目录标签抽屉：按 tagKey 直接取行（名字里带 / 也不受查询解析影响）
+{
+  const st = await call({ type: 'state' });
+  const t = st.dirTags.find((x) => x.tag === 'program/ff') || st.dirTags[0];
+  ok(!!t, 'E197 有目录标签可取');
+  const dr = await call({ type: 'dir:rows', key: t.key });
+  ok(dr.total >= 1, 'E198 dir:rows 按 tagKey 取到书签');
+  ok(dr.items.every((i) => i.url && i.nodeIds && i.nodeIds.length), 'E199 行带 url 与 nodeIds（抽屉要用）');
+  const drBad = await call({ type: 'dir:rows', key: 'no-such-dir' });
+  eq(drBad.total, 0, 'E200 未知 key 返回空表而不是报错');
+}
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);

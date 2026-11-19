@@ -1474,6 +1474,22 @@ async function handle(msg) {
     return { ok: true, configFiles: Object.fromEntries(Object.entries(configNodes).map(([k, n]) => [k, n.title])) };
   }
 
+  // 目录标签 → 它包含的书签（按 tagKey 直接取集合，绕开 @查询 的解析，
+  // 名字里带 / 或别名的目录也不会查空）
+  if (type === 'dir:rows') {
+    await ready;
+    if (rebuildPending) await rebuild();
+    const key = String(msg.key || '');
+    const set = (index.dirTagToKeys && index.dirTagToKeys.get(key)) || new Set();
+    const items = buildItems(set, true);
+    return {
+      ok: true,
+      total: items.length,
+      name: (index.dirTagForm && index.dirTagForm.get(key)) || key,
+      items,
+    };
+  }
+
   if (type === 'open') {
     await ready;
     const where = msg.where || 'tab';
