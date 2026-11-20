@@ -1874,13 +1874,14 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
 // T162：两朵云按内容需求分配高度，别固定 1:1
 {
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
-  ok(pn.includes('function layoutClouds()') && pn.includes("const head = p.querySelector('.pane-head');"), 'T162a 按 标题行+scrollHeight 量每朵云的自然高度');
-  ok(pn.includes('needs.map((n) => Math.max(44, Math.round((n / sum) * avail)))'), 'T162b 超出预算时按需求比例分配（短的那朵只拿自己需要的）');
-  ok(pn.includes('if (sum < avail) {') && pn.includes('shares[tallest] += avail - sum;'), 'T162c 有富余时补给最高的那朵，云区底部不留空白');
-  ok(pn.includes('avail = Math.min(needs.reduce((a, b) => a + b, 0), capByList);'), 'T162d 没拖过时云区收缩到内容合计（上限仍是留 6 行）');
-  ok(pn.includes('function scheduleCloudLayout()') && pn.includes('requestAnimationFrame'), 'T162e 渲染后合并到下一帧重排，避免抖动');
-  ok(pn.includes('applyCloudSpace(app.cloudSpace);\n    scheduleCloudLayout();'), 'T162f 拖动时不只改总高，也重排两朵云');
-  ok(!pn.includes('flex: 1 1 0; min-height: 0; overflow: hidden; }\n.cloud-area .pane'), 'T162g 不再靠 CSS 平分两朵云');
+  ok(pn.includes('function layoutClouds()') && pn.includes("const h = (head ? head.offsetHeight : 0) + (cloud ? cloud.scrollHeight : 0) + 2;"), 'T162a 按 标题行+scrollHeight 量每朵云的自然高度');
+  ok(pn.includes("area.style.setProperty('--cloud-space', `${Math.round(target)}px`);"), 'T162b 云区总高是唯一真值：先定总高再按需求分配');
+  ok(pn.includes('if (target >= needSum) {') && pn.includes('shares[tallest] += target - needSum;'), 'T162c 富余补给最高的那朵，云区底部不留空白');
+  ok(pn.includes("const target = Math.max(88, Math.min(app.cloudSpace == null ? needSum : app.cloudSpace, cap));"), 'T162d 没拖过就贴内容（内容少把空间还给列表），拖过就听用户的');
+  ok(pn.includes('let diff = Math.round(target) - shares.reduce((a, b) => a + b, 0);'), 'T162e 取整误差补齐，两朵云加起来正好等于云区高度（否则底部冒白条）');
+  ok(pn.includes("if (p.classList.contains('off')) {") && pn.includes("p.style.height = '';"), 'T162f 关掉的栏不参与竞争、不被拉高');
+  ok(pn.includes('function scheduleCloudLayout()') && pn.includes('requestAnimationFrame'), 'T162g 渲染后合并到下一帧重排，避免抖动');
+  ok(pn.includes('scheduleCloudLayout();\n    toast('), 'T162h 双击恢复默认后也重排');
 }
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {

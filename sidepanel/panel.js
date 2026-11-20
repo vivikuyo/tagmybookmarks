@@ -1422,42 +1422,59 @@ function layoutClouds() {
   const panes = [...area.querySelectorAll(':scope > .pane')];
   if (!panes.length) return;
 
-  // 每朵云"自然需要的高度" = 标题行 + 云内容（scrollHeight 不受自身被压扁影响）
-  const needs = panes.map((p) => {
+  // 关掉的栏（只剩标题行）不参与高度竞争，也不许被拉高
+  const live = panes.filter((p) => !p.classList.contains('off'));
+  panes.forEach((p) => {
+    if (p.classList.contains('off')) {
+      p.style.flex = '0 0 auto';
+      p.style.height = '';
+    }
+  });
+  if (!live.length) return;
+
+  // 每朵云"自然需要的高度" = 标题行 + 云内容（scrollHeight 是内容高度，不受被压扁影响）
+  const needs = live.map((p) => {
     const head = p.querySelector('.pane-head');
     const cloud = p.querySelector('.cloud');
-    const h = (head ? head.offsetHeight : 0) + (cloud ? cloud.scrollHeight : 0);
+    const h = (head ? head.offsetHeight : 0) + (cloud ? cloud.scrollHeight : 0) + 2;
     return Math.max(44, h);
   });
+  const needSum = needs.reduce((a, b) => a + b, 0);
 
+  // 云区 + 列表之外的固定件高度（和云区多高无关，是不变量）
   const H = window.innerHeight;
   const list = $('#list');
-  const fixed = H - area.offsetHeight - (list ? list.offsetHeight : 0);
-  const capByList = Math.max(96, H - Math.max(0, fixed) - estimateRowHeight() * 6);
+  const chrome = Math.max(0, H - area.offsetHeight - (list ? list.offsetHeight : 0));
+  const cap = Math.max(96, Math.min(H - chrome - estimateRowHeight() * 6, H - 200));
 
-  let avail;
-  if (app.cloudSpace == null) {
-    avail = Math.min(needs.reduce((a, b) => a + b, 0), capByList);
-    applyCloudSpace(avail === capByList ? null : avail); // 触顶就留给默认的 52% 上限
-  } else {
-    avail = Math.max(96, Math.min(app.cloudSpace, capByList, Math.round(H * 0.52)));
-  }
+  // 目标总高：没拖过就贴内容（内容少就把空间还给列表），拖过就听用户的
+  const target = Math.max(88, Math.min(app.cloudSpace == null ? needSum : app.cloudSpace, cap));
 
-  const sum = needs.reduce((a, b) => a + b, 0);
-  const shares = sum <= avail
-    ? needs.slice()
-    : needs.map((n) => Math.max(44, Math.round((n / sum) * avail)));
+  // 先定云区总高——这是唯一真值，两朵云的高度必须刚好加满它
+  area.style.setProperty('--cloud-space', `${Math.round(target)}px`);
 
-  // 拖过比例（云区比内容高）时，把多出来的高度补给最高的那朵，
-  // 别在云区底部留一块空白
-  if (sum < avail) {
+  let shares;
+  if (target >= needSum) {
+    shares = needs.slice();
     let tallest = 0;
     for (let i = 1; i < needs.length; i++) if (needs[i] > needs[tallest]) tallest = i;
-    shares[tallest] += avail - sum;
+    shares[tallest] += target - needSum; // 富余补给最高的那朵，云区底部不留空白
+  } else {
+    shares = needs.map((n) => Math.max(44, Math.floor((n / needSum) * target)));
+    // 取整误差补齐，保证和总高严丝合缝（否则底部会冒出一条空白）
+    let diff = Math.round(target) - shares.reduce((a, b) => a + b, 0);
+    let tallest = 0;
+    for (let i = 1; i < shares.length; i++) if (shares[i] > shares[tallest]) tallest = i;
+    if (diff > 0) shares[tallest] += diff;
+    else if (diff < 0) {
+      for (let i = 0; i < shares.length && diff < 0; i++) {
+        const take = Math.min(shares[i] - 44, -diff);
+        if (take > 0) { shares[i] -= take; diff += take; }
+      }
+    }
   }
 
-  // 关掉的栏（只剩标题行）不再参与高度竞争
-  panes.forEach((p, i) => {
+  live.forEach((p, i) => {
     p.style.flex = '0 0 auto';
     p.style.height = `${shares[i]}px`;
   });
@@ -1513,6 +1530,7 @@ function bindCloudSplit() {
       await chrome.storage.local.remove(CLOUD_SPACE_KEY);
     } catch {}
     applyCloudSpace(defaultCloudSpace());
+    scheduleCloudLayout();
     toast('已恢复默认比例');
   });
   window.addEventListener('resize', () => {
