@@ -151,6 +151,7 @@ function bind() {
     if (app.data) {
       renderCloud();
       renderDirPane(app.dirEnabled !== false);
+      scheduleCloudLayout();
     }
     updateSuggest();
     app.jumpOnce = true;
@@ -319,6 +320,7 @@ function render() {
   applyCloudMode();
   renderCloud();
   renderDirPane(app.dirEnabled !== false);
+  scheduleCloudLayout();
   renderList();
   updateBulk();
 }
@@ -1399,6 +1401,68 @@ function refreshCloudSpace() {
   applyCloudSpace(app.cloudSpace);
 }
 
+/**
+ * 两朵云按"各自内容需要多少"分云区高度，而不是固定 1:1。
+ * 短的那朵只拿自己需要的，剩下的全给长的那朵（长的那朵内部滚动）。
+ * 用户没拖过时，云区本身也收缩到两朵云的合计需要（上限仍是"列表留 6 行"），
+ * 免得内容只有两行却占着一大块空白。
+ */
+let cloudLayoutTick = null;
+function scheduleCloudLayout() {
+  if (cloudLayoutTick) cancelAnimationFrame(cloudLayoutTick);
+  cloudLayoutTick = requestAnimationFrame(() => {
+    cloudLayoutTick = null;
+    layoutClouds();
+  });
+}
+
+function layoutClouds() {
+  const area = $('#cloudArea');
+  if (!area) return;
+  const panes = [...area.querySelectorAll(':scope > .pane')];
+  if (!panes.length) return;
+
+  // 每朵云"自然需要的高度" = 标题行 + 云内容（scrollHeight 不受自身被压扁影响）
+  const needs = panes.map((p) => {
+    const head = p.querySelector('.pane-head');
+    const cloud = p.querySelector('.cloud');
+    const h = (head ? head.offsetHeight : 0) + (cloud ? cloud.scrollHeight : 0);
+    return Math.max(44, h);
+  });
+
+  const H = window.innerHeight;
+  const list = $('#list');
+  const fixed = H - area.offsetHeight - (list ? list.offsetHeight : 0);
+  const capByList = Math.max(96, H - Math.max(0, fixed) - estimateRowHeight() * 6);
+
+  let avail;
+  if (app.cloudSpace == null) {
+    avail = Math.min(needs.reduce((a, b) => a + b, 0), capByList);
+    applyCloudSpace(avail === capByList ? null : avail); // 触顶就留给默认的 52% 上限
+  } else {
+    avail = Math.max(96, Math.min(app.cloudSpace, capByList, Math.round(H * 0.52)));
+  }
+
+  const sum = needs.reduce((a, b) => a + b, 0);
+  const shares = sum <= avail
+    ? needs.slice()
+    : needs.map((n) => Math.max(44, Math.round((n / sum) * avail)));
+
+  // 拖过比例（云区比内容高）时，把多出来的高度补给最高的那朵，
+  // 别在云区底部留一块空白
+  if (sum < avail) {
+    let tallest = 0;
+    for (let i = 1; i < needs.length; i++) if (needs[i] > needs[tallest]) tallest = i;
+    shares[tallest] += avail - sum;
+  }
+
+  // 关掉的栏（只剩标题行）不再参与高度竞争
+  panes.forEach((p, i) => {
+    p.style.flex = '0 0 auto';
+    p.style.height = `${shares[i]}px`;
+  });
+}
+
 async function loadCloudSpace() {
   let saved = null;
   try {
@@ -1431,6 +1495,7 @@ function bindCloudSplit() {
     const h = Math.max(96, Math.min(drag.h + (e.clientY - drag.y), H - 160));
     app.cloudSpace = Math.round(h);
     applyCloudSpace(app.cloudSpace);
+    scheduleCloudLayout();
   });
   const end = async () => {
     if (!drag) return;
@@ -1450,7 +1515,10 @@ function bindCloudSplit() {
     applyCloudSpace(defaultCloudSpace());
     toast('已恢复默认比例');
   });
-  window.addEventListener('resize', refreshCloudSpace);
+  window.addEventListener('resize', () => {
+    refreshCloudSpace();
+    scheduleCloudLayout();
+  });
   applyCloudSpace(app.cloudSpace);
   refreshCloudSpace();
 }

@@ -1870,6 +1870,18 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pc.includes('@media (max-height: 1100px) {') && pc.includes('.cloud .tag { font-size: 11px;'), 'T161h 矮屏云里 chip 自动 11px');
   ok(pc.includes('.cloud-area .dir-pane.off { flex: 0 0 auto; }'), 'T161i 目录栏关掉时只留标题行');
 }
+
+// T162：两朵云按内容需求分配高度，别固定 1:1
+{
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  ok(pn.includes('function layoutClouds()') && pn.includes("const head = p.querySelector('.pane-head');"), 'T162a 按 标题行+scrollHeight 量每朵云的自然高度');
+  ok(pn.includes('needs.map((n) => Math.max(44, Math.round((n / sum) * avail)))'), 'T162b 超出预算时按需求比例分配（短的那朵只拿自己需要的）');
+  ok(pn.includes('if (sum < avail) {') && pn.includes('shares[tallest] += avail - sum;'), 'T162c 有富余时补给最高的那朵，云区底部不留空白');
+  ok(pn.includes('avail = Math.min(needs.reduce((a, b) => a + b, 0), capByList);'), 'T162d 没拖过时云区收缩到内容合计（上限仍是留 6 行）');
+  ok(pn.includes('function scheduleCloudLayout()') && pn.includes('requestAnimationFrame'), 'T162e 渲染后合并到下一帧重排，避免抖动');
+  ok(pn.includes('applyCloudSpace(app.cloudSpace);\n    scheduleCloudLayout();'), 'T162f 拖动时不只改总高，也重排两朵云');
+  ok(!pn.includes('flex: 1 1 0; min-height: 0; overflow: hidden; }\n.cloud-area .pane'), 'T162g 不再靠 CSS 平分两朵云');
+}
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);
