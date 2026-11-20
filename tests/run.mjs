@@ -1851,6 +1851,25 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(bm.includes('if (last && a <= last[1]) last[1] = Math.max(last[1], b);'), 'T160e 多个词的重叠区间会合并');
   ok(sc.includes('.bm-hit { color: var(--accent); font-weight: 600; }'), 'T160f 命中词样式');
 }
+
+// T161：云区定高（自适应 + 可拖）、矮屏 chip 小一档
+{
+  const html = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  ok(html.includes('id="cloudArea"') && html.includes('id="cloudSplit"'), 'T161a 两朵云包进 cloud-area，后面跟分隔条');
+  const areaAt = html.indexOf('<div id="cloudArea" class="cloud-area">');
+  const dirAt = html.indexOf('id="dirCloud"');
+  const splitAt = html.indexOf('<div id="cloudSplit"');
+  ok(areaAt > -1 && dirAt > areaAt && splitAt > dirAt, 'T161b 云区把两朵云整体包住，分隔条在云区外');
+  ok(pc.includes('.cloud-area {') && pc.includes('height: var(--cloud-space, 44vh);'), 'T161c 云区高度走 CSS 变量');
+  ok(pc.includes('.cloud-area .pane { flex: 1 1 0; min-height: 0; overflow: hidden; }'), 'T161d 两朵云在云区里对半分并可滚动');
+  ok(pn.includes('function defaultCloudSpace()') && pn.includes('estimateRowHeight() * 6'), 'T161e 自动值按"列表至少 6 行"算');
+  ok(pn.includes("const CLOUD_SPACE_KEY = 'panel.cloudSpace';") && pn.includes('chrome.storage.local.set({ [CLOUD_SPACE_KEY]: app.cloudSpace })'), 'T161f 拖动比例存本机');
+  ok(pn.includes("split.addEventListener('dblclick'") && pn.includes("toast('已恢复默认比例')"), 'T161g 双击恢复默认');
+  ok(pc.includes('@media (max-height: 1100px) {') && pc.includes('.cloud .tag { font-size: 11px;'), 'T161h 矮屏云里 chip 自动 11px');
+  ok(pc.includes('.cloud-area .dir-pane.off { flex: 0 0 auto; }'), 'T161i 目录栏关掉时只留标题行');
+}
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);

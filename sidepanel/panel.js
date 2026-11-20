@@ -37,6 +37,7 @@ const app = {
   pageLimit: 1000,      // 一次取多少条（滚到底自动往上加 1000）
   pendingLoad: false,   // 上一页被截断，列表末尾还有没取完的
   loadingMore: false,   // 正在自动加载下一页（防重复触发）
+  cloudSpace: null,     // 云区高度（px）：null = 按视口自动算
   grpCollapsed: new Set(), // 折叠的组（会话内有效，不落盘）
 };
 
@@ -66,6 +67,8 @@ chrome.runtime.onMessage.addListener((m) => {
 async function boot() {
   bindSplitters();
   await loadDensity();
+  await loadCloudSpace();
+  bindCloudSplit();
   await loadGroup();
   app.allRows = null; // app:changed 会重新 boot，全量清单跟着重建
   app.foldersTree = null;
@@ -136,6 +139,7 @@ function bind() {
     const i = DENSITY.indexOf(app.density);
     app.density = DENSITY[(i + 1) % DENSITY.length];
     applyDensity();
+    refreshCloudSpace();
     chrome.storage.local.set({ 'panel.density': app.density });
   });
   let typing = null;
@@ -1352,6 +1356,104 @@ function askTrashSetup() {
 // ---------------------------------------------------------------- 补全
 
 // ---------------------------------------------------------------- 行密度
+
+const CLOUD_SPACE_KEY = 'panel.cloudSpace';
+
+/** 列表行的大致高度：用来算"至少要给列表留几行" */
+function estimateRowHeight() {
+  if (app.density === 'compact') return 38;
+  if (app.density === 'ultra') return 32;
+  return 46;
+}
+
+/** 自动值：视口高度 - 固定件 - 6 行列表，再夹在 [96px, 52% 视口] 之间 */
+function defaultCloudSpace() {
+  const area = $('#cloudArea');
+  const list = $('#list');
+  const split = $('#cloudSplit');
+  const H = window.innerHeight;
+  if (!area || !list) return Math.round(H * 0.44);
+  const chrome = H - area.offsetHeight - list.offsetHeight - (split ? split.offsetHeight : 0);
+  const want = H - Math.max(0, chrome) - estimateRowHeight() * 6;
+  return Math.max(96, Math.min(Math.round(want), Math.round(H * 0.52)));
+}
+
+/** 应用高度：px 为 null 就走自动 */
+function applyCloudSpace(px) {
+  const area = $('#cloudArea');
+  if (!area) return;
+  if (px == null) area.style.removeProperty('--cloud-space');
+  else area.style.setProperty('--cloud-space', `${Math.round(px)}px`);
+}
+
+/** 窗口尺寸或行密度变了：没用过拖动的就重算，用过就只夹一下范围 */
+function refreshCloudSpace() {
+  const H = window.innerHeight;
+  if (app.cloudSpace == null) {
+    applyCloudSpace(defaultCloudSpace());
+    return;
+  }
+  const lo = 96;
+  const hi = Math.max(lo, H - 160);
+  app.cloudSpace = Math.max(lo, Math.min(app.cloudSpace, hi));
+  applyCloudSpace(app.cloudSpace);
+}
+
+async function loadCloudSpace() {
+  let saved = null;
+  try {
+    const o = await chrome.storage.local.get(CLOUD_SPACE_KEY);
+    const v = o && o[CLOUD_SPACE_KEY];
+    if (typeof v === 'number' && v > 0) saved = v;
+  } catch {}
+  app.cloudSpace = saved;
+  applyCloudSpace(app.cloudSpace);
+}
+
+/** 云区与列表之间的分隔条：拖动改比例、双击恢复自动 */
+function bindCloudSplit() {
+  const split = $('#cloudSplit');
+  const area = $('#cloudArea');
+  if (!split || !area) return;
+  let drag = null;
+
+  split.addEventListener('pointerdown', (e) => {
+    drag = { y: e.clientY, h: area.offsetHeight };
+    split.classList.add('dragging');
+    try {
+      split.setPointerCapture(e.pointerId);
+    } catch {}
+    e.preventDefault();
+  });
+  split.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const H = window.innerHeight;
+    const h = Math.max(96, Math.min(drag.h + (e.clientY - drag.y), H - 160));
+    app.cloudSpace = Math.round(h);
+    applyCloudSpace(app.cloudSpace);
+  });
+  const end = async () => {
+    if (!drag) return;
+    drag = null;
+    split.classList.remove('dragging');
+    try {
+      await chrome.storage.local.set({ [CLOUD_SPACE_KEY]: app.cloudSpace });
+    } catch {}
+  };
+  split.addEventListener('pointerup', end);
+  split.addEventListener('pointercancel', end);
+  split.addEventListener('dblclick', async () => {
+    app.cloudSpace = null;
+    try {
+      await chrome.storage.local.remove(CLOUD_SPACE_KEY);
+    } catch {}
+    applyCloudSpace(defaultCloudSpace());
+    toast('已恢复默认比例');
+  });
+  window.addEventListener('resize', refreshCloudSpace);
+  applyCloudSpace(app.cloudSpace);
+  refreshCloudSpace();
+}
 
 const DENSITY = ['normal', 'compact', 'ultra'];
 const DENSITY_LABEL = { normal: '标准', compact: '紧凑', ultra: '极简' };

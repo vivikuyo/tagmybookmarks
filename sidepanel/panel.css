@@ -124,6 +124,35 @@ body {
 .tags-pane { border-bottom: 1px solid var(--line); }
 .list-pane { flex: 1 1 auto; min-height: 0; }
 
+/* 两朵云装进一个可定高的区域：默认按视口算出"列表至少 6 行"后剩下的部分，
+   也可以拖下面的分隔条自己改比例；云内部自己滚动，标签再多也顶不走列表 */
+.cloud-area {
+  flex: 0 0 auto;
+  height: var(--cloud-space, 44vh);
+  max-height: calc(100vh - 200px);
+  min-height: 88px;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.cloud-area .pane { flex: 1 1 0; min-height: 0; overflow: hidden; }
+.cloud-area .cloud { flex: 1 1 auto; min-height: 0; }
+
+.cloud-split {
+  flex: 0 0 7px; position: relative; cursor: row-resize;
+  background: transparent; touch-action: none;
+}
+.cloud-split::before {
+  content: ''; position: absolute; left: 10px; right: 10px; top: 3px; height: 1px;
+  background: var(--line); transition: background .12s ease, height .12s ease;
+}
+.cloud-split:hover::before, .cloud-split.dragging::before { background: var(--accent); height: 2px; top: 2px; }
+
+/* 矮屏（约 1080p 不缩放的窗口）：云里 chip 自动小一档，同面积能多看几个标签 */
+@media (max-height: 1100px) {
+  .cloud .tag { font-size: 11px; min-height: 18px; padding: 0 7px; gap: 3px; }
+  .cloud .tag .c { font-size: 9px; }
+}
+
 /* 行密度三档：只覆写度量，不隐藏任何信息（标签再多也是换行，不截断） */
 body[data-density="compact"] .row { padding: 3px 6px 2px; }
 body[data-density="compact"] .row .pick { margin: 0 0 0; }
@@ -373,6 +402,8 @@ body[data-density="ultra"] .grp .grp-n { font-size: 10px; }
 
 .dir-pane { border-top: 1px solid var(--line); }
 .dir-pane.off .dir-cloud { display: none; }
+/* 目录栏关掉时只留标题行（开关还得看得见），不要占云区的一半空高 */
+.cloud-area .dir-pane.off { flex: 0 0 auto; }
 .pane-sub { color: var(--text-dim); font-weight: 400; font-size: 11px; }
 .dir-cloud { padding: 8px 10px 10px; overflow-y: auto; }
 
