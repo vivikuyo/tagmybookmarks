@@ -129,7 +129,6 @@ body {
 .cloud-area {
   flex: 0 0 auto;
   height: var(--cloud-space, 44vh);
-  max-height: calc(100vh - 200px);
   min-height: 88px;
   overflow: hidden;
   display: flex; flex-direction: column;

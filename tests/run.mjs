@@ -1863,25 +1863,29 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const splitAt = html.indexOf('<div id="cloudSplit"');
   ok(areaAt > -1 && dirAt > areaAt && splitAt > dirAt, 'T161b 云区把两朵云整体包住，分隔条在云区外');
   ok(pc.includes('.cloud-area {') && pc.includes('height: var(--cloud-space, 44vh);'), 'T161c 云区高度走 CSS 变量');
-  ok(pc.includes('.cloud-area .pane { flex: 1 1 0; min-height: 0; overflow: hidden; }'), 'T161d 两朵云在云区里对半分并可滚动');
-  ok(pn.includes('function defaultCloudSpace()') && pn.includes('estimateRowHeight() * 6'), 'T161e 自动值按"列表至少 6 行"算');
+  ok(pc.includes('.cloud-area .pane { flex: 1 1 0; min-height: 0; overflow: hidden; }'), 'T161d 两朵云在云区里可滚动（具体高度由 JS 分，不再 CSS 对半）');
+  ok(pn.includes('Math.round(rowH * 6)') && pn.includes('estimateRowHeight()'), 'T161e 列表 6 行这条底线还在用');
   ok(pn.includes("const CLOUD_SPACE_KEY = 'panel.cloudSpace';") && pn.includes('chrome.storage.local.set({ [CLOUD_SPACE_KEY]: app.cloudSpace })'), 'T161f 拖动比例存本机');
   ok(pn.includes("split.addEventListener('dblclick'") && pn.includes("toast('已恢复默认比例')"), 'T161g 双击恢复默认');
   ok(pc.includes('@media (max-height: 1100px) {') && pc.includes('.cloud .tag { font-size: 11px;'), 'T161h 矮屏云里 chip 自动 11px');
   ok(pc.includes('.cloud-area .dir-pane.off { flex: 0 0 auto; }'), 'T161i 目录栏关掉时只留标题行');
 }
 
-// T162：两朵云按内容需求分配高度，别固定 1:1
+// T162：云区空间分配——列表 6 行保底 / 云自适应 / 瀑布式收缩
 {
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   ok(pn.includes('function layoutClouds()') && pn.includes("const h = (head ? head.offsetHeight : 0) + (cloud ? cloud.scrollHeight : 0) + 2;"), 'T162a 按 标题行+scrollHeight 量每朵云的自然高度');
-  ok(pn.includes("area.style.setProperty('--cloud-space', `${Math.round(target)}px`);"), 'T162b 云区总高是唯一真值：先定总高再按需求分配');
-  ok(pn.includes('if (target >= needSum) {') && pn.includes('shares[tallest] += target - needSum;'), 'T162c 富余补给最高的那朵，云区底部不留空白');
-  ok(pn.includes("const target = Math.max(88, Math.min(app.cloudSpace == null ? needSum : app.cloudSpace, cap));"), 'T162d 没拖过就贴内容（内容少把空间还给列表），拖过就听用户的');
-  ok(pn.includes('let diff = Math.round(target) - shares.reduce((a, b) => a + b, 0);'), 'T162e 取整误差补齐，两朵云加起来正好等于云区高度（否则底部冒白条）');
-  ok(pn.includes("if (p.classList.contains('off')) {") && pn.includes("p.style.height = '';"), 'T162f 关掉的栏不参与竞争、不被拉高');
-  ok(pn.includes('function scheduleCloudLayout()') && pn.includes('requestAnimationFrame'), 'T162g 渲染后合并到下一帧重排，避免抖动');
-  ok(pn.includes('scheduleCloudLayout();\n    toast('), 'T162h 双击恢复默认后也重排');
+  ok(pn.includes("const firstRow = list ? list.querySelector('li') : null;") && pn.includes('H - chrome - Math.round(rowH * 6) - 2'), 'T162b 硬底线：列表至少能看见 6 条书签（行高优先量真实第一行）');
+  ok(pn.includes('const ceiling = Math.min(capByList, app.cloudSpace == null ? Infinity : app.cloudSpace);') && pn.includes('const target = Math.max(88, Math.min(needSum, ceiling));'), 'T162c 云区随标签数量自适应（内容少就缩回去，多则到天花板为止）');
+  ok(pn.includes("area.style.setProperty('--cloud-space', `${Math.round(target)}px`);"), 'T162d 云区总高是唯一真值，先定总高再分两朵');
+  ok(pn.includes('function allocateCloudHeights(needs, budget)') && pn.includes('const fair = Math.floor(Math.max(0, left) / Math.max(1, rem));'), 'T162e 瀑布式分配：短的先拿够自己需要的，余量留给下一朵（不同时缩）');
+  ok(pn.includes('Math.max(Math.min(needs[i], fair), Math.min(needs[i], 60))'), 'T162f 每朵 60px 保底（标题行 + 两行 chip）');
+  ok(pn.includes('let over = out.reduce((a, b) => a + b, 0) - budget;'), 'T162g 保底吃穿预算时从最高的那朵往回夺，加总不会超');
+  ok(pn.includes("if (p.classList.contains('off')) {") && pn.includes("p.style.height = '';"), 'T162h 关掉的栏不参与竞争、不被拉高');
+  ok(pn.includes('function scheduleCloudLayout()') && pn.includes('requestAnimationFrame'), 'T162i 渲染后合并到下一帧重排，避免抖动');
+  ok(pn.includes('scheduleCloudLayout();\n    toast('), 'T162j 双击恢复默认后也重排');
+  ok(!pn.includes('defaultCloudSpace'), 'T162k 去掉旧的 44vh/52% 双口径默认值，只有一条算法');
+  ok(pn.includes('app.cloudSpace = Math.round(h);\n    scheduleCloudLayout();'), 'T162l 拖动只调天花板，不写死总高（不会凭空留白）');
 }
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {

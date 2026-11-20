@@ -1368,18 +1368,6 @@ function estimateRowHeight() {
   return 46;
 }
 
-/** 自动值：视口高度 - 固定件 - 6 行列表，再夹在 [96px, 52% 视口] 之间 */
-function defaultCloudSpace() {
-  const area = $('#cloudArea');
-  const list = $('#list');
-  const split = $('#cloudSplit');
-  const H = window.innerHeight;
-  if (!area || !list) return Math.round(H * 0.44);
-  const chrome = H - area.offsetHeight - list.offsetHeight - (split ? split.offsetHeight : 0);
-  const want = H - Math.max(0, chrome) - estimateRowHeight() * 6;
-  return Math.max(96, Math.min(Math.round(want), Math.round(H * 0.52)));
-}
-
 /** 应用高度：px 为 null 就走自动 */
 function applyCloudSpace(px) {
   const area = $('#cloudArea');
@@ -1388,17 +1376,14 @@ function applyCloudSpace(px) {
   else area.style.setProperty('--cloud-space', `${Math.round(px)}px`);
 }
 
-/** 窗口尺寸或行密度变了：没用过拖动的就重算，用过就只夹一下范围 */
+/** 窗口尺寸或行密度变了：只夹一下用户设的天花板，重排交给 layoutClouds */
 function refreshCloudSpace() {
-  const H = window.innerHeight;
-  if (app.cloudSpace == null) {
-    applyCloudSpace(defaultCloudSpace());
-    return;
+  if (app.cloudSpace != null) {
+    const lo = 96;
+    const hi = Math.max(lo, window.innerHeight - 160);
+    app.cloudSpace = Math.max(lo, Math.min(app.cloudSpace, hi));
   }
-  const lo = 96;
-  const hi = Math.max(lo, H - 160);
-  app.cloudSpace = Math.max(lo, Math.min(app.cloudSpace, hi));
-  applyCloudSpace(app.cloudSpace);
+  scheduleCloudLayout();
 }
 
 /**
@@ -1414,6 +1399,36 @@ function scheduleCloudLayout() {
     cloudLayoutTick = null;
     layoutClouds();
   });
+}
+
+/**
+ * 按"瀑布"分配两朵云的高度：先把预算按剩余云的均分额度给最省的那朵，
+ * 省下来的余量全部留给下一朵——短的那朵不会被长的那朵连累着一起缩。
+ * 每朵还有一个 60px 保底（标题行 + 两行 chip），免得被削成光秃秃一条标题。
+ */
+function allocateCloudHeights(needs, budget) {
+  const order = needs.map((_, i) => i).sort((a, b) => needs[a] - needs[b]);
+  const out = new Array(needs.length).fill(0);
+  let left = budget;
+  let rem = needs.length;
+  for (const i of order) {
+    const fair = Math.floor(Math.max(0, left) / Math.max(1, rem));
+    out[i] = Math.max(Math.min(needs[i], fair), Math.min(needs[i], 60));
+    left -= out[i];
+    rem -= 1;
+  }
+  // 保底把预算吃穿了：从最高的那朵身上往回夺（最低只夺到 44px）
+  let over = out.reduce((a, b) => a + b, 0) - budget;
+  while (over > 0) {
+    let t = 0;
+    for (let i = 1; i < out.length; i++) if (out[i] > out[t]) t = i;
+    const floor = Math.min(needs[t], 44);
+    const take = Math.min(over, Math.max(0, out[t] - floor));
+    if (take <= 0) break;
+    out[t] -= take;
+    over -= take;
+  }
+  return out;
 }
 
 function layoutClouds() {
@@ -1445,35 +1460,22 @@ function layoutClouds() {
   const H = window.innerHeight;
   const list = $('#list');
   const chrome = Math.max(0, H - area.offsetHeight - (list ? list.offsetHeight : 0));
-  const cap = Math.max(96, Math.min(H - chrome - estimateRowHeight() * 6, H - 200));
+  // 硬底线：列表一定能看到 6 条书签，云区只能吃剩下的。
+  // 行高优先量真实的第一行（清单/目录两种行高差挺多），量不到再退回按密度估算
+  const firstRow = list ? list.querySelector('li') : null;
+  const rowH = firstRow && firstRow.getBoundingClientRect().height > 20
+    ? firstRow.getBoundingClientRect().height
+    : estimateRowHeight();
+  const capByList = Math.max(96, H - chrome - Math.round(rowH * 6) - 2);
 
-  // 目标总高：没拖过就贴内容（内容少就把空间还给列表），拖过就听用户的
-  const target = Math.max(88, Math.min(app.cloudSpace == null ? needSum : app.cloudSpace, cap));
+  // 云区总高 = 内容需要多少就多少（自适应），但不超过"列表 6 行"这条线。
+  // 拖动只改这条线的高低（天花板），不会凭空拉出一块空白。
+  const ceiling = Math.min(capByList, app.cloudSpace == null ? Infinity : app.cloudSpace);
+  const target = Math.max(88, Math.min(needSum, ceiling));
 
-  // 先定云区总高——这是唯一真值，两朵云的高度必须刚好加满它
   area.style.setProperty('--cloud-space', `${Math.round(target)}px`);
 
-  let shares;
-  if (target >= needSum) {
-    shares = needs.slice();
-    let tallest = 0;
-    for (let i = 1; i < needs.length; i++) if (needs[i] > needs[tallest]) tallest = i;
-    shares[tallest] += target - needSum; // 富余补给最高的那朵，云区底部不留空白
-  } else {
-    shares = needs.map((n) => Math.max(44, Math.floor((n / needSum) * target)));
-    // 取整误差补齐，保证和总高严丝合缝（否则底部会冒出一条空白）
-    let diff = Math.round(target) - shares.reduce((a, b) => a + b, 0);
-    let tallest = 0;
-    for (let i = 1; i < shares.length; i++) if (shares[i] > shares[tallest]) tallest = i;
-    if (diff > 0) shares[tallest] += diff;
-    else if (diff < 0) {
-      for (let i = 0; i < shares.length && diff < 0; i++) {
-        const take = Math.min(shares[i] - 44, -diff);
-        if (take > 0) { shares[i] -= take; diff += take; }
-      }
-    }
-  }
-
+  const shares = allocateCloudHeights(needs, Math.round(target));
   live.forEach((p, i) => {
     p.style.flex = '0 0 auto';
     p.style.height = `${shares[i]}px`;
@@ -1511,7 +1513,6 @@ function bindCloudSplit() {
     const H = window.innerHeight;
     const h = Math.max(96, Math.min(drag.h + (e.clientY - drag.y), H - 160));
     app.cloudSpace = Math.round(h);
-    applyCloudSpace(app.cloudSpace);
     scheduleCloudLayout();
   });
   const end = async () => {
@@ -1529,7 +1530,6 @@ function bindCloudSplit() {
     try {
       await chrome.storage.local.remove(CLOUD_SPACE_KEY);
     } catch {}
-    applyCloudSpace(defaultCloudSpace());
     scheduleCloudLayout();
     toast('已恢复默认比例');
   });
