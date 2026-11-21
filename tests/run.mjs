@@ -1732,6 +1732,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pc.includes('.grp.grp-hit {') && pc.includes('border-left: 2px solid var(--accent);'), 'T151f 命中目录用强调色竖条');
   ok(pn.includes('if (app.expr && data && data.items && data.items.length)'), 'T151g 空查询不算命中（否则满屏都是蓝组头）');
   ok(pn.includes('if (app.hitFolders.size > 8) app.hitFolders.clear();'), 'T151h 命中分散超过 8 个目录就整片不亮');
+  ok(pn.includes('const isHit = !collapsed && hasRows && !!(app.hitFolders'), 'T151i 收起的目录即使有命中也不变色（展开才亮）');
 }
 
 

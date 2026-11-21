@@ -806,7 +806,9 @@ function renderFolderHead(node) {
   // 只有「展开且确实有内容」的目录才亮；收起的、空壳目录保持中性灰
   const hasRows = ((app.rowsByParent && app.rowsByParent.get(id)) || []).length > 0;
   const open = !collapsed && ((node.children || []).length > 0 || hasRows);
-  const isHit = !!(app.hitFolders && app.hitFolders.has(id));
+  // 只有"真的展开、且自己这一层就有命中行"的目录才亮强调色：
+  // 收起状态下变色会让人误以为它被展开了
+  const isHit = !collapsed && hasRows && !!(app.hitFolders && app.hitFolders.has(id));
   head.className = 'grp'
     + (collapsed ? ' collapsed' : '')
     + (open ? ' grp-open' : '')
