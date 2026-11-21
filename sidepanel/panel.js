@@ -1447,13 +1447,15 @@ function layoutClouds() {
   });
   if (!live.length) return;
 
-  // 每朵云"自然需要的高度" = 标题行 + 云内容（scrollHeight 是内容高度，不受被压扁影响）
-  const needs = live.map((p) => {
-    const head = p.querySelector('.pane-head');
-    const cloud = p.querySelector('.cloud');
-    const h = (head ? head.offsetHeight : 0) + (cloud ? cloud.scrollHeight : 0) + 2;
-    return Math.max(44, h);
+  // 量之前先把两朵云解锁到自然高度再量。
+  // scrollHeight 至少等于元素当前高度——不解锁的话"内容变少"永远量不出来，
+  // 云区就一直停在旧的大高度，底部留一块空白。
+  live.forEach((p) => {
+    p.style.flex = '0 0 auto';
+    p.style.height = 'auto';
   });
+  void area.offsetHeight; // 强制一次重排，让 auto 高度落地
+  const needs = live.map((p) => Math.max(44, Math.round(p.getBoundingClientRect().height)));
   const needSum = needs.reduce((a, b) => a + b, 0);
 
   // 云区 + 列表之外的固定件高度（和云区多高无关，是不变量）

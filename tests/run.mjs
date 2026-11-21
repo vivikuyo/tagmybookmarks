@@ -1874,7 +1874,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
 // T162：云区空间分配——列表 6 行保底 / 云自适应 / 瀑布式收缩
 {
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
-  ok(pn.includes('function layoutClouds()') && pn.includes("const h = (head ? head.offsetHeight : 0) + (cloud ? cloud.scrollHeight : 0) + 2;"), 'T162a 按 标题行+scrollHeight 量每朵云的自然高度');
+  ok(pn.includes('function layoutClouds()') && pn.includes("p.style.height = 'auto';") && pn.includes('void area.offsetHeight;'), 'T162a 量高度前先解锁到自然高度（否则内容变少量不出，底部留白）');
   ok(pn.includes("const firstRow = list ? list.querySelector('li') : null;") && pn.includes('H - chrome - Math.round(rowH * 6) - 2'), 'T162b 硬底线：列表至少能看见 6 条书签（行高优先量真实第一行）');
   ok(pn.includes('const ceiling = Math.min(capByList, app.cloudSpace == null ? Infinity : app.cloudSpace);') && pn.includes('const target = Math.max(88, Math.min(needSum, ceiling));'), 'T162c 云区随标签数量自适应（内容少就缩回去，多则到天花板为止）');
   ok(pn.includes("area.style.setProperty('--cloud-space', `${Math.round(target)}px`);"), 'T162d 云区总高是唯一真值，先定总高再分两朵');
@@ -1886,6 +1886,16 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes('scheduleCloudLayout();\n    toast('), 'T162j 双击恢复默认后也重排');
   ok(!pn.includes('defaultCloudSpace'), 'T162k 去掉旧的 44vh/52% 双口径默认值，只有一条算法');
   ok(pn.includes('app.cloudSpace = Math.round(h);\n    scheduleCloudLayout();'), 'T162l 拖动只调天花板，不写死总高（不会凭空留白）');
+}
+
+// T163：矮屏密集化——标题栏收窄、云内 chip 间距收紧
+{
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  ok(pc.includes('.bar {') && pc.includes('padding: 3px 8px;'), 'T163a 顶部标题栏收窄（上下 3px）');
+  ok(pc.includes('.icon {') && pc.includes('width: 22px; height: 22px;'), 'T163b 顶栏图标缩到 22px');
+  ok(pc.includes('display: flex; flex-wrap: wrap; gap: 3px 5px;'), 'T163c 云里 chip 上下 3px / 左右 5px');
+  ok(pc.includes('padding: 1px 10px 6px;'), 'T163d 云容器底部留白收窄');
+  ok(pc.includes('padding: 3px 10px 2px;'), 'T163e 云标题行上下收窄');
 }
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
