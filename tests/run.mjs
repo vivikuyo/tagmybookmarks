@@ -36,7 +36,7 @@ import {
 import { colorFor, resolveColorValue, hashIndex } from '../lib/palette.js';
 import { planReplaceTags, summarizePlan, validateTagTarget } from '../lib/ops.js';
 import { scan as diagScan, planFix, issueMeta } from '../lib/diagnose.js';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 let pass = 0;
 const failures = [];
@@ -1926,6 +1926,19 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const f = ph.indexOf('id="bulkFloat"');
   ok(f > 0 && ph.indexOf('id="tagInput"') > f && ph.indexOf('data-act="add"') > ph.indexOf('id="tagInput"') && ph.indexOf('data-act="untag"') > ph.indexOf('data-act="add"'), 'T164k 输入框和"加"放进勾选后才出现的动作行，排在"摘"之前');
   ok(pc.includes('.bulk-float .bulk-tagwrap { flex: 1 1 60px; min-width: 0; }') && pc.includes('.bulk input[type="text"] {\n  flex: 1 1 60px; min-width: 0;'), 'T164l 输入框最小宽度归零，占位文案允许被截断');
+}
+
+// T166：概览页的求打赏区块（两张本地静态收款码，不联网、不换功能）
+{
+  const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  const sc = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  const inView = sp.indexOf('id="view-overview"') < sp.indexOf('id="rewardSec"')
+    && sp.indexOf('id="rewardSec"') < sp.indexOf('id="view-tags"');
+  ok(inView, 'T166a 求打赏只在概览视图内（其他页不出现）');
+  ok(sp.includes('src="assets/reward-wechat.png"') && sp.includes('src="assets/reward-alipay.png"'), 'T166b 微信 + 支付宝两张码都放上');
+  ok(existsSync(new URL('../space/assets/reward-wechat.png', import.meta.url))
+    && existsSync(new URL('../space/assets/reward-alipay.png', import.meta.url)), 'T166c 两张码是仓库里的本地图片，扩展不因此联网');
+  ok(sc.includes('.reward-code img {') && sc.includes('width: 172px;') && sc.includes('background: #fff;'), 'T166d 码位固定 172px 白底，深浅主题都能扫');
 }
 
 // T165：点 @目录 chip 跳转时优先落在"那个目录里的那一份"（同 URL 多处收藏不再跳错目录）

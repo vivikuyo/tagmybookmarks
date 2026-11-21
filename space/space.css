@@ -502,6 +502,43 @@ textarea:focus { border-color: var(--accent); }
   .cards { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* 概览里的求打赏：两个人一个比一个懒，就别再要求排版了 */
+.reward {
+  margin-top: 30px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.reward-lede {
+  margin: 10px 0 16px;
+  max-width: 760px;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--text-dim);
+}
+.reward-codes { display: flex; gap: 20px; flex-wrap: wrap; }
+.reward-code {
+  margin: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+}
+.reward-code img {
+  width: 172px;
+  display: block;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  transition: border-color .15s ease, transform .15s ease;
+}
+.reward-code a:hover img { border-color: var(--accent); transform: translateY(-1px); }
+.reward-code figcaption { font-size: 11.5px; color: var(--text-dim); }
+.reward-note {
+  margin: 14px 0 0;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--text-dim);
+  opacity: .8;
+}
+
 /* ---------- 别名 ---------- */
 
 .alias-sec {
