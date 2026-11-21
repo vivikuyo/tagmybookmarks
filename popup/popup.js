@@ -283,8 +283,20 @@ $('#btnSpace').addEventListener('click', () => {
 });
 
 $('#btnPanel').addEventListener('click', async () => {
+  // 原生侧边栏必须在当前这个用户手势里直接调 open()。转给后台 SW 会丢手势，
+  // Chrome 会抛 "may only be called in response to a user gesture" 而退化成小窗。
+  if (chrome.sidePanel && chrome.sidePanel.open) {
+    try {
+      const win = await chrome.windows.getCurrent();
+      await chrome.sidePanel.open({ windowId: win.id });
+      window.close();
+      return;
+    } catch (e) {
+      console.warn('[TagMyBookmarks] 本页直接开侧栏失败，交给后台兜底', e);
+    }
+  }
   try {
-    // 原生侧边栏优先，Vivaldi 等没有 sidePanel 宿主的浏览器由后台改成独立小窗
+    // Vivaldi 等没有 sidePanel 宿主的浏览器走这里，后台改开独立小窗
     await send({ type: 'panel:open' });
   } catch (e) {
     toast(e.message || '打开面板失败', true);

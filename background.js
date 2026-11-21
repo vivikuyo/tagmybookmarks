@@ -106,9 +106,11 @@ async function setPanelBehavior() {
 boot();
 
 chrome.runtime.onInstalled.addListener(() => {
+  ensureActionMenu();
   boot();
 });
 chrome.runtime.onStartup.addListener(() => {
+  ensureActionMenu();
   boot();
 });
 
@@ -2148,6 +2150,34 @@ async function openPanelBestEffort() {
   }
   await openPanelWindow();
   return 'window';
+}
+
+// 工具栏图标的右键菜单：给侧栏一个一眼能找到的入口
+function ensureActionMenu() {
+  if (!chrome.contextMenus) return;
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: 'panel-open',
+      title: '在侧边栏中打开',
+      contexts: ['action'],
+    });
+    chrome.contextMenus.create({
+      id: 'space-open',
+      title: '打开管理台',
+      contexts: ['action'],
+    });
+  });
+}
+
+if (chrome.contextMenus) {
+  chrome.contextMenus.onClicked.addListener(async (info) => {
+    try {
+      if (info.menuItemId === 'panel-open') await openPanelBestEffort();
+      else if (info.menuItemId === 'space-open') await chrome.tabs.create({ url: chrome.runtime.getURL(SPACE_PAGE) });
+    } catch (e) {
+      console.error('[TagMyBookmarks] 菜单动作失败', e);
+    }
+  });
 }
 
 chrome.commands.onCommand.addListener(async (cmd) => {

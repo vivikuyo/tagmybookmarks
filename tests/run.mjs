@@ -1963,6 +1963,17 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(sj.includes("if (footCfg) footCfg.hidden = name !== 'config';"), 'T168c 切视图时按 name 开关（只有 config 显示）');
 }
 
+// T169：侧边栏入口必须能在 Chrome 里真正打开（手势 + 右键菜单）
+{
+  const mf = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
+  const pp = readFileSync(new URL('../popup/popup.js', import.meta.url), 'utf8');
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  ok(mf.side_panel && mf.side_panel.default_path === 'sidepanel/panel.html', 'T169a manifest 声明了 side_panel');
+  ok(mf.permissions.includes('sidePanel') && mf.permissions.includes('contextMenus'), 'T169b sidePanel + contextMenus 权限都在');
+  ok(pp.includes('chrome.sidePanel.open({ windowId: win.id })'), 'T169c 弹窗在用户手势里直接开侧栏（不经后台转发）');
+  ok(bg.includes("contexts: ['action']") && bg.includes("'在侧边栏中打开'"), 'T169d 工具栏图标右键有侧栏入口');
+}
+
 // T165：点 @目录 chip 跳转时优先落在"那个目录里的那一份"（同 URL 多处收藏不再跳错目录）
 {
   const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
