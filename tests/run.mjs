@@ -1876,13 +1876,14 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   ok(pn.includes('function layoutClouds()') && pn.includes("p.style.height = 'auto';") && pn.includes('void area.offsetHeight;'), 'T162a 量高度前先解锁到自然高度（否则内容变少量不出，底部留白）');
   ok(pn.includes('const rows = Math.max(1, count ? Math.min(want, count) : want);') && pn.includes('reserve += measured[i] || rowH;'), 'T162b 保底高度按真实行逐条累加，行数按数据条数收（不足 N 条就少留）');
-  ok(pn.includes('const capByList = Math.max(96, m.H - m.chrome - m.reserve - 2);') && pn.includes('const target = Math.max(88, Math.min(needSum, capByList));'), 'T162c 云区随标签数量自适应，只受"列表保底行数"约束');
-  ok(pn.includes("area.style.setProperty('--cloud-space', `${Math.round(target)}px`);"), 'T162d 云区总高是唯一真值，先定总高再分两朵');
+  ok(pn.includes('let total = Math.max(88, Math.min(needSum, capByList));') && pn.includes('const capByList = Math.max(96, m.H - m.chrome - m.reserve - 2);'), 'T162c 云区随标签数量自适应，只受"列表保底行数"约束');
+  ok(pn.includes('const over = cloud.scrollHeight - cloud.clientHeight;') && pn.includes('const give = Math.min(over + 1, surplus);'), 'T162c2 第二遍实测：谁在滚就补谁的，不靠测量精确');
+  ok(pn.includes("area.style.setProperty('--cloud-space', `${Math.round(total)}px`);"), 'T162d 云区总高是唯一真值，先定总高再分两朵');
   ok(pn.includes('function allocateCloudHeights(needs, budget)') && pn.includes('const fair = Math.floor(Math.max(0, left) / Math.max(1, rem));'), 'T162e 瀑布式分配：短的先拿够自己需要的，余量留给下一朵（不同时缩）');
   ok(pn.includes('Math.max(Math.min(needs[i], fair), Math.min(needs[i], 60))'), 'T162f 每朵 60px 保底（标题行 + 两行 chip）');
   ok(pn.includes('let over = out.reduce((a, b) => a + b, 0) - budget;'), 'T162g 保底吃穿预算时从最高的那朵往回夺，加总不会超');
   ok(pn.includes("if (p.classList.contains('off')) {") && pn.includes("p.style.height = '';"), 'T162h 关掉的栏不参与竞争、不被拉高');
-  ok(pn.includes('const LIST_ROWS_MIN = 6;'), 'T162m 保底 6 行是硬底线，拖动只能给列表多加行');
+  ok(pn.includes('const LIST_ROWS_DEFAULT = 6;') && pn.includes('const LIST_ROWS_MIN = 2;'), 'T162m 默认/复位都是 6 行，拖动可临时压到 2 行');
   ok(pn.includes('function scheduleCloudLayout()') && pn.includes('requestAnimationFrame'), 'T162i 渲染后合并到下一帧重排，避免抖动');
   ok(pn.includes('scheduleCloudLayout();\n    toast('), 'T162j 双击恢复默认后也重排');
   ok(!pn.includes('defaultCloudSpace'), 'T162k 去掉旧的 44vh/52% 双口径默认值，只有一条算法');

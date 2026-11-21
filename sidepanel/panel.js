@@ -1361,7 +1361,7 @@ function askTrashSetup() {
 
 const LIST_ROWS_KEY = 'panel.listRows';
 const LIST_ROWS_DEFAULT = 6;
-const LIST_ROWS_MIN = 6; // 保底 6 行是硬底线：拖动只能让列表多留，绝不少留
+const LIST_ROWS_MIN = 2; // 默认保底 6 行；想临时多给云，拖分隔条可以压到 2 行
 const LIST_ROWS_MAX = 14;
 
 /** 列表行的大致高度：量不到真实行时按密度估 */
@@ -1507,15 +1507,39 @@ function layoutClouds() {
   const capByList = Math.max(96, m.H - m.chrome - m.reserve - 2);
 
   // 云区总高 = 内容需要多少就多少（自适应），不吃满预算也不留空白
-  const target = Math.max(88, Math.min(needSum, capByList));
+  let total = Math.max(88, Math.min(needSum, capByList));
+  const shares = allocateCloudHeights(needs, Math.round(total));
 
-  area.style.setProperty('--cloud-space', `${Math.round(target)}px`);
+  const apply = () => {
+    area.style.setProperty('--cloud-space', `${Math.round(total)}px`);
+    live.forEach((p, i) => {
+      p.style.flex = '0 0 auto';
+      p.style.height = `${shares[i]}px`;
+    });
+  };
+  apply();
+  void area.offsetHeight;
 
-  const shares = allocateCloudHeights(needs, Math.round(target));
-  live.forEach((p, i) => {
-    p.style.flex = '0 0 auto';
-    p.style.height = `${shares[i]}px`;
-  });
+  // 第二遍：测量难免差个半行一行。谁真的在滚（scrollHeight > clientHeight）
+  // 就把还没用掉的预算补给谁，直到不滚为止——不靠"量准"，靠"实测谁缺"。
+  let surplus = Math.round(capByList - total);
+  for (let round = 0; round < 3 && surplus > 2; round++) {
+    let grew = false;
+    for (let i = 0; i < live.length && surplus > 2; i++) {
+      const cloud = live[i].querySelector('.cloud');
+      if (!cloud) continue;
+      const over = cloud.scrollHeight - cloud.clientHeight;
+      if (over <= 2) continue;
+      const give = Math.min(over + 1, surplus);
+      shares[i] += give;
+      total += give;
+      surplus -= give;
+      grew = true;
+      apply();
+      void area.offsetHeight;
+    }
+    if (!grew) break;
+  }
 }
 
 async function loadListRows() {
