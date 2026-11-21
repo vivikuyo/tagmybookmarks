@@ -194,6 +194,9 @@ async function showView(name) {
   document.querySelectorAll('.nav a').forEach((a) => {
     a.classList.toggle('on', a.dataset.view === name);
   });
+  // 页脚第二句只对配置页有用：三个文件存的是全局设置，不是标签本体
+  const footCfg = document.querySelector('#footCfg');
+  if (footCfg) footCfg.hidden = name !== 'config';
   if (name === 'overview') {
     try {
       await refreshOverview();

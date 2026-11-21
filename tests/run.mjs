@@ -1953,6 +1953,16 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(sp.includes('class="reward-src"') && sp.includes('rel="noopener"'), 'T167d 打赏块尾部一行小字，外链带 noopener');
 }
 
+// T168：页脚那句"这三个文件只存全局配置"只在配置页显示，其他页只留通用那句
+{
+  const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  const sj = readFileSync(new URL('../space/space.js', import.meta.url), 'utf8');
+  const foot = sp.slice(sp.indexOf('<footer class="foot">'), sp.indexOf('</footer>'));
+  ok(foot.includes('id="footCfg"') && foot.includes('hidden'), 'T168a 配置专属那句默认收起');
+  ok(foot.includes('标签写在每条书签标题里') && !foot.includes('这里只是给全局配置用的三个文件'), 'T168b 通用那句不再背配置页的解释');
+  ok(sj.includes("if (footCfg) footCfg.hidden = name !== 'config';"), 'T168c 切视图时按 name 开关（只有 config 显示）');
+}
+
 // T165：点 @目录 chip 跳转时优先落在"那个目录里的那一份"（同 URL 多处收藏不再跳错目录）
 {
   const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
