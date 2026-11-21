@@ -1941,6 +1941,18 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(sc.includes('.reward-code img {') && sc.includes('width: 172px;') && sc.includes('background: #fff;'), 'T166d 码位固定 172px 白底，深浅主题都能扫');
 }
 
+// T167：GitHub 入口三处（manifest 官方字段 / 顶栏 / 打赏块尾部），都指同一个仓库
+{
+  const mf = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
+  const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  const REPO = 'https://github.com/vivikuyo/tagmybookmarks';
+  ok(mf.homepage_url === REPO, 'T167a manifest 的 homepage_url 指向仓库（扩展详情页的"主页"）');
+  const links = [...sp.matchAll(/href="(https:\/\/github\.com\/vivikuyo\/tagmybookmarks)"/g)].map((m) => m.index);
+  ok(links.length >= 2, 'T167b 顶栏 + 打赏块尾部都有 GitHub 入口');
+  ok(sp.includes('class="btn ghost" href="https://github.com/vivikuyo/tagmybookmarks"'), 'T167c 顶栏是按钮样式的常驻入口');
+  ok(sp.includes('class="reward-src"') && sp.includes('rel="noopener"'), 'T167d 打赏块尾部一行小字，外链带 noopener');
+}
+
 // T165：点 @目录 chip 跳转时优先落在"那个目录里的那一份"（同 URL 多处收藏不再跳错目录）
 {
   const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
