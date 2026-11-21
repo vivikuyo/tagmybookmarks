@@ -60,12 +60,17 @@
         <button id="tagClear" class="clear" title="清空输入">×</button>
       </span>
       <button class="mini-btn" data-act="add">加</button>
-      <button class="mini-btn" data-act="untag">摘</button>
-      <button class="mini-btn" data-act="clear">清空</button>
-      <button class="mini-btn" data-act="open">打开</button>
-      <button class="mini-btn danger" data-act="delete">删除</button>
     </div>
     <ul id="list" class="list"></ul>
+    <!-- 上下文浮条：勾选了才浮出来，平时完全不占高度 -->
+    <div id="bulkFloat" class="bulk-float" hidden>
+      <span id="floatCount" class="bulk-float-count">已选 0</span>
+      <button class="mini-btn" data-act="untag">摘</button>
+      <button class="mini-btn" data-act="clear">清空标签</button>
+      <button class="mini-btn" data-act="open">打开</button>
+      <button class="mini-btn danger" data-act="delete">删除</button>
+      <button class="bulk-float-x" data-act="unselect" title="取消选择">×</button>
+    </div>
   </section>
 
   <div id="trashAsk" class="trash-ask" hidden>

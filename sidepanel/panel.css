@@ -123,7 +123,30 @@ body {
 
 .pane { display: flex; flex-direction: column; min-height: 0; flex: 0 0 auto; }
 .tags-pane { border-bottom: 1px solid var(--line); }
-.list-pane { flex: 1 1 auto; min-height: 0; }
+.list-pane { flex: 1 1 auto; min-height: 0; position: relative; }
+
+/* 上下文浮条：勾选后浮在列表底部，平时 hidden 不占高度 */
+.bulk-float {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: 10px; z-index: 5;
+  display: flex; align-items: center; gap: 5px;
+  max-width: calc(100% - 16px);
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .16);
+  flex-wrap: wrap;
+}
+.bulk-float-count { font-size: 11px; color: var(--text-dim); white-space: nowrap; padding: 0 2px; }
+.bulk-float-x {
+  width: 22px; height: 22px; border: none; border-radius: 50%;
+  background: transparent; color: var(--text-dim); cursor: pointer; font-size: 15px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.bulk-float-x:hover { background: var(--bg-hover); color: var(--text); }
+/* 浮条压住最后一行时，给列表补一点底部留白 */
+.list-pane.has-sel .list { padding-bottom: 46px; }
 
 /* 两朵云装进一个可定高的区域：默认按视口算出"列表至少 6 行"后剩下的部分，
    也可以拖下面的分隔条自己改比例；云内部自己滚动，标签再多也顶不走列表 */

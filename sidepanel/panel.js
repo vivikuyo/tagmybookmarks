@@ -11,6 +11,7 @@ const countEl = $('#count');
 const suggestEl = $('#suggest');
 const syntaxEl = $('#syntax');
 const bulkEl = $('#bulk');
+const floatEl = $('#bulkFloat');
 const bulkCountEl = $('#bulkCount');
 const tagInput = $('#tagInput');
 const toastEl = $('#toast');
@@ -239,7 +240,7 @@ function bind() {
     render();
   });
 
-  bulkEl.addEventListener('click', async (e) => {
+  const onBulkClick = async (e) => {
     const btn = e.target.closest ? e.target.closest('[data-act]') : null;
     const act = btn && btn.dataset.act;
     if (!act) return;
@@ -248,7 +249,9 @@ function bind() {
     } catch (err) {
       toast(err.message || '操作失败', true);
     }
-  });
+  };
+  bulkEl.addEventListener('click', onBulkClick);
+  if (floatEl) floatEl.addEventListener('click', onBulkClick);
 
   tagInput.addEventListener('keydown', async (e) => {
     if (e.key !== 'Enter') return;
@@ -1230,8 +1233,17 @@ function updateBulk() {
   const n = app.selected.size;
   const total = viewRows().length;
   bulkCountEl.textContent = `已选 ${n}`;
-  // 操作带常驻：无选中时动作按钮置灰，全选框反映当前选择状态
-  for (const b of bulkEl.querySelectorAll('[data-act]')) b.disabled = !n;
+  // 上下文浮条：有选中才浮出来；平时不占一像素
+  const float = $('#bulkFloat');
+  if (float) {
+    float.hidden = n === 0;
+    const fc = $('#floatCount');
+    if (fc) fc.textContent = `已选 ${n}`;
+    const pane = float.parentElement;
+    if (pane) pane.classList.toggle('has-sel', n > 0);
+  }
+  // 无选中时动作按钮置灰，全选框反映当前选择状态
+  for (const b of document.querySelectorAll('.bulk [data-act], .bulk-float [data-act]')) b.disabled = !n;
   const all = $('#bulkAll');
   if (all) {
     all.checked = total > 0 && n === total;
@@ -1246,14 +1258,14 @@ const tagList = (input) =>
     .map(normalizeTagOrNull)
     .filter(Boolean);
 
-const ARM_TEXT = { clear: ['清空', '确认清空？'], delete: ['删除', '确认删除？'] };
+const ARM_TEXT = { clear: ['清空标签', '确认清空？'], delete: ['删除', '确认删除？'] };
 
 // 侧边栏是内嵌视图，window.confirm 不弹窗、直接返回 false，用就地二次确认
 function disarm() {
   clearTimeout(app.armTimer);
   app.armed = null;
   for (const [act, [idle]] of Object.entries(ARM_TEXT)) {
-    const b = bulkEl.querySelector(`[data-act="${act}"]`);
+    const b = document.querySelector(`.bulk [data-act="${act}"], .bulk-float [data-act="${act}"]`);
     if (b) {
       b.textContent = idle;
       b.classList.remove('armed');
@@ -1278,6 +1290,10 @@ function armOrConfirm(act, btn) {
 }
 
 async function bulkAction(act, btn) {
+  if (act === 'unselect') {
+    app.selected.clear();
+    return renderList();
+  }
   const ids = selectedIds();
   if (!ids.length) return;
 

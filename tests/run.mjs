@@ -905,7 +905,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(ph.includes('id="densityBtn"') && ph.indexOf('id="densityBtn"') < ph.indexOf('id="tagInput"'), 'T101e 紧凑按钮在标签输入框左侧');
   ok(/\.bulk {[^}]*border-bottom: 1px solid/.test(pc), 'T101g 操作带上下分割线');
   ok(!/\.bulk {[^}]*border-radius/.test(pc) && !/\.bulk {[^}]*background: var\(--bg-soft\)/.test(pc), 'T101h 操作带无外框无底色');
-  ok(pj.includes("bulkEl.querySelectorAll('[data-act]')"), 'T101i 操作带常驻按钮置灰');
+  ok(pj.includes("document.querySelectorAll('.bulk [data-act], .bulk-float [data-act]')"), 'T101i 动作按钮（含浮条）无选中时置灰');
   ok(/\.dir-pane\.off \.[\s\S]{0,80}display: none/.test(pc), 'T101j 目录关闭时整栏收起');
   ok(!pj.includes('目录标签已关闭'), 'T101k 已关闭提示文案删除');
   ok(pj.includes('splitTagInput(input)') && pj.includes('normalizeTagOrNull'), 'T101l 打标签切分规则与书签管理页一致');
@@ -1899,6 +1899,24 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pc.includes('padding: 1px 10px 6px;'), 'T163d 云容器底部留白收窄');
   ok(pc.includes('padding: 3px 10px 2px;'), 'T163e 云标题行上下收窄');
   ok(pc.includes('@media (max-height: 860px)'), 'T163f 更矮的面板再降一档 chip 尺寸（780 高左右能看到更多行）');
+}
+
+// T164：操作带瘦身——动作收进"勾选才出现"的浮条
+{
+  const ph = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
+  const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  ok(ph.includes('id="bulkFloat"') && ph.includes('class="bulk-float" hidden'), 'T164a 浮条默认 hidden，不占高度');
+  const bulkAt = ph.indexOf('id="bulk"');
+  const floatAt = ph.indexOf('id="bulkFloat"');
+  ok(bulkAt > -1 && floatAt > bulkAt, 'T164b 浮条在操作带之后');
+  ok((ph.slice(bulkAt, floatAt).match(/data-act="untag"/g) || []).length === 0, 'T164c 摘/清空/打开/删除已从常驻操作带移出');
+  ok(ph.slice(floatAt).includes('data-act="untag"') && ph.slice(floatAt).includes('data-act="delete"'), 'T164d 动作都在浮条里');
+  ok(pj.includes("float.hidden = n === 0;"), 'T164e 有选中才浮出');
+  ok(pj.includes("floatEl.addEventListener('click', onBulkClick)"), 'T164f 浮条按钮走同一套 bulkAction');
+  ok(pj.includes("if (act === 'unselect')"), 'T164g 浮条上的 × 清空选择');
+  ok(pc.includes('.bulk-float {') && pc.includes('position: absolute; left: 50%'), 'T164h 浮条居中悬浮在列表底部');
+  ok(pc.includes('.list-pane.has-sel .list { padding-bottom: 46px; }'), 'T164i 浮条压住的最后一行留出空间');
 }
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
