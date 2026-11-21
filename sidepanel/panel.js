@@ -37,7 +37,7 @@ const app = {
   pageLimit: 1000,      // 一次取多少条（滚到底自动往上加 1000）
   pendingLoad: false,   // 上一页被截断，列表末尾还有没取完的
   loadingMore: false,   // 正在自动加载下一页（防重复触发）
-  listRows: 6,          // 列表保底几行（拖分隔条改这个；云区高度永远按内容自适应）
+  listRows: 6,          // 列表保底几行（硬底线 6，拖动只能往上加；云区高度按内容自适应）
   grpCollapsed: new Set(), // 折叠的组（会话内有效，不落盘）
 };
 
@@ -1361,7 +1361,7 @@ function askTrashSetup() {
 
 const LIST_ROWS_KEY = 'panel.listRows';
 const LIST_ROWS_DEFAULT = 6;
-const LIST_ROWS_MIN = 1;
+const LIST_ROWS_MIN = 6; // 保底 6 行是硬底线：拖动只能让列表多留，绝不少留
 const LIST_ROWS_MAX = 14;
 
 /** 列表行的大致高度：量不到真实行时按密度估 */

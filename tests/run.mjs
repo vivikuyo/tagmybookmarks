@@ -1882,6 +1882,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes('Math.max(Math.min(needs[i], fair), Math.min(needs[i], 60))'), 'T162f 每朵 60px 保底（标题行 + 两行 chip）');
   ok(pn.includes('let over = out.reduce((a, b) => a + b, 0) - budget;'), 'T162g 保底吃穿预算时从最高的那朵往回夺，加总不会超');
   ok(pn.includes("if (p.classList.contains('off')) {") && pn.includes("p.style.height = '';"), 'T162h 关掉的栏不参与竞争、不被拉高');
+  ok(pn.includes('const LIST_ROWS_MIN = 6;'), 'T162m 保底 6 行是硬底线，拖动只能给列表多加行');
   ok(pn.includes('function scheduleCloudLayout()') && pn.includes('requestAnimationFrame'), 'T162i 渲染后合并到下一帧重排，避免抖动');
   ok(pn.includes('scheduleCloudLayout();\n    toast('), 'T162j 双击恢复默认后也重排');
   ok(!pn.includes('defaultCloudSpace'), 'T162k 去掉旧的 44vh/52% 双口径默认值，只有一条算法');
