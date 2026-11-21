@@ -43,19 +43,20 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 3px 8px;
+  padding: 0 6px;
   border-bottom: 1px solid var(--line);
   background: var(--bg-soft);
   flex: 0 0 auto;
 }
 
 .brand { font-weight: 650; letter-spacing: .2px; }
+.icon svg { width: 17px; height: 17px; }
 .brand span { color: var(--accent); }
 
 .bar-actions { display: flex; gap: 4px; }
 
 .icon {
-  width: 22px; height: 22px;
+  width: 27px; height: 27px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;

@@ -1864,9 +1864,9 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(areaAt > -1 && dirAt > areaAt && splitAt > dirAt, 'T161b 云区把两朵云整体包住，分隔条在云区外');
   ok(pc.includes('.cloud-area {') && pc.includes('height: var(--cloud-space, 44vh);'), 'T161c 云区高度走 CSS 变量');
   ok(pc.includes('.cloud-area .pane { flex: 1 1 0; min-height: 0; overflow: hidden; }'), 'T161d 两朵云在云区里可滚动（具体高度由 JS 分，不再 CSS 对半）');
-  ok(pn.includes('Math.round(rowH * 6)') && pn.includes('estimateRowHeight()'), 'T161e 列表 6 行这条底线还在用');
-  ok(pn.includes("const CLOUD_SPACE_KEY = 'panel.cloudSpace';") && pn.includes('chrome.storage.local.set({ [CLOUD_SPACE_KEY]: app.cloudSpace })'), 'T161f 拖动比例存本机');
-  ok(pn.includes("split.addEventListener('dblclick'") && pn.includes("toast('已恢复默认比例')"), 'T161g 双击恢复默认');
+  ok(pn.includes('function listMetrics()') && pn.includes('m.H - m.chrome - m.reserve - 2'), 'T161e 列表保底行数这条底线还在用');
+  ok(pn.includes("const LIST_ROWS_KEY = 'panel.listRows';") && pn.includes('chrome.storage.local.set({ [LIST_ROWS_KEY]: app.listRows })'), 'T161f 拖出来的保底行数存本机');
+  ok(pn.includes("split.addEventListener('dblclick'") && pn.includes('app.listRows = LIST_ROWS_DEFAULT'), 'T161g 双击恢复保底 6 行');
   ok(pc.includes('@media (max-height: 1100px) {') && pc.includes('.cloud .tag { font-size: 11px;'), 'T161h 矮屏云里 chip 自动 11px');
   ok(pc.includes('.cloud-area .dir-pane.off { flex: 0 0 auto; }'), 'T161i 目录栏关掉时只留标题行');
 }
@@ -1875,8 +1875,8 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
 {
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   ok(pn.includes('function layoutClouds()') && pn.includes("p.style.height = 'auto';") && pn.includes('void area.offsetHeight;'), 'T162a 量高度前先解锁到自然高度（否则内容变少量不出，底部留白）');
-  ok(pn.includes("const firstRow = list ? list.querySelector('li') : null;") && pn.includes('H - chrome - Math.round(rowH * 6) - 2'), 'T162b 硬底线：列表至少能看见 6 条书签（行高优先量真实第一行）');
-  ok(pn.includes('const ceiling = Math.min(capByList, app.cloudSpace == null ? Infinity : app.cloudSpace);') && pn.includes('const target = Math.max(88, Math.min(needSum, ceiling));'), 'T162c 云区随标签数量自适应（内容少就缩回去，多则到天花板为止）');
+  ok(pn.includes('const rows = Math.min(want, Math.max(1, lis.length));') && pn.includes('reserve += h > 20 ? h : rowH;'), 'T162b 保底行数按真实行高度累加，结果不足 N 条就少留');
+  ok(pn.includes('const capByList = Math.max(96, m.H - m.chrome - m.reserve - 2);') && pn.includes('const target = Math.max(88, Math.min(needSum, capByList));'), 'T162c 云区随标签数量自适应，只受"列表保底行数"约束');
   ok(pn.includes("area.style.setProperty('--cloud-space', `${Math.round(target)}px`);"), 'T162d 云区总高是唯一真值，先定总高再分两朵');
   ok(pn.includes('function allocateCloudHeights(needs, budget)') && pn.includes('const fair = Math.floor(Math.max(0, left) / Math.max(1, rem));'), 'T162e 瀑布式分配：短的先拿够自己需要的，余量留给下一朵（不同时缩）');
   ok(pn.includes('Math.max(Math.min(needs[i], fair), Math.min(needs[i], 60))'), 'T162f 每朵 60px 保底（标题行 + 两行 chip）');
@@ -1885,14 +1885,14 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes('function scheduleCloudLayout()') && pn.includes('requestAnimationFrame'), 'T162i 渲染后合并到下一帧重排，避免抖动');
   ok(pn.includes('scheduleCloudLayout();\n    toast('), 'T162j 双击恢复默认后也重排');
   ok(!pn.includes('defaultCloudSpace'), 'T162k 去掉旧的 44vh/52% 双口径默认值，只有一条算法');
-  ok(pn.includes('app.cloudSpace = Math.round(h);\n    scheduleCloudLayout();'), 'T162l 拖动只调天花板，不写死总高（不会凭空留白）');
+  ok(pn.includes('const rows = Math.round(drag.rows - (e.clientY - drag.y) / Math.max(24, m.rowH));'), 'T162l 拖动按整行改保底行数，不写死像素高度');
 }
 
 // T163：矮屏密集化——标题栏收窄、云内 chip 间距收紧
 {
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
-  ok(pc.includes('.bar {') && pc.includes('padding: 3px 8px;'), 'T163a 顶部标题栏收窄（上下 3px）');
-  ok(pc.includes('.icon {') && pc.includes('width: 22px; height: 22px;'), 'T163b 顶栏图标缩到 22px');
+  ok(pc.includes('.bar {') && pc.includes('padding: 0 6px;'), 'T163a 顶部标题栏不留上下内边距（高度靠按钮撑）');
+  ok(pc.includes('.icon {') && pc.includes('width: 27px; height: 27px;') && pc.includes('.icon svg { width: 17px; height: 17px; }'), 'T163b 顶栏按钮放大到 27px，顶条高度不变');
   ok(pc.includes('display: flex; flex-wrap: wrap; gap: 3px 5px;'), 'T163c 云里 chip 上下 3px / 左右 5px');
   ok(pc.includes('padding: 1px 10px 6px;'), 'T163d 云容器底部留白收窄');
   ok(pc.includes('padding: 3px 10px 2px;'), 'T163e 云标题行上下收窄');

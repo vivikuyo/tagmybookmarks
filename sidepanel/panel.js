@@ -37,7 +37,7 @@ const app = {
   pageLimit: 1000,      // 一次取多少条（滚到底自动往上加 1000）
   pendingLoad: false,   // 上一页被截断，列表末尾还有没取完的
   loadingMore: false,   // 正在自动加载下一页（防重复触发）
-  cloudSpace: null,     // 云区高度（px）：null = 按视口自动算
+  listRows: 6,          // 列表保底几行（拖分隔条改这个；云区高度永远按内容自适应）
   grpCollapsed: new Set(), // 折叠的组（会话内有效，不落盘）
 };
 
@@ -67,7 +67,7 @@ chrome.runtime.onMessage.addListener((m) => {
 async function boot() {
   bindSplitters();
   await loadDensity();
-  await loadCloudSpace();
+  await loadListRows();
   bindCloudSplit();
   await loadGroup();
   app.allRows = null; // app:changed 会重新 boot，全量清单跟着重建
@@ -1359,39 +1359,51 @@ function askTrashSetup() {
 
 // ---------------------------------------------------------------- 行密度
 
-const CLOUD_SPACE_KEY = 'panel.cloudSpace';
+const LIST_ROWS_KEY = 'panel.listRows';
+const LIST_ROWS_DEFAULT = 6;
+const LIST_ROWS_MIN = 1;
+const LIST_ROWS_MAX = 14;
 
-/** 列表行的大致高度：用来算"至少要给列表留几行" */
+/** 列表行的大致高度：量不到真实行时按密度估 */
 function estimateRowHeight() {
   if (app.density === 'compact') return 38;
   if (app.density === 'ultra') return 32;
   return 46;
 }
 
-/** 应用高度：px 为 null 就走自动 */
-function applyCloudSpace(px) {
+/**
+ * 量一次布局"标尺"：
+ * - chrome：云区 + 列表之外的所有固定件（标题栏、查询框、操作带、分隔条……），
+ *   用 H - 云区 - 列表反推，是跟云区高度无关的不变量；
+ * - rowH：真实行高（清单行带标签 chips 会更高）；
+ * - reserve：列表保底要占的高度，直接累加前 N 条真实行的实测高度，
+ *   行数不够 N 条时才用 rowH 补——这样"保底 6 行"是真的 6 行，不是 6×估算。
+ */
+function listMetrics() {
   const area = $('#cloudArea');
-  if (!area) return;
-  if (px == null) area.style.removeProperty('--cloud-space');
-  else area.style.setProperty('--cloud-space', `${Math.round(px)}px`);
+  const list = $('#list');
+  const H = window.innerHeight;
+  const chrome = Math.max(0, H - (area ? area.offsetHeight : 0) - (list ? list.offsetHeight : 0));
+  const lis = list ? [...list.children].filter((el) => el.tagName === 'LI') : [];
+  const firstH = lis.length ? lis[0].getBoundingClientRect().height : 0;
+  const rowH = firstH > 20 ? firstH : estimateRowHeight();
+  const want = Math.max(LIST_ROWS_MIN, Math.min(LIST_ROWS_MAX, app.listRows || LIST_ROWS_DEFAULT));
+  // 结果不够 N 条时别为"不存在的行"留空——列表只有 3 条就只保 3 行，剩下的全给云
+  const rows = Math.min(want, Math.max(1, lis.length));
+  let reserve = 0;
+  for (let i = 0; i < rows; i++) {
+    const h = lis[i] ? lis[i].getBoundingClientRect().height : 0;
+    reserve += h > 20 ? h : rowH;
+  }
+  return { H, chrome, rowH, reserve, rows };
 }
 
-/** 窗口尺寸或行密度变了：只夹一下用户设的天花板，重排交给 layoutClouds */
+/** 窗口尺寸或行密度变了：只夹一下行数，重排交给 layoutClouds */
 function refreshCloudSpace() {
-  if (app.cloudSpace != null) {
-    const lo = 96;
-    const hi = Math.max(lo, window.innerHeight - 160);
-    app.cloudSpace = Math.max(lo, Math.min(app.cloudSpace, hi));
-  }
+  app.listRows = Math.max(LIST_ROWS_MIN, Math.min(LIST_ROWS_MAX, app.listRows || LIST_ROWS_DEFAULT));
   scheduleCloudLayout();
 }
 
-/**
- * 两朵云按"各自内容需要多少"分云区高度，而不是固定 1:1。
- * 短的那朵只拿自己需要的，剩下的全给长的那朵（长的那朵内部滚动）。
- * 用户没拖过时，云区本身也收缩到两朵云的合计需要（上限仍是"列表留 6 行"），
- * 免得内容只有两行却占着一大块空白。
- */
 let cloudLayoutTick = null;
 function scheduleCloudLayout() {
   if (cloudLayoutTick) cancelAnimationFrame(cloudLayoutTick);
@@ -1458,22 +1470,12 @@ function layoutClouds() {
   const needs = live.map((p) => Math.max(44, Math.round(p.getBoundingClientRect().height)));
   const needSum = needs.reduce((a, b) => a + b, 0);
 
-  // 云区 + 列表之外的固定件高度（和云区多高无关，是不变量）
-  const H = window.innerHeight;
-  const list = $('#list');
-  const chrome = Math.max(0, H - area.offsetHeight - (list ? list.offsetHeight : 0));
-  // 硬底线：列表一定能看到 6 条书签，云区只能吃剩下的。
-  // 行高优先量真实的第一行（清单/目录两种行高差挺多），量不到再退回按密度估算
-  const firstRow = list ? list.querySelector('li') : null;
-  const rowH = firstRow && firstRow.getBoundingClientRect().height > 20
-    ? firstRow.getBoundingClientRect().height
-    : estimateRowHeight();
-  const capByList = Math.max(96, H - chrome - Math.round(rowH * 6) - 2);
+  // 硬底线：列表保底 N 行（默认 6，可拖分隔条改），云区只能吃剩下的
+  const m = listMetrics();
+  const capByList = Math.max(96, m.H - m.chrome - m.reserve - 2);
 
-  // 云区总高 = 内容需要多少就多少（自适应），但不超过"列表 6 行"这条线。
-  // 拖动只改这条线的高低（天花板），不会凭空拉出一块空白。
-  const ceiling = Math.min(capByList, app.cloudSpace == null ? Infinity : app.cloudSpace);
-  const target = Math.max(88, Math.min(needSum, ceiling));
+  // 云区总高 = 内容需要多少就多少（自适应），不吃满预算也不留空白
+  const target = Math.max(88, Math.min(needSum, capByList));
 
   area.style.setProperty('--cloud-space', `${Math.round(target)}px`);
 
@@ -1484,15 +1486,14 @@ function layoutClouds() {
   });
 }
 
-async function loadCloudSpace() {
+async function loadListRows() {
   let saved = null;
   try {
-    const o = await chrome.storage.local.get(CLOUD_SPACE_KEY);
-    const v = o && o[CLOUD_SPACE_KEY];
+    const o = await chrome.storage.local.get(LIST_ROWS_KEY);
+    const v = o && o[LIST_ROWS_KEY];
     if (typeof v === 'number' && v > 0) saved = v;
   } catch {}
-  app.cloudSpace = saved;
-  applyCloudSpace(app.cloudSpace);
+  if (saved) app.listRows = Math.max(LIST_ROWS_MIN, Math.min(LIST_ROWS_MAX, saved));
 }
 
 /** 云区与列表之间的分隔条：拖动改比例、双击恢复自动 */
@@ -1503,7 +1504,7 @@ function bindCloudSplit() {
   let drag = null;
 
   split.addEventListener('pointerdown', (e) => {
-    drag = { y: e.clientY, h: area.offsetHeight };
+    drag = { y: e.clientY, rows: app.listRows };
     split.classList.add('dragging');
     try {
       split.setPointerCapture(e.pointerId);
@@ -1512,34 +1513,37 @@ function bindCloudSplit() {
   });
   split.addEventListener('pointermove', (e) => {
     if (!drag) return;
-    const H = window.innerHeight;
-    const h = Math.max(96, Math.min(drag.h + (e.clientY - drag.y), H - 160));
-    app.cloudSpace = Math.round(h);
-    scheduleCloudLayout();
+    // 往下拖 = 云区变高 = 列表少留一行，整行整行地变，不出现半行
+    const m = listMetrics();
+    const rows = Math.round(drag.rows - (e.clientY - drag.y) / Math.max(24, m.rowH));
+    const next = Math.max(LIST_ROWS_MIN, Math.min(LIST_ROWS_MAX, rows));
+    if (next !== app.listRows) {
+      app.listRows = next;
+      scheduleCloudLayout();
+    }
   });
   const end = async () => {
     if (!drag) return;
     drag = null;
     split.classList.remove('dragging');
     try {
-      await chrome.storage.local.set({ [CLOUD_SPACE_KEY]: app.cloudSpace });
+      await chrome.storage.local.set({ [LIST_ROWS_KEY]: app.listRows });
     } catch {}
   };
   split.addEventListener('pointerup', end);
   split.addEventListener('pointercancel', end);
   split.addEventListener('dblclick', async () => {
-    app.cloudSpace = null;
+    app.listRows = LIST_ROWS_DEFAULT;
     try {
-      await chrome.storage.local.remove(CLOUD_SPACE_KEY);
+      await chrome.storage.local.remove(LIST_ROWS_KEY);
     } catch {}
     scheduleCloudLayout();
-    toast('已恢复默认比例');
+    toast(`已恢复：列表保底 ${LIST_ROWS_DEFAULT} 行`);
   });
   window.addEventListener('resize', () => {
     refreshCloudSpace();
     scheduleCloudLayout();
   });
-  applyCloudSpace(app.cloudSpace);
   refreshCloudSpace();
 }
 
