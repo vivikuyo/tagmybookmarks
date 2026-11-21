@@ -368,12 +368,13 @@ body[data-density="ultra"] .grp .grp-n { font-size: 10px; }
 .bulk-sep { flex: 0 0 1px; width: 1px; height: 16px; background: var(--line); }
 .bulk-count { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
 .bulk .mini-btn:disabled { opacity: .45; cursor: default; }
-.bulk-tagwrap { position: relative; flex: 1 1 140px; min-width: 120px; display: inline-flex; }
+.bulk-addgroup { flex: 1 1 150px; min-width: 120px; display: flex; align-items: center; gap: 4px; }
+.bulk-tagwrap { position: relative; flex: 1 1 auto; min-width: 0; display: inline-flex; }
 .bulk-tagwrap input[type="text"] { width: 100%; padding-right: 26px; }
 .bulk-tagwrap .clear { right: 4px; }
 .bulk input[type="checkbox"] { margin: 0; accent-color: var(--accent); cursor: pointer; }
 .bulk input[type="text"] {
-  flex: 1 1 90px; min-width: 60px;
+  flex: 1 1 60px; min-width: 0;
   padding: 3px 6px; border: 1px solid var(--line); border-radius: 5px;
   background: var(--bg); color: var(--text); font: inherit; font-size: 12px;
 }

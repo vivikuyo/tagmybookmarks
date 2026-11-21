@@ -909,7 +909,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(/\.dir-pane\.off \.[\s\S]{0,80}display: none/.test(pc), 'T101j 目录关闭时整栏收起');
   ok(!pj.includes('目录标签已关闭'), 'T101k 已关闭提示文案删除');
   ok(pj.includes('splitTagInput(input)') && pj.includes('normalizeTagOrNull'), 'T101l 打标签切分规则与书签管理页一致');
-  ok(ph.includes('带空格用引号'), 'T101m 打标签占位文案一致');
+  ok(ph.includes('placeholder="标签，空格/逗号"') && ph.includes('title="空格 / 逗号分开；标签含空格时用引号包住"'), 'T101m 占位文案收短（规则移到 title，窄栏不挤成省略号）');
   ok(ph.includes('id="tagClear"'), 'T101n 打标签输入带 × 清除');
 }
 
@@ -1918,6 +1918,8 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pc.includes('.bulk-float {') && pc.includes('flex: 1 0 100%;') && !pc.includes('position: absolute; left: 50%'), 'T164h 动作行回到操作带里、贴着"已选 N"，不再悬浮到列表底部');
   ok(pc.includes('display: flex; align-items: center; gap: 4px;'), 'T164i 动作行横排一行');
   ok(pc.includes('.bulk-float[hidden]') === false && !pc.includes('has-sel'), 'T164j 不再需要给列表补底部留白');
+  ok(ph.includes('<span class="bulk-addgroup">') && ph.indexOf('id="tagInput"') > ph.indexOf('bulk-addgroup') && ph.indexOf('data-act="add"') > ph.indexOf('bulk-addgroup'), 'T164k 标签输入框和"加"绑成一组，换行时一起走');
+  ok(pc.includes('.bulk-addgroup { flex: 1 1 150px; min-width: 120px;') && pc.includes('.bulk-tagwrap { position: relative; flex: 1 1 auto; min-width: 0;'), 'T164l 输入框最小宽度归零，窄栏先缩框不换行');
 }
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {

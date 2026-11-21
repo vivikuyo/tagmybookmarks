@@ -55,11 +55,13 @@
       <button id="groupBtn" class="mini-btn" title="显示方式：清单（平铺）/ 分组（按目录插组头，可折叠）">清单</button>
       <button id="foldBtn" class="mini-btn" title="折叠 / 展开所有文件夹（仅目录模式）" hidden>折叠全部</button>
       <span class="bulk-sep"></span>
-      <span class="bulk-tagwrap">
-        <input id="tagInput" type="text" placeholder="标签，空格/逗号分开；带空格用引号" autocomplete="off" />
-        <button id="tagClear" class="clear" title="清空输入">×</button>
+      <span class="bulk-addgroup">
+        <span class="bulk-tagwrap">
+          <input id="tagInput" type="text" placeholder="标签，空格/逗号" autocomplete="off" title="空格 / 逗号分开；标签含空格时用引号包住" />
+          <button id="tagClear" class="clear" title="清空输入">×</button>
+        </span>
+        <button class="mini-btn" data-act="add">加</button>
       </span>
-      <button class="mini-btn" data-act="add">加</button>
       <!-- 上下文动作行：勾选了才出现，平时完全不占高度 -->
       <div id="bulkFloat" class="bulk-float" hidden>
       <button class="mini-btn" data-act="untag">摘</button>
