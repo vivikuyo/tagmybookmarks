@@ -1874,7 +1874,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
 // T162：云区空间分配——列表 6 行保底 / 云自适应 / 瀑布式收缩
 {
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
-  ok(pn.includes('function layoutClouds()') && pn.includes("p.style.height = 'auto';") && pn.includes('void area.offsetHeight;'), 'T162a 量高度前先解锁到自然高度（否则内容变少量不出，底部留白）');
+  ok(pn.includes('function paneContentHeight(pane)') && pn.includes('el.getBoundingClientRect().bottom - cTop + padB'), 'T162a 用 chip 底边量内容真实高度（容器偏高/偏矮都不影响）');
   ok(pn.includes('const rows = Math.max(1, count ? Math.min(want, count) : want);') && pn.includes('reserve += measured[i] || rowH;'), 'T162b 保底高度按真实行逐条累加，行数按数据条数收（不足 N 条就少留）');
   ok(pn.includes('let total = Math.max(88, Math.min(needSum, capByList));') && pn.includes('const capByList = Math.max(96, m.H - m.chrome - m.reserve - 2);'), 'T162c 云区随标签数量自适应，只受"列表保底行数"约束');
   ok(pn.includes('const over = cloud.scrollHeight - cloud.clientHeight;') && pn.includes('const give = Math.min(over + 1, surplus);'), 'T162c2 第二遍实测：谁在滚就补谁的，不靠测量精确');

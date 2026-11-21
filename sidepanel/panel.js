@@ -1475,6 +1475,31 @@ function allocateCloudHeights(needs, budget) {
   return out;
 }
 
+/** 一朵云"内容到底要多高"：标题行 + 内容底边（不受当前容器高度影响） */
+function paneContentHeight(pane) {
+  const head = pane.querySelector('.pane-head');
+  const cloud = pane.querySelector('.cloud');
+  const headH = head ? head.offsetHeight : 0;
+  if (!cloud) return Math.max(44, headH);
+  const cs = getComputedStyle(cloud);
+  const padT = parseFloat(cs.paddingTop) || 0;
+  const padB = parseFloat(cs.paddingBottom) || 0;
+  let contentH = 0;
+  const kids = [...cloud.children];
+  if (kids.length) {
+    // 取所有 chip 里最低的那条底边（最后一排里可能有个子矮的，不能只看最后一条）
+    const cTop = cloud.getBoundingClientRect().top;
+    for (const el of kids) {
+      const b = el.getBoundingClientRect().bottom - cTop + padB;
+      if (b > contentH) contentH = b;
+    }
+  } else {
+    contentH = cloud.scrollHeight;
+  }
+  // +2 是给亚像素留的余量，免得刚好卡在整像素时冒出一条 1px 滚动条
+  return Math.max(44, Math.round(headH + Math.max(contentH, padT + padB)) + 2);
+}
+
 function layoutClouds() {
   const area = $('#cloudArea');
   if (!area) return;
@@ -1491,15 +1516,15 @@ function layoutClouds() {
   });
   if (!live.length) return;
 
-  // 量之前先把两朵云解锁到自然高度再量。
-  // scrollHeight 至少等于元素当前高度——不解锁的话"内容变少"永远量不出来，
-  // 云区就一直停在旧的大高度，底部留一块空白。
+  // 量内容真实高度：不看容器多高，直接量最后一排 chip 的底边。
+  // 这样无论云区现在是偏高还是偏矮，量出来的都是"内容本身要多高"——
+  // 既不会因为被压扁而量不出来，也不会因为之前拉高过而虚高留白。
   live.forEach((p) => {
     p.style.flex = '0 0 auto';
     p.style.height = 'auto';
   });
-  void area.offsetHeight; // 强制一次重排，让 auto 高度落地
-  const needs = live.map((p) => Math.max(44, Math.round(p.getBoundingClientRect().height)));
+  void area.offsetHeight; // 先让 auto 高度落地，再量（下面量法本身也不依赖它）
+  const needs = live.map((p) => paneContentHeight(p));
   const needSum = needs.reduce((a, b) => a + b, 0);
 
   // 硬底线：列表保底 N 行（默认 6，可拖分隔条改），云区只能吃剩下的
