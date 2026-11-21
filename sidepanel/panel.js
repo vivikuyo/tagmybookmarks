@@ -1237,10 +1237,6 @@ function updateBulk() {
   const float = $('#bulkFloat');
   if (float) {
     float.hidden = n === 0;
-    const fc = $('#floatCount');
-    if (fc) fc.textContent = `已选 ${n}`;
-    const pane = float.parentElement;
-    if (pane) pane.classList.toggle('has-sel', n > 0);
   }
   // 无选中时动作按钮置灰，全选框反映当前选择状态
   for (const b of document.querySelectorAll('.bulk [data-act], .bulk-float [data-act]')) b.disabled = !n;
@@ -1258,7 +1254,7 @@ const tagList = (input) =>
     .map(normalizeTagOrNull)
     .filter(Boolean);
 
-const ARM_TEXT = { clear: ['清空标签', '确认清空？'], delete: ['删除', '确认删除？'] };
+const ARM_TEXT = { clear: ['清空', '确认清空？'], delete: ['删除', '确认删除？'] };
 
 // 侧边栏是内嵌视图，window.confirm 不弹窗、直接返回 false，用就地二次确认
 function disarm() {

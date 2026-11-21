@@ -1915,8 +1915,9 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pj.includes("float.hidden = n === 0;"), 'T164e 有选中才浮出');
   ok(pj.includes("floatEl.addEventListener('click', onBulkClick)"), 'T164f 浮条按钮走同一套 bulkAction');
   ok(pj.includes("if (act === 'unselect')"), 'T164g 浮条上的 × 清空选择');
-  ok(pc.includes('.bulk-float {') && pc.includes('position: absolute; left: 50%'), 'T164h 浮条居中悬浮在列表底部');
-  ok(pc.includes('.list-pane.has-sel .list { padding-bottom: 46px; }'), 'T164i 浮条压住的最后一行留出空间');
+  ok(pc.includes('.bulk-float {') && pc.includes('flex: 1 0 100%;') && !pc.includes('position: absolute; left: 50%'), 'T164h 动作行回到操作带里、贴着"已选 N"，不再悬浮到列表底部');
+  ok(pc.includes('display: flex; align-items: center; gap: 4px;'), 'T164i 动作行横排一行');
+  ok(pc.includes('.bulk-float[hidden]') === false && !pc.includes('has-sel'), 'T164j 不再需要给列表补底部留白');
 }
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
