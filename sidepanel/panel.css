@@ -135,8 +135,8 @@ body {
   margin-top: 1px;
 }
 .bulk-float .mini-btn { padding: 2px 8px; }
-.bulk-float .bulk-sep { flex: 0 0 1px; width: 1px; height: 16px; background: var(--line); }
 .bulk-float .bulk-tagwrap { flex: 1 1 60px; min-width: 0; }
+.bulk-float [data-act="add"] { margin-right: 4px; }
 .bulk-float-x {
   width: 22px; height: 20px; border: none; border-radius: 50%;
   background: transparent; color: var(--text-dim); cursor: pointer; font-size: 14px; line-height: 1;
