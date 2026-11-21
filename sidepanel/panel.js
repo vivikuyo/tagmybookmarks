@@ -1371,31 +1371,63 @@ function estimateRowHeight() {
   return 46;
 }
 
+/** 云区 + 列表之外那些固定件到底占多高（标题栏、查询框、语法提示、操作带、分隔条） */
+function fixedChrome() {
+  let h = 0;
+  for (const sel of ['.bar', '.query', '#syntax', '#bulk', '#cloudSplit']) {
+    const el = $(sel);
+    if (!el || el.hidden) continue;
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    h += r.height + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
+  }
+  const body = getComputedStyle(document.body);
+  h += (parseFloat(body.paddingTop) || 0) + (parseFloat(body.paddingBottom) || 0);
+  return Math.max(0, Math.round(h));
+}
+
+/** 当前视图里到底有多少行书签（目录模式数全库，清单模式数查询结果） */
+function listRowCount() {
+  if (app.group === 'dir') return (app.allRows || []).length;
+  return (app.data && app.data.items) ? app.data.items.length : 0;
+}
+
 /**
  * 量一次布局"标尺"：
  * - chrome：云区 + 列表之外的所有固定件（标题栏、查询框、操作带、分隔条……），
  *   用 H - 云区 - 列表反推，是跟云区高度无关的不变量；
- * - rowH：真实行高（清单行带标签 chips 会更高）；
- * - reserve：列表保底要占的高度，直接累加前 N 条真实行的实测高度，
- *   行数不够 N 条时才用 rowH 补——这样"保底 6 行"是真的 6 行，不是 6×估算。
+ * - rowH：真实行高（带标签 chips 的行更高）；
+ * - reserve：列表保底要占的高度——先按真实行逐条累加实测高度，
+ *   量不到的（还没渲染完 / 目录模式列表头几条是文件夹组头不是书签行）用 rowH 补。
+ *   兜底也要按"数据里确实有多少行"来定，绝不能算成 1 行——那会让云区把列表吃干净。
  */
 function listMetrics() {
-  const area = $('#cloudArea');
   const list = $('#list');
   const H = window.innerHeight;
-  const chrome = Math.max(0, H - (area ? area.offsetHeight : 0) - (list ? list.offsetHeight : 0));
-  const lis = list ? [...list.children].filter((el) => el.tagName === 'LI') : [];
-  const firstH = lis.length ? lis[0].getBoundingClientRect().height : 0;
-  const rowH = firstH > 20 ? firstH : estimateRowHeight();
+  // 固定件高度直接加总，别用「H − 云区 − 列表」反推：列表一旦被挤成 0 高，
+  // 反推出来的 chrome 会偏小，然后永远算错、越挤越死——这就是"拖动被锁死"的成因
+  const chrome = fixedChrome();
+
   const want = Math.max(LIST_ROWS_MIN, Math.min(LIST_ROWS_MAX, app.listRows || LIST_ROWS_DEFAULT));
-  // 结果不够 N 条时别为"不存在的行"留空——列表只有 3 条就只保 3 行，剩下的全给云
-  const rows = Math.min(want, Math.max(1, lis.length));
-  let reserve = 0;
-  for (let i = 0; i < rows; i++) {
-    const h = lis[i] ? lis[i].getBoundingClientRect().height : 0;
-    reserve += h > 20 ? h : rowH;
+  const count = listRowCount();
+  // 结果比保底行数还少时，别为不存在的行留空
+  const rows = Math.max(1, count ? Math.min(want, count) : want);
+
+  const lis = list ? [...list.children].filter((el) => el.tagName === 'LI') : [];
+  const measured = [];
+  for (const el of lis) {
+    if (measured.length >= rows) break;
+    const h = el.getBoundingClientRect().height;
+    if (h > 20) measured.push(h);
   }
-  return { H, chrome, rowH, reserve, rows };
+  const rowH = measured.length ? measured[0] : estimateRowHeight();
+  let reserve = 0;
+  for (let i = 0; i < rows; i++) reserve += measured[i] || rowH;
+  if (list) {
+    const cs = getComputedStyle(list);
+    reserve += (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+  }
+  return { H, chrome, rowH, reserve, rows, need: rows };
 }
 
 /** 窗口尺寸或行密度变了：只夹一下行数，重排交给 layoutClouds */

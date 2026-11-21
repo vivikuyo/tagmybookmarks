@@ -153,6 +153,14 @@ body {
   .cloud .tag .c { font-size: 9px; }
 }
 
+/* 更矮的面板（约 780 高的侧栏）：再降一档，尽量把标签全铺进去 */
+@media (max-height: 860px) {
+  .cloud { gap: 2px 4px; padding: 1px 8px 4px; }
+  .cloud .tag { font-size: 10.5px; min-height: 17px; padding: 0 6px; }
+  .cloud .tag .c { font-size: 8.5px; }
+  .pane-head { padding: 2px 8px 1px; font-size: 11px; }
+}
+
 /* 行密度三档：只覆写度量，不隐藏任何信息（标签再多也是换行，不截断） */
 body[data-density="compact"] .row { padding: 3px 6px 2px; }
 body[data-density="compact"] .row .pick { margin: 0 0 0; }

@@ -1875,7 +1875,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
 {
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   ok(pn.includes('function layoutClouds()') && pn.includes("p.style.height = 'auto';") && pn.includes('void area.offsetHeight;'), 'T162a 量高度前先解锁到自然高度（否则内容变少量不出，底部留白）');
-  ok(pn.includes('const rows = Math.min(want, Math.max(1, lis.length));') && pn.includes('reserve += h > 20 ? h : rowH;'), 'T162b 保底行数按真实行高度累加，结果不足 N 条就少留');
+  ok(pn.includes('const rows = Math.max(1, count ? Math.min(want, count) : want);') && pn.includes('reserve += measured[i] || rowH;'), 'T162b 保底高度按真实行逐条累加，行数按数据条数收（不足 N 条就少留）');
   ok(pn.includes('const capByList = Math.max(96, m.H - m.chrome - m.reserve - 2);') && pn.includes('const target = Math.max(88, Math.min(needSum, capByList));'), 'T162c 云区随标签数量自适应，只受"列表保底行数"约束');
   ok(pn.includes("area.style.setProperty('--cloud-space', `${Math.round(target)}px`);"), 'T162d 云区总高是唯一真值，先定总高再分两朵');
   ok(pn.includes('function allocateCloudHeights(needs, budget)') && pn.includes('const fair = Math.floor(Math.max(0, left) / Math.max(1, rem));'), 'T162e 瀑布式分配：短的先拿够自己需要的，余量留给下一朵（不同时缩）');
@@ -1896,6 +1896,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pc.includes('display: flex; flex-wrap: wrap; gap: 3px 5px;'), 'T163c 云里 chip 上下 3px / 左右 5px');
   ok(pc.includes('padding: 1px 10px 6px;'), 'T163d 云容器底部留白收窄');
   ok(pc.includes('padding: 3px 10px 2px;'), 'T163e 云标题行上下收窄');
+  ok(pc.includes('@media (max-height: 860px)'), 'T163f 更矮的面板再降一档 chip 尺寸（780 高左右能看到更多行）');
 }
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
