@@ -55,18 +55,24 @@ Chrome 的书签只能放在一个文件夹里，由此产生几个限制：
 
 不提供：自动推断标签、自建同步服务、修改原生右键菜单。
 
-## 安装（开发版）
+## 安装
+
+**下载安装包**：到 [Releases](https://github.com/vivikuyo/tagmybookmarks/releases) 下载 `TagMyBookmarks-1.0.0.zip`，解压后得到 `manifest.json` 所在的文件夹。
 
 1. 打开 `chrome://extensions`
 2. 右上角打开「开发者模式」
-3. 点「加载已解压的扩展程序」，选择本目录 `tagspace/`
-4. 点扩展图标旁的图钉，把 TagMyBookmarks 固定到工具栏
+3. 点「加载已解压的扩展程序」，选择解压出来的文件夹
+4. 点扩展图标旁的图钉，把它固定到工具栏
+
+也可以用 `git clone` 到本地后直接加载仓库里的 `tagspace/` 目录。
 
 首次加载会自动做三件事：
 
 - 在 `其他书签` 下建 `TagSpace/` 文件夹，放三条配置文件书签
-- 建 `TagSpace 收件箱` 文件夹（给"未收藏页面打标签"用）
+- 建 `TagSpace 收件箱` 文件夹，用于给未收藏的页面打标签
 - 建好索引（5,000 条书签约 50ms）
+
+当前版本 **1.0.0**。支持 Chrome / Edge / Vivaldi 等 Chromium 内核浏览器；在 Vivaldi 上侧边栏会退化为独立小窗，因为该浏览器没有实现 `chrome.sidePanel`。
 
 ## 关于命名
 

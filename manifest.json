@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TagMyBookmarks",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "书签标签化管理：布尔标签查询、相关标签收窄、标签写在标题里，随 Chrome 同步。",
   "homepage_url": "https://github.com/vivikuyo/tagmybookmarks",
   "permissions": ["bookmarks", "storage", "sidePanel", "activeTab"],

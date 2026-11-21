@@ -5,5 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "node tests/run.mjs"
-  }
+  },
+  "version": "1.0.0",
+  "description": "书签标签化管理扩展：标签写在标题里，随浏览器同步",
+  "license": "MIT"
 }
