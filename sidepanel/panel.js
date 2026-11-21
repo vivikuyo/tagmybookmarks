@@ -1301,7 +1301,7 @@ async function bulkAction(act, btn) {
     const tags = tagList(tagInput.value);
     if (!tags.length) {
       tagInput.focus();
-      return toast('先在上面输入标签名');
+      return toast('先在左侧输入标签名');
     }
     const r = await send({ type: act === 'add' ? 'tags:add' : 'tags:remove', ids, tags });
     tagInput.value = '';

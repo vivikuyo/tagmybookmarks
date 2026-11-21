@@ -1918,8 +1918,9 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pc.includes('.bulk-float {') && pc.includes('flex: 1 0 100%;') && !pc.includes('position: absolute; left: 50%'), 'T164h 动作行回到操作带里、贴着"已选 N"，不再悬浮到列表底部');
   ok(pc.includes('display: flex; align-items: center; gap: 4px;'), 'T164i 动作行横排一行');
   ok(pc.includes('.bulk-float[hidden]') === false && !pc.includes('has-sel'), 'T164j 不再需要给列表补底部留白');
-  ok(ph.indexOf('id="tagInput"') > ph.indexOf('id="bulk"') && ph.indexOf('data-act="add"') > ph.indexOf('id="tagInput"'), 'T164k 输入框和"加"直接排在操作带同一行');
-  ok(pc.includes('.bulk-tagwrap { position: relative; flex: 1 1 60px; min-width: 0;') && pc.includes('.bulk input[type="text"] {\n  flex: 1 1 60px; min-width: 0;'), 'T164l 输入框最小宽度归零，占位文案允许被截断');
+  const f = ph.indexOf('id="bulkFloat"');
+  ok(f > 0 && ph.indexOf('id="tagInput"') > f && ph.indexOf('data-act="add"') > ph.indexOf('id="tagInput"') && ph.indexOf('data-act="untag"') > ph.indexOf('data-act="add"'), 'T164k 输入框和"加"放进勾选后才出现的动作行，排在"摘"之前');
+  ok(pc.includes('.bulk-float .bulk-tagwrap { flex: 1 1 60px; min-width: 0; }') && pc.includes('.bulk input[type="text"] {\n  flex: 1 1 60px; min-width: 0;'), 'T164l 输入框最小宽度归零，占位文案允许被截断');
 }
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
