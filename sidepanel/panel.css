@@ -287,14 +287,24 @@ body[data-density="ultra"] .load-more {
 .row.drop { box-shadow: inset 0 2px 0 var(--accent); }
 .grp .grp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .grp .grp-n { margin-left: auto; flex: 0 0 auto; color: var(--text-dim); font-weight: 400; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+/* 展开态只给一条中性竖条：强调色留给"命中所在目录"（.grp-hit） */
 .grp.grp-open {
+  color: var(--text);
+  background: var(--bg-soft);
+  border-left: 2px solid color-mix(in srgb, var(--text-dim) 45%, transparent);
+}
+.grp.grp-open:hover { background: var(--bg-hover); }
+.grp.grp-open .grp-caret,
+.grp.grp-open .grp-n { color: var(--text-dim); }
+/* 命中：查询命中的书签所在的目录才亮强调色 */
+.grp.grp-hit {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, var(--bg-soft));
   border-left: 2px solid var(--accent);
 }
-.grp.grp-open:hover { background: color-mix(in srgb, var(--accent) 16%, var(--bg-hover)); }
-.grp.grp-open .grp-caret,
-.grp.grp-open .grp-n { color: var(--accent); }
+.grp.grp-hit:hover { background: color-mix(in srgb, var(--accent) 16%, var(--bg-hover)); }
+.grp.grp-hit .grp-caret,
+.grp.grp-hit .grp-n { color: var(--accent); }
 .grp-top { font-weight: 700; }
 body[data-density="compact"] .grp { padding: 3px 6px 2px; }
 body[data-density="ultra"] .grp { padding: 2px 6px 1px; font-size: 11px; }

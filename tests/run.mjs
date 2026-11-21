@@ -1725,9 +1725,13 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
   ok(pn.includes("(node.depth === 0 ? ' grp-top' : '')"), 'T151a depth 0 的组头仍标 grp-top（仅加粗）');
   ok(pn.includes("const open = !collapsed && ((node.children || []).length > 0 || hasRows);"), 'T151b 只有展开且有内容的目录才亮');
-  ok(pc.includes('.grp.grp-open {') && pc.includes('color: var(--accent);'), 'T151c 展开态用强调色 + 左侧竖条');
+  ok(pc.includes('.grp.grp-open {') && pc.includes('border-left: 2px solid color-mix(in srgb, var(--text-dim) 45%, transparent);'), 'T151c 展开态只给中性竖条（强调色不再表示"展开"）');
   ok(!pc.includes('.grp.grp-top {') || !pc.includes('.grp.grp-top .grp-n'), 'T151d 不再按层级无条件上色');
   ok(pc.includes('color-mix(in srgb'), 'T151d 底色用 accent 与 bg-soft 混色，深浅主题自适应');
+  ok(pn.includes("+ (isHit ? ' grp-hit' : '')") && pn.includes('app.hitFolders.add(String(r.parentId'), 'T151e 命中所在目录才挂 grp-hit');
+  ok(pc.includes('.grp.grp-hit {') && pc.includes('border-left: 2px solid var(--accent);'), 'T151f 命中目录用强调色竖条');
+  ok(pn.includes('if (app.expr && data && data.items && data.items.length)'), 'T151g 空查询不算命中（否则满屏都是蓝组头）');
+  ok(pn.includes('if (app.hitFolders.size > 8) app.hitFolders.clear();'), 'T151h 命中分散超过 8 个目录就整片不亮');
 }
 
 

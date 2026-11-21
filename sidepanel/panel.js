@@ -724,6 +724,14 @@ function renderList() {
       listEl.append(div);
       return;
     }
+    // 命中目录：查非空时，命中的书签落在哪些目录 → 组头才亮强调色
+    app.hitFolders = new Set();
+    if (app.expr && data && data.items && data.items.length) {
+      const hit = new Set(data.items.map((i) => i.key));
+      for (const r of rows) if (hit.has(r.key)) app.hitFolders.add(String(r.parentId ?? ''));
+    }
+    // 命中太分散（>8 个目录）就整片不亮，免得半个列表都是蓝组头
+    if (app.hitFolders.size > 8) app.hitFolders.clear();
     const foldBtn = $('#foldBtn');
     if (foldBtn) foldBtn.hidden = false;
     if (app.foldersTree) renderTreeRows();
@@ -798,9 +806,11 @@ function renderFolderHead(node) {
   // 只有「展开且确实有内容」的目录才亮；收起的、空壳目录保持中性灰
   const hasRows = ((app.rowsByParent && app.rowsByParent.get(id)) || []).length > 0;
   const open = !collapsed && ((node.children || []).length > 0 || hasRows);
+  const isHit = !!(app.hitFolders && app.hitFolders.has(id));
   head.className = 'grp'
     + (collapsed ? ' collapsed' : '')
     + (open ? ' grp-open' : '')
+    + (isHit ? ' grp-hit' : '')
     + (node.depth === 0 ? ' grp-top' : '');
   head.dataset.folder = id;
   head.style.paddingLeft = '6px'; // 不做层级缩进，层级由路径标签体现
