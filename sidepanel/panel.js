@@ -1,6 +1,6 @@
 import { colorFor } from '../lib/palette.js';
 import { insertTag, quoteTag, hasTag } from '../lib/query.js';
-import { splitTagInput, normalizeTagOrNull } from '../lib/title.js';
+import { splitTagInput, normalizeTagOrNull, tagKey } from '../lib/title.js';
 
 const $ = (sel) => document.querySelector(sel);
 const PATH_SEP = String.fromCharCode(31); // 后台的目录路径分隔符（文件夹名里的 / 不会被当层级）
@@ -643,15 +643,42 @@ function buildRowIndex() {
 }
 
 /** 目录模式：查询只用来"定位"，不去过滤列表 —— 滚到第一处命中（书签树里最靠前的那个）并闪一下 */
+/** 行所属目录链上每一级文件夹的名字（小写），用于判断这行是否真的在某目录里 */
+function folderNameKeys(parentId) {
+  const out = [];
+  let pid = String(parentId ?? '');
+  const seen = new Set();
+  while (pid && !seen.has(pid)) {
+    seen.add(pid);
+    const node = app.folderById && app.folderById.get(pid);
+    if (node && node.title) out.push(tagKey(node.title));
+    pid = (app.folderParent && app.folderParent.get(pid)) || '';
+  }
+  return out;
+}
+
+/** 这一行的某个上级目录名，正是查询里 @出来的目录 */
+function rowInQueryDirs(row, dirs) {
+  if (!dirs.size) return false;
+  return folderNameKeys(row.parentId).some((k) => dirs.has(k));
+}
+
 function jumpToFirstHit() {
   if (app.group !== 'dir') return;
   if (!app.allRows || !app.data || !app.data.items.length) return;
 
   // 命中的 key → 在全书签清单里找 seq 最小的那一行（树序最靠前，而不是标题序）
   const hit = new Set(app.data.items.map((i) => i.key));
+  // 同一条 URL 可能同时躺在好几个目录里（key 按 URL 归一，目录标签是并集）。
+  // 点了 @某目录 的 chip 时，优先跳"确实落在这个目录里"的那一份，
+  // 否则会按树序跳到别处的同名书签，看起来像"跳错目录"。
+  const dirs = new Set((app.data.queryDirs || []).filter(Boolean));
+  const picks = [];
+  for (const r of app.allRows) if (hit.has(r.key)) picks.push(r);
+  const near = dirs.size ? picks.filter((r) => rowInQueryDirs(r, dirs)) : [];
+  const pool = near.length ? near : picks;
   let target = null;
-  for (const r of app.allRows) {
-    if (!hit.has(r.key)) continue;
+  for (const r of pool) {
     if (!target || (r.seq ?? Infinity) < (target.seq ?? Infinity)) target = r;
   }
   if (!target) return;

@@ -1922,6 +1922,16 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(f > 0 && ph.indexOf('id="tagInput"') > f && ph.indexOf('data-act="add"') > ph.indexOf('id="tagInput"') && ph.indexOf('data-act="untag"') > ph.indexOf('data-act="add"'), 'T164k 输入框和"加"放进勾选后才出现的动作行，排在"摘"之前');
   ok(pc.includes('.bulk-float .bulk-tagwrap { flex: 1 1 60px; min-width: 0; }') && pc.includes('.bulk input[type="text"] {\n  flex: 1 1 60px; min-width: 0;'), 'T164l 输入框最小宽度归零，占位文案允许被截断');
 }
+
+// T165：点 @目录 chip 跳转时优先落在"那个目录里的那一份"（同 URL 多处收藏不再跳错目录）
+{
+  const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  ok(pj.includes("splitTagInput, normalizeTagOrNull, tagKey"), 'T165a tagKey 复用 lib 口径（小写归一）');
+  ok(pj.includes('function folderNameKeys(parentId)') && pj.includes('app.folderParent.get(pid)'), 'T165b 沿目录链逐级取上级文件夹名');
+  ok(pj.includes('function rowInQueryDirs(row, dirs)') && pj.includes('folderNameKeys(row.parentId).some((k) => dirs.has(k))'), 'T165c 判断这行是否真在某目录里');
+  const jump = pj.slice(pj.indexOf('function jumpToFirstHit()'), pj.indexOf('function renderList()'));
+  ok(jump.includes('const dirs = new Set((app.data.queryDirs || []).filter(Boolean));') && jump.includes('const near = dirs.size ? picks.filter((r) => rowInQueryDirs(r, dirs)) : [];') && jump.includes('const pool = near.length ? near : picks;'), 'T165d 有 @目录 时先在同目录副本里挑，再按树序取最靠前');
+}
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);
