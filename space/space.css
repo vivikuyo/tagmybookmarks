@@ -510,11 +510,13 @@ textarea:focus { border-color: var(--accent); }
 }
 .reward-lede {
   margin: 10px 0 16px;
-  max-width: 760px;
+  max-width: 720px;
   font-size: 12.5px;
-  line-height: 1.75;
+  line-height: 1.9;
   color: var(--text-dim);
 }
+.reward-lede p { margin: 0 0 6px; }
+.reward-lede p:last-child { margin-bottom: 0; }
 .reward-codes { display: flex; gap: 20px; flex-wrap: wrap; }
 .reward-code {
   margin: 0;
