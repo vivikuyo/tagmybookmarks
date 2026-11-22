@@ -370,6 +370,9 @@ function renderCloud() {
   const needle = (app.filterText || '').toLowerCase();
   const filtered = needle ? list.filter((t) => t.tag.toLowerCase().includes(needle)) : list;
 
+  // 标签名和某个目录同名时，给标签 chip 也加 # 前缀：两朵云里出现同名 chip 时
+  // 一眼能看出哪一行是标签、哪一行是目录，点错了也不会再以为是扩展筛错
+  const dirKeys = new Set((app.dirTags || []).map((t) => t.key));
   filtered.slice(0, LIMIT).forEach((t) => {
     const btn = document.createElement('button');
     btn.className = 'tag' + (activeTags.has(t.tag.toLowerCase()) ? ' active' : '');
@@ -381,7 +384,14 @@ function renderCloud() {
     const cnt = document.createElement('span');
     cnt.className = 'c';
     cnt.textContent = t.count;
-    btn.append(name, cnt);
+    if (dirKeys.has(t.key)) {
+      const hash = document.createElement('span');
+      hash.className = 'hash';
+      hash.textContent = '#';
+      btn.append(hash, name, cnt);
+    } else {
+      btn.append(name, cnt);
+    }
 
     btn.addEventListener('click', (e) => {
       const mode = e.altKey ? 'not' : e.shiftKey ? 'or' : 'and';
@@ -526,13 +536,17 @@ function renderDirPane(enabled) {
     const btn = document.createElement('button');
     btn.className = 'tag dir' + (activeDirs.has(t.key) ? ' active' : '');
     btn.style.color = colorFor(t.tag, app.colors);
-    btn.title = `${t.tag} · ${t.count} 条\n点击 = 与（AND，同名标签一并命中）  Shift = 或（OR）  Alt = 非（NOT）  双击 = 只看这个目录（@${t.tag}）`;
+    btn.title = `${t.tag} · ${t.count} 条\n点击 = 与（AND，插入 @${t.tag}）  Shift = 或（OR）  Alt = 非（NOT）  双击 = 只看这个目录（@${t.tag}）`;
+    // 目录 chip 一律带 @ 前缀：和同名标签 chip 长得一样时，用户分不清点的是哪一朵云
+    const at = document.createElement('span');
+    at.className = 'at';
+    at.textContent = '@';
     const name = document.createElement('span');
     name.textContent = t.tag;
     const c = document.createElement('span');
     c.className = 'c';
     c.textContent = t.count;
-    btn.append(name, c);
+    btn.append(at, name, c);
     btn.addEventListener('click', (e) => {
       const mode = e.altKey ? 'not' : e.shiftKey ? 'or' : 'and';
       applyTag(t.tag, mode, '@');
@@ -701,8 +715,8 @@ function jumpToFirstHit() {
   }
   if (!row) return;
   row.scrollIntoView({ block: 'center' });
+  // 命中行一直闪，直到查询被改掉（renderList 重建 DOM，类名随之消失）。
   row.classList.add('flash');
-  setTimeout(() => row.classList.remove('flash'), 900);
 }
 
 function renderList() {
@@ -716,7 +730,7 @@ function renderList() {
       countEl.textContent = '加载全部书签…';
       return;
     }
-    countEl.textContent = `${app.allTotal} 条（全部）${app.expr ? ' · 查询只跳转' : ''}`;
+    countEl.textContent = `${app.allTotal} 条（全部）`;
     if (!rows.length) {
       const div = document.createElement('div');
       div.className = 'empty';

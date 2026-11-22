@@ -243,6 +243,8 @@ body[data-density="ultra"] .load-more {
 }
 .tag:hover { opacity: 1; background: var(--bg-hover); }
 .tag .c { align-self: center; font-size: 9.5px; line-height: 1; opacity: .7; font-variant-numeric: tabular-nums; }
+/* 前缀：目录 chip 一律 @；只有与目录同名的标签才加 #（其余标签不加，避免每个 chip 都挂符号） */
+.tag .at, .tag .hash { align-self: center; font-size: 10px; line-height: 1; opacity: .55; margin-right: -1px; }
 .tag.active { background: currentColor; }
 .tag.active span { color: var(--bg); filter: invert(0); }
 .tag.virtual { border-style: dashed; }
@@ -318,8 +320,12 @@ body[data-density="ultra"] .grp .grp-n { font-size: 10px; }
 }
 .row:hover { background: var(--bg-hover); }
 .row.selected { background: color-mix(in srgb, var(--accent) 10%, transparent); }
-/* 目录模式：跳到命中位置时闪一下（约 0.9s 自动收回） */
-.row.flash { background: color-mix(in srgb, var(--accent) 26%, transparent); transition: background .18s ease-out; }
+/* 目录模式：命中行一直闪，直到查询改变（不再是闪一下就收回） */
+.row.flash { animation: hitFlash 1.15s ease-in-out infinite; box-shadow: inset 2px 0 0 var(--accent); }
+@keyframes hitFlash {
+  0%, 100% { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  50% { background: color-mix(in srgb, var(--accent) 34%, transparent); }
+}
 
 .row .pick { margin: 1px 0 0; flex: 0 0 auto; }
 

@@ -1661,9 +1661,9 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes('const hit = new Set(app.data.items.map((i) => i.key));')
      && pn.includes('if (!target || (r.seq ?? Infinity) < (target.seq ?? Infinity)) target = r;'), 'T147g 跳转目标 = 命中里树序最靠前的那一行');
   ok(pn.includes('let pid = String(target.parentId ?? \'\');') && pn.includes("pid = (app.folderParent && app.folderParent.get(pid)) || '';"), 'T147h 跳转时把目标所在目录的祖先链全部展开再跳');
-  ok(pn.includes("row.scrollIntoView({ block: 'center' })") && pn.includes("row.classList.add('flash')") && pn.includes("setTimeout(() => row.classList.remove('flash'), 900)"), 'T147i 滚到位置并闪 0.9s 自动收');
+  ok(pn.includes("row.scrollIntoView({ block: 'center' })") && pn.includes("row.classList.add('flash')") && !pn.includes("setTimeout(() => row.classList.remove('flash')"), 'T147i 滚到位置并一直闪（不再 0.9s 收回）');
   ok(pc.includes('.row.flash {'), 'T147j 闪烁样式');
-  ok(pn.includes('`${app.allTotal} 条（全部）') && pn.includes('查询只跳转'), 'T147k 计数如实标「全部」，并提示查询只跳转');
+  ok(pn.includes('`${app.allTotal} 条（全部）`') && !pn.includes('查询只跳转'), 'T147k 计数如实标「全部」，不再挂查询只跳转的提示');
 }
 
 
@@ -1972,6 +1972,26 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(mf.permissions.includes('sidePanel') && mf.permissions.includes('contextMenus'), 'T169b sidePanel + contextMenus 权限都在');
   ok(pp.includes('chrome.sidePanel.open({ windowId: win.id })'), 'T169c 弹窗在用户手势里直接开侧栏（不经后台转发）');
   ok(bg.includes("contexts: ['action']") && bg.includes("'在侧边栏中打开'"), 'T169d 工具栏图标右键有侧栏入口');
+}
+
+// T170：目录模式的状态行去噪 + 命中行常亮 + 目录 chip 与同名标签可区分
+{
+  const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  ok(!pj.includes('查询只跳转'), 'T170a 状态行不再带「查询只跳转」');
+  ok(pj.includes('条（全部）`') && !pj.includes('查询只跳转'), 'T170b 目录模式只报总条数');
+  ok(pc.includes('.row.flash { animation: hitFlash') && pc.includes('infinite'), 'T170c 命中行是无限循环动画');
+  ok(!pj.includes("setTimeout(() => row.classList.remove('flash')"), 'T170d 不再 0.9s 自动收回 ');
+  ok(pj.includes("at.className = 'at'") && pj.includes("at.textContent = '@'"), 'T170e 目录 chip 带 @ 前缀');
+  ok(pj.includes("btn.append(at, name, c)"), 'T170f 前缀渲染在名字前');
+}
+
+// T171：同名标签与同名目录在两朵云里必须可区分（标签加 #，目录加 @）
+{
+  const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  ok(pj.includes('const dirKeys = new Set((app.dirTags || []).map((t) => t.key));'), 'T171a 标签云知道哪些名字同时是目录');
+  ok(pj.includes("hash.className = 'hash'") && pj.includes("hash.textContent = '#'"), 'T171b 同名标签 chip 加 # 前缀');
+  ok(pj.includes('if (dirKeys.has(t.key))') && pj.includes('} else {'), 'T171c 只有同名时才加前缀，其余 chip 保持干净');
 }
 
 // T165：点 @目录 chip 跳转时优先落在"那个目录里的那一份"（同 URL 多处收藏不再跳错目录）
