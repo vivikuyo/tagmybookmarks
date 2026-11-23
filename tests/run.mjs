@@ -1882,9 +1882,9 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   ok(pn.includes('function paneContentHeight(pane)') && pn.includes('el.getBoundingClientRect().bottom - cTop + padB'), 'T162a 用 chip 底边量内容真实高度（容器偏高/偏矮都不影响）');
   ok(pn.includes('const rows = Math.max(1, count ? Math.min(want, count) : want);') && pn.includes('reserve += measured[i] || rowH;'), 'T162b 保底高度按真实行逐条累加，行数按数据条数收（不足 N 条就少留）');
-  ok(pn.includes('let total = Math.max(88, Math.min(needSum, capByList));') && pn.includes('const capByList = Math.max(96, m.H - m.chrome - m.reserve - 2);'), 'T162c 云区随标签数量自适应，只受"列表保底行数"约束');
+  ok(pn.includes('let total = Math.max(88, Math.min(needSum, capLive));') && pn.includes('const capByList = Math.max(96, m.H - m.chrome - m.reserve - 2);'), 'T162c 云区随标签数量自适应，只受"列表保底行数"约束');
   ok(pn.includes('const over = cloud.scrollHeight - cloud.clientHeight;') && pn.includes('const give = Math.min(over + 1, surplus);'), 'T162c2 第二遍实测：谁在滚就补谁的，不靠测量精确');
-  ok(pn.includes("area.style.setProperty('--cloud-space', `${Math.round(total)}px`);"), 'T162d 云区总高是唯一真值，先定总高再分两朵');
+  ok(pn.includes('`${Math.round(total + offH)}px`'), 'T162d 云区总高是唯一真值（含关掉那栏的标题行），先定总高再分两朵');
   ok(pn.includes('function allocateCloudHeights(needs, budget)') && pn.includes('const fair = Math.floor(Math.max(0, left) / Math.max(1, rem));'), 'T162e 瀑布式分配：短的先拿够自己需要的，余量留给下一朵（不同时缩）');
   ok(pn.includes('Math.max(Math.min(needs[i], fair), Math.min(needs[i], 60))'), 'T162f 每朵 60px 保底（标题行 + 两行 chip）');
   ok(pn.includes('let over = out.reduce((a, b) => a + b, 0) - budget;'), 'T162g 保底吃穿预算时从最高的那朵往回夺，加总不会超');
@@ -2042,6 +2042,15 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pj.includes("if (Date.now() - (app.armedAt || 0) < 300)"), 'T175a 上膛后 300ms 内的重复事件当作同一次点击，仍要求再点');
   ok(pj.includes('app.armedAt = Date.now();'), 'T175b 上膛时记时间戳');
   ok(pj.includes("['清空', '确认清空？']"), 'T175c 清空本来就有二次确认（浮条上「清空」= 摘掉全部标签，不是取消选择）');
+}
+
+// T176：关掉的栏（取消勾选「启用目录标签」）不许被云区高度裁掉
+{
+  const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  ok(pj.includes('const offH = panes'), 'T176a 云区高度把「只剩标题行」的栏也算进去');
+  ok(pj.includes('.filter((p) => p.classList.contains(\'off\'))'), 'T176b 只统计被关掉的那栏');
+  ok(pj.includes('`${Math.round(total + offH)}px`'), 'T176c 区总高 = 开着的栏 + 关着的标题行');
+  ok(pj.includes('const capLive = Math.max(60, capByList - offH);'), 'T176d 给列表的保底预算要把标题行扣掉');
 }
 
 }

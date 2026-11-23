@@ -1681,12 +1681,23 @@ function layoutClouds() {
   const m = listMetrics();
   const capByList = Math.max(96, m.H - m.chrome - m.reserve - 2);
 
+  // 关掉的栏（比如「启用目录标签」取消勾选）只剩标题行，但它也得占地方：
+  // 云区高度以前只按"开着的栏"算，关掉的那栏就被 overflow:hidden 整条裁掉，
+  // 连恢复用的勾选框一起看不见了——所以这里把它的高度单算，加在总高上
+  const offH = panes
+    .filter((p) => p.classList.contains('off'))
+    .reduce((a, p) => {
+      const head = p.querySelector('.pane-head');
+      return a + (head ? head.offsetHeight : 22);
+    }, 0);
+  const capLive = Math.max(60, capByList - offH);
+
   // 云区总高 = 内容需要多少就多少（自适应），不吃满预算也不留空白
-  let total = Math.max(88, Math.min(needSum, capByList));
+  let total = Math.max(88, Math.min(needSum, capLive));
   const shares = allocateCloudHeights(needs, Math.round(total));
 
   const apply = () => {
-    area.style.setProperty('--cloud-space', `${Math.round(total)}px`);
+    area.style.setProperty('--cloud-space', `${Math.round(total + offH)}px`);
     live.forEach((p, i) => {
       p.style.flex = '0 0 auto';
       p.style.height = `${shares[i]}px`;
