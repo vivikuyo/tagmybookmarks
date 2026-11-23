@@ -2058,21 +2058,24 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
   ok(pj.includes('app.subtreeKeys = new Map();') && pj.includes('arr.push(k);'), 'T177a 先按目录建一棵「这一枝有哪些书签行」的索引');
-  ok(pj.includes("cb.className = 'grp-cb';") && pj.includes('勾选这个目录里的全部书签'), 'T177b 组头有复选框，带说明');
-  ok(pj.includes('if (cb.checked) app.selected.add(k);') && pj.includes('else app.selected.delete(k);'), 'T177c 勾上选中整枝、取消清掉整枝');
-  ok(pj.includes('cb.indeterminate = picked > 0 && picked < keys.length;'), 'T177d 部分选中显示半选');
+  ok(pj.includes("cb.className = 'grp-cb';") && pj.includes('勾选这个目录（含 ${keys.length} 条书签）'), 'T177b 组头有复选框，带说明');
+  ok(pj.includes('if (cb.checked) app.selected.add(fkey);') && pj.includes('else app.selected.delete(fkey);'), 'T177c 勾上记这个目录、取消清掉这个目录');
+  ok(pj.includes('勾选这个空目录——删除会把它移到回收站'), 'T177d 空目录也能勾（删除 = 整枝移进回收站）');
   ok(pj.includes('function syncRowHighlights()') && pj.includes('li.dataset.rowKey = rowKey(item);'), 'T177e 勾选后只改行高亮，不重建列表（滚动不跳）');
   ok(pj.includes('head.append(cb, caret, name, n);'), 'T177f 勾选框排在箭头之前');
   ok(pc.includes('.grp-cb {'), 'T177g 勾选框有独立样式');
-  ok(pj.includes('cb.disabled = true;') && pj.includes("cb.title = '这个目录（含子目录）里没有书签，没有可勾选的对象';"), 'T177h 空目录的勾选框置灰并说明原因（不是坏了，是可勾对象为 0）');
-  ok(pc.includes('.grp-cb:disabled { opacity: .4; cursor: default; }'), 'T177i 置灰样式');
+  ok(pj.includes('const folderKey = (id) => `f:${String(id ?? \'\')}`;'), 'T177h 目录用 f:<id> 单独记选中态，不和书签的行键混用');
+  ok(pj.includes('function selectedFolderIds()') && pj.includes("startsWith('f:')"), 'T177i 取选中目录时把目录和书签分开');
+  ok(pj.includes('ids: ids.concat(fids)'), 'T177j 删除时把目录一起发给后台（后台按整枝移进回收站）');
+  ok(pc.includes('.grp.on {'), 'T177k 勾中的目录行整行着色');
+  ok(pj.includes("return toast('只勾了目录：标签类操作只作用于书签，删除会把整个目录移进回收站');"), 'T177l 只勾目录时点标签操作有明确提示，不是没反应');
 }
 
 // T178：目录展开箭头要看得见
 {
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
   ok(pc.includes('.grp .grp-caret::before'), 'T178a 三角改用 CSS 几何图形画，不依赖字体字形');
-  ok(pc.includes('border-left: 12px solid currentColor;') && pc.includes('border-top: 10px solid transparent;'), 'T178b 三角 20px 高、12px 宽，用主色 currentColor');
+  ok(pc.includes('border-left: 10px solid currentColor;') && pc.includes('border-top: 8px solid transparent;'), 'T178b 三角 16px 高、10px 宽，用主色 currentColor');
   ok(pc.includes('.grp:not(.collapsed) .grp-caret::before { transform: translate(-50%, -50%) rotate(90deg); }'), 'T178c 展开时转 90°');
   ok(pj.includes('caret.textContent = \'\';'), 'T178e 不再塞字体字符（字形不居中才是错行的根）');
   ok(pc.includes('align-items: center; gap: 5px; min-height: 24px;'), 'T178d 组头与箭头纵向居中对齐，行高不再被撑大');

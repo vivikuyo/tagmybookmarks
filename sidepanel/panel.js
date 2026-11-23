@@ -881,6 +881,7 @@ function renderFolderHead(node) {
     + (collapsed ? ' collapsed' : '')
     + (open ? ' grp-open' : '')
     + (isHit ? ' grp-hit' : '')
+    + (app.selected.has(folderKey(id)) ? ' on' : '')
     + (node.depth === 0 ? ' grp-top' : '');
   head.dataset.folder = id;
   head.style.paddingLeft = '6px'; // 不做层级缩进，层级由路径标签体现
@@ -891,23 +892,17 @@ function renderFolderHead(node) {
   const cb = document.createElement('input');
   cb.type = 'checkbox';
   cb.className = 'grp-cb';
-  const picked = keys.filter((k) => app.selected.has(k)).length;
-  cb.checked = keys.length > 0 && picked === keys.length;
-  cb.indeterminate = picked > 0 && picked < keys.length;
-  // 空目录（包括只有空子目录、里面一条书签都没有的）没有可勾选的对象：
-  // 置灰并说明原因，避免"点了没反应"看起来像坏了
-  if (!keys.length) {
-    cb.disabled = true;
-    cb.title = '这个目录（含子目录）里没有书签，没有可勾选的对象';
-  } else {
-    cb.title = '勾选这个目录里的全部书签（含子目录）';
-  }
+  // 勾选框选的是「这个目录」本身（f:<id>）：删除 = 整枝进回收站，空目录也能删
+  const fkey = folderKey(id);
+  cb.checked = app.selected.has(fkey);
+  cb.title = keys.length
+    ? `勾选这个目录（含 ${keys.length} 条书签）——删除会把整个目录移到回收站`
+    : '勾选这个空目录——删除会把它移到回收站';
   cb.addEventListener('click', (e) => e.stopPropagation());
   cb.addEventListener('change', () => {
-    for (const k of keys) {
-      if (cb.checked) app.selected.add(k);
-      else app.selected.delete(k);
-    }
+    if (cb.checked) app.selected.add(fkey);
+    else app.selected.delete(fkey);
+    head.classList.toggle('on', cb.checked);
     syncRowHighlights();
     updateBulk();
   });
@@ -1398,6 +1393,13 @@ function selectedIds() {
   return selectedItems().flatMap((i) => nodeIdsOf(i));
 }
 
+const folderKey = (id) => `f:${String(id ?? '')}`;
+
+/** 选中的目录（勾的是目录本身，不是它里面的书签） */
+function selectedFolderIds() {
+  return [...app.selected].filter((k) => k.startsWith('f:')).map((k) => k.slice(2));
+}
+
 // 勾选变化后只改行的高亮，不重建列表（重建会把滚动位置弹回去）
 function syncRowHighlights() {
   for (const li of listEl.querySelectorAll('li.row')) {
@@ -1413,10 +1415,9 @@ function syncGroupChecks() {
   for (const head of listEl.querySelectorAll('.grp')) {
     const cb = head.querySelector('.grp-cb');
     if (!cb) continue;
-    const keys = app.subtreeKeys.get(String(head.dataset.folder ?? '')) || [];
-    const picked = keys.filter((k) => app.selected.has(k)).length;
-    cb.checked = keys.length > 0 && picked === keys.length;
-    cb.indeterminate = picked > 0 && picked < keys.length;
+    const fk = folderKey(head.dataset.folder ?? '');
+    cb.checked = app.selected.has(fk);
+    head.classList.toggle('on', cb.checked);
   }
 }
 
@@ -1492,8 +1493,13 @@ async function bulkAction(act, btn) {
     app.selected.clear();
     return renderList();
   }
+  const fids = selectedFolderIds();
   const ids = selectedIds();
-  if (!ids.length) return;
+  if (!ids.length && !fids.length) return;
+  // 加/摘标签、清空、打开都只针对书签；只勾了目录时给一句话，而不是默默没反应
+  if (fids.length && !ids.length && act !== 'delete' && act !== 'unselect') {
+    return toast('只勾了目录：标签类操作只作用于书签，删除会把整个目录移进回收站');
+  }
 
   if (act === 'clear' || act === 'delete') {
     if (!armOrConfirm(act, btn)) return;
@@ -1527,17 +1533,18 @@ async function bulkAction(act, btn) {
   }
 
   if (act === 'delete') {
-    let r = await send({ type: 'delete', ids });
+    let r = await send({ type: 'delete', ids: ids.concat(fids) });
     if (r.needTrash) {
       // 首次删除：先问回收站位置，同意默认位置后补删这批
       const ok = await askTrashSetup();
       if (!ok) return toast('已取消：先在管理页设置回收站');
-      r = await send({ type: 'delete', ids });
+      r = await send({ type: 'delete', ids: ids.concat(fids) });
     }
     app.selected.clear();
     await run();
-    if (r.purged) toast(`已彻底删除 ${r.purged} 个书签`);
-    else toast(`已移入回收站 ${r.trashed || 0} 个书签`);
+    const what = fids.length ? `（含 ${fids.length} 个目录）` : '';
+    if (r.purged) toast(`已彻底删除 ${r.purged} 项${what}`);
+    else toast(`已移入回收站 ${r.trashed || 0} 项${what}`);
   }
 }
 
