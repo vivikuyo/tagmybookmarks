@@ -2064,13 +2064,15 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pj.includes('function syncRowHighlights()') && pj.includes('li.dataset.rowKey = rowKey(item);'), 'T177e 勾选后只改行高亮，不重建列表（滚动不跳）');
   ok(pj.includes('head.append(cb, caret, name, n);'), 'T177f 勾选框排在箭头之前');
   ok(pc.includes('.grp-cb {'), 'T177g 勾选框有独立样式');
+  ok(pj.includes('cb.disabled = true;') && pj.includes("cb.title = '这个目录（含子目录）里没有书签，没有可勾选的对象';"), 'T177h 空目录的勾选框置灰并说明原因（不是坏了，是可勾对象为 0）');
+  ok(pc.includes('.grp-cb:disabled { opacity: .4; cursor: default; }'), 'T177i 置灰样式');
 }
 
 // T178：目录展开箭头要看得见
 {
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
   ok(pc.includes('.grp .grp-caret::before'), 'T178a 三角改用 CSS 几何图形画，不依赖字体字形');
-  ok(pc.includes('border-left: 10px solid currentColor;'), 'T178b 三角形状与主色一致，跟着主题走');
+  ok(pc.includes('border-left: 12px solid currentColor;') && pc.includes('border-top: 10px solid transparent;'), 'T178b 三角 20px 高、12px 宽，用主色 currentColor');
   ok(pc.includes('.grp:not(.collapsed) .grp-caret::before { transform: translate(-50%, -50%) rotate(90deg); }'), 'T178c 展开时转 90°');
   ok(pj.includes('caret.textContent = \'\';'), 'T178e 不再塞字体字符（字形不居中才是错行的根）');
   ok(pc.includes('align-items: center; gap: 5px; min-height: 24px;'), 'T178d 组头与箭头纵向居中对齐，行高不再被撑大');

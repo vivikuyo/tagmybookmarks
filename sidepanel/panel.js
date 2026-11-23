@@ -891,10 +891,17 @@ function renderFolderHead(node) {
   const cb = document.createElement('input');
   cb.type = 'checkbox';
   cb.className = 'grp-cb';
-  cb.title = '勾选这个目录里的全部书签（含子目录）';
   const picked = keys.filter((k) => app.selected.has(k)).length;
   cb.checked = keys.length > 0 && picked === keys.length;
   cb.indeterminate = picked > 0 && picked < keys.length;
+  // 空目录（包括只有空子目录、里面一条书签都没有的）没有可勾选的对象：
+  // 置灰并说明原因，避免"点了没反应"看起来像坏了
+  if (!keys.length) {
+    cb.disabled = true;
+    cb.title = '这个目录（含子目录）里没有书签，没有可勾选的对象';
+  } else {
+    cb.title = '勾选这个目录里的全部书签（含子目录）';
+  }
   cb.addEventListener('click', (e) => e.stopPropagation());
   cb.addEventListener('change', () => {
     for (const k of keys) {
