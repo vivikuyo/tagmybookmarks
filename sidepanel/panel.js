@@ -690,9 +690,11 @@ function addWithAncestors(id, out) {
  */
 function isGroupCollapsed(id) {
   const key = String(id ?? '');
-  if (app.grpCollapsed.has(key)) return true;
-  if (app.autoOpen && !app.autoOpen.has(key)) return true;
-  return false;
+  // 查询期间以临时展开集合为唯一依据：不能再先看 grpCollapsed，
+  // 否则"之前手动折叠过 / 点过折叠全部"的目录会一直是收起状态，
+  // 既不会被命中展开，手动点也压不过它（点只改 autoOpen）。
+  if (app.autoOpen) return !app.autoOpen.has(key);
+  return app.grpCollapsed.has(key);
 }
 
 /** 这一行是否落在"整枝命中"的目录里（@目录 或命中行的上级） */

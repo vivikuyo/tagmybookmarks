@@ -2002,12 +2002,27 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pj.includes("if (!String(app.expr || '').trim()) return;"), 'T172a 空查询不跳转（不再莫名其妙着色）');
   ok(pj.includes('app.hitKeys = new Set();') && pj.includes('app.hitDirs = new Set();'), 'T172b 命中书签与命中目录两套集合');
   ok(pj.includes('function addSubtreeIds(id, out)'), 'T172c @目录 命中算整枝（含子目录）');
-  ok(pj.includes('function isGroupCollapsed(id)') && pj.includes('if (app.autoOpen && !app.autoOpen.has(key)) return true;'), 'T172d 查询非空时只展开命中目录，其余临时收起');
+  ok(pj.includes('function isGroupCollapsed(id)') && pj.includes('if (app.autoOpen) return !app.autoOpen.has(key);'), 'T172d 查询非空时只展开命中目录，其余临时收起');
   ok(pj.includes('for (const id of app.hitFolders) addWithAncestors(id, app.autoOpen);'), 'T172e 命中行的目录与祖先链一起展开');
   ok(pj.includes("(hit ? ' hit' : inHitBranch ? ' hit-in' : '')"), 'T172f 行分两档着色：直接命中 / 整枝内');
   ok(pc.includes('.row.hit {') && pc.includes('.row.hit-in {') && pc.includes('.grp-hit'), 'T172g 行与目录组头都有着色');
   ok(pj.includes('|| (app.hitDirs && app.hitDirs.has(id)));'), 'T172h 被 @点名的目录组头也亮');
   ok(!pj.includes('所选不同枝，交集为空'), 'T172i 不再提示「所选不同枝，交集为空」');
+  ok(!pj.includes('if (app.grpCollapsed.has(key)) return true;'), 'T173a 查询期间手动折叠记忆不再压过临时展开');
+// T173：查询期间折叠状态只认临时展开集合（否则折叠过就再也打不开）
+{
+  const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  ok(pj.includes("if (app.grpCollapsed.has(key)) return true;") === false
+     && pj.includes('if (app.autoOpen) return !app.autoOpen.has(key);'),
+     'T173b 目录收起判断：有查询看 autoOpen，无查询看 grpCollapsed');
+  ok(pj.includes('if (collapsedNow) app.autoOpen.add(key);')
+     && pj.includes('else app.autoOpen.delete(key);'),
+     'T173c 查询期间手动点组头只改临时集合，能正常展开/收起');
+  ok(pj.includes('app.autoOpen = anyOpen ? new Set() : new Set(ids);'),
+     'T173d 一键折叠/展开在查询期间作用于 foldIds 全集（含子目录）');
+  ok(pj.includes("app.autoOpen = null;"), 'T173e 空查询把临时集合清掉，回到手动展开状态');
+}
+
 }
 
 // T165：点 @目录 chip 跳转时优先落在"那个目录里的那一份"（同 URL 多处收藏不再跳错目录）
