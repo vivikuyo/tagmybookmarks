@@ -272,7 +272,7 @@ body[data-density="ultra"] .load-more {
 .grp:hover { background: var(--bg-hover); }
 /* 三角用 CSS 几何图形画（不依赖字体字形），只显示、不占自己的点击区 */
 .grp .grp-caret {
-  position: relative; flex: 0 0 auto; width: 20px; height: 20px;
+  position: relative; flex: 0 0 auto; width: 16px; height: 16px;
   margin: 0; padding: 0; border: 0; background: transparent;
   font-size: 0; line-height: 0; color: var(--text);
   cursor: pointer;
@@ -281,9 +281,9 @@ body[data-density="ultra"] .load-more {
   content: '';
   position: absolute; top: 50%; left: 50%;
   width: 0; height: 0;
-  border-left: 10px solid currentColor;
-  border-top: 8px solid transparent;
-  border-bottom: 8px solid transparent;
+  border-left: 7px solid currentColor;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
   transform: translate(-50%, -50%);
   transition: transform .12s ease;
 }
