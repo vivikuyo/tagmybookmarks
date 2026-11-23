@@ -257,7 +257,7 @@ body[data-density="ultra"] .load-more {
 
 /* 目录分组组头（分组视图：清单按目录分段，组头可折叠） */
 .grp {
-  display: flex; align-items: center; gap: 5px;
+  display: flex; align-items: center; gap: 5px; min-height: 36px;
   width: 100%;
   margin-top: 2px;
   padding: 4px 8px 3px;
@@ -271,9 +271,9 @@ body[data-density="ultra"] .load-more {
 }
 .grp:hover { background: var(--bg-hover); }
 .grp .grp-caret {
-  flex: 0 0 auto; width: 18px; height: 18px; padding: 0;
-  border: 0; border-radius: 4px; background: transparent; color: var(--text);
-  font: inherit; font-size: 13px; font-weight: 600; line-height: 18px;
+  flex: 0 0 auto; width: 30px; height: 30px; padding: 0;
+  border: 0; border-radius: 6px; background: transparent; color: var(--text);
+  font: inherit; font-size: 26px; font-weight: 600; line-height: 30px;
   text-align: center; cursor: pointer;
 }
 .grp .grp-caret:hover {
