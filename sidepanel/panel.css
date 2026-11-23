@@ -271,12 +271,15 @@ body[data-density="ultra"] .load-more {
 }
 .grp:hover { background: var(--bg-hover); }
 .grp .grp-caret {
-  flex: 0 0 auto; width: 14px; height: 14px; padding: 0;
-  border: 0; background: transparent; color: var(--text-dim);
-  font: inherit; font-size: 10px; font-weight: 400; line-height: 14px;
-  cursor: pointer;
+  flex: 0 0 auto; width: 18px; height: 18px; padding: 0;
+  border: 0; border-radius: 4px; background: transparent; color: var(--text);
+  font: inherit; font-size: 13px; font-weight: 600; line-height: 18px;
+  text-align: center; cursor: pointer;
 }
-.grp .grp-caret:hover { color: var(--text); }
+.grp .grp-caret:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
 .grp.drop { box-shadow: inset 0 0 0 2px var(--accent); }
 .grp-rename {
   flex: 1 1 auto; min-width: 0;
@@ -294,7 +297,8 @@ body[data-density="ultra"] .load-more {
   border-left: 2px solid color-mix(in srgb, var(--text-dim) 45%, transparent);
 }
 .grp.grp-open:hover { background: var(--bg-hover); }
-.grp.grp-open .grp-caret,
+/* 展开的目录：箭头点成强调色，一眼看出这枝是打开的 */
+.grp.grp-open .grp-caret { color: var(--accent); }
 .grp.grp-open .grp-n { color: var(--text-dim); }
 /* 命中：查询命中的书签所在的目录才亮强调色 */
 .grp.grp-hit {

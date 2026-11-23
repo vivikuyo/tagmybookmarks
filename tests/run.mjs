@@ -2066,6 +2066,14 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pc.includes('.grp-cb {'), 'T177g 勾选框有独立样式');
 }
 
+// T178：目录展开箭头要看得见
+{
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  ok(pc.includes('width: 18px; height: 18px; padding: 0;'), 'T178a 箭头热区放大到 18×18');
+  ok(pc.includes('font-size: 13px; font-weight: 600; line-height: 18px;'), 'T178b 三角字形加大加粗（原来 10px 太细看不出）');
+  ok(pc.includes('.grp.grp-open .grp-caret { color: var(--accent); }'), 'T178c 展开的目录箭头用强调色');
+}
+
 }
 
 // T165：点 @目录 chip 跳转时优先落在"那个目录里的那一份"（同 URL 多处收藏不再跳错目录）
