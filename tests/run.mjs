@@ -2069,9 +2069,10 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
 // T178：目录展开箭头要看得见
 {
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
-  ok(pc.includes('font-size: 24px; font-weight: 600; line-height: 1;'), 'T178a 三角字形 24px');
-  ok(pc.includes('.grp .grp-caret {') && pc.includes('border: 0; background: transparent; color: var(--text);')
-     && !pc.includes('width: 18px; height: 18px; padding: 0;'), 'T178b 只显示三角，不再给它单独的点击区');
+  ok(pc.includes('.grp .grp-caret::before'), 'T178a 三角改用 CSS 几何图形画，不依赖字体字形');
+  ok(pc.includes('border-left: 10px solid currentColor;'), 'T178b 三角形状与主色一致，跟着主题走');
+  ok(pc.includes('.grp:not(.collapsed) .grp-caret::before { transform: translate(-50%, -50%) rotate(90deg); }'), 'T178c 展开时转 90°');
+  ok(pj.includes('caret.textContent = \'\';'), 'T178e 不再塞字体字符（字形不居中才是错行的根）');
   ok(pc.includes('align-items: center; gap: 5px; min-height: 24px;'), 'T178d 组头与箭头纵向居中对齐，行高不再被撑大');
   ok(pc.includes('.grp.grp-open .grp-caret { color: var(--accent); }'), 'T178c 展开的目录箭头用强调色');
 }

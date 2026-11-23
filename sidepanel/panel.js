@@ -908,7 +908,10 @@ function renderFolderHead(node) {
   const caret = document.createElement('button');
   caret.type = 'button';
   caret.className = 'grp-caret';
-  caret.textContent = collapsed ? '▸' : '▾';
+  // 三角不再用字体字符（字形的墨迹不居中，放多大都会和目录名错开半行），
+  // 改成 CSS 画的纯几何三角，由 .collapsed 决定朝向
+  caret.textContent = '';
+  caret.setAttribute('aria-label', collapsed ? '展开目录' : '折叠目录');
   caret.title = collapsed ? '展开' : '折叠';
   caret.addEventListener('click', (e) => {
     e.stopPropagation();
