@@ -333,6 +333,9 @@ body[data-density="ultra"] .grp .grp-n { font-size: 10px; }
 
 .row .pick { margin: 1px 0 0; flex: 0 0 auto; }
 
+/* 目录组头的勾选框：勾上 = 这一枝的书签全选中 */
+.grp-cb { flex: 0 0 auto; margin: 0 2px 0 0; accent-color: var(--accent); cursor: pointer; }
+
 .row-main { min-width: 0; flex: 1 1 auto; }
 
 .row-title {

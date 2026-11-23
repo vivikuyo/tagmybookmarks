@@ -787,6 +787,19 @@ function renderList() {
       for (const id of app.hitFolders) addWithAncestors(id, app.autoOpen);
       for (const id of app.hitDirs) addWithAncestors(id, app.autoOpen);
     }
+    // 每个目录下（含各级子目录）有哪些书签行：给文件夹勾选框用，一趟扫完
+    app.subtreeKeys = new Map();
+    for (const r of rows) {
+      const k = rowKey(r);
+      let pid = String(r.parentId ?? '');
+      let guard = 0;
+      while (pid && guard++ < 60) {
+        let arr = app.subtreeKeys.get(pid);
+        if (!arr) { arr = []; app.subtreeKeys.set(pid, arr); }
+        arr.push(k);
+        pid = (app.folderParent && app.folderParent.get(pid)) || '';
+      }
+    }
     const foldBtn = $('#foldBtn');
     if (foldBtn) foldBtn.hidden = false;
     if (app.foldersTree) renderTreeRows();
@@ -873,6 +886,25 @@ function renderFolderHead(node) {
   head.style.paddingLeft = '6px'; // 不做层级缩进，层级由路径标签体现
   head.title = `${folderLabel(node)} · ${node.total ?? 0} 条（右键可重命名）`;
 
+  // 文件夹勾选框：勾上 = 这一枝（含所有子目录）的书签全部选中，取消 = 全部取消
+  const keys = (app.subtreeKeys && app.subtreeKeys.get(id)) || [];
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.className = 'grp-cb';
+  cb.title = '勾选这个目录里的全部书签（含子目录）';
+  const picked = keys.filter((k) => app.selected.has(k)).length;
+  cb.checked = keys.length > 0 && picked === keys.length;
+  cb.indeterminate = picked > 0 && picked < keys.length;
+  cb.addEventListener('click', (e) => e.stopPropagation());
+  cb.addEventListener('change', () => {
+    for (const k of keys) {
+      if (cb.checked) app.selected.add(k);
+      else app.selected.delete(k);
+    }
+    syncRowHighlights();
+    updateBulk();
+  });
+
   const caret = document.createElement('button');
   caret.type = 'button';
   caret.className = 'grp-caret';
@@ -891,7 +923,7 @@ function renderFolderHead(node) {
   n.className = 'grp-n';
   n.textContent = `${node.total ?? 0} 条`;
 
-  head.append(caret, name, n);
+  head.append(cb, caret, name, n);
   head.addEventListener('click', () => toggleFolder(id));
 
   // 右键：重命名文件夹（就地改，Enter 提交、Esc 取消）
@@ -1139,6 +1171,7 @@ function renderRow(item) {
     + (app.selected.has(rowKey(item)) ? ' selected' : '')
     + (hit ? ' hit' : inHitBranch ? ' hit-in' : '');
   li.dataset.key = item.key;
+  li.dataset.rowKey = rowKey(item);
 
   const pick = document.createElement('input');
   pick.type = 'checkbox';
@@ -1355,6 +1388,28 @@ function selectedIds() {
   return selectedItems().flatMap((i) => nodeIdsOf(i));
 }
 
+// 勾选变化后只改行的高亮，不重建列表（重建会把滚动位置弹回去）
+function syncRowHighlights() {
+  for (const li of listEl.querySelectorAll('li.row')) {
+    const k = li.dataset.rowKey;
+    if (!k) continue;
+    li.classList.toggle('selected', app.selected.has(k));
+  }
+}
+
+// 文件夹勾选框的三态：跟着当前选择重算（不重建 DOM）
+function syncGroupChecks() {
+  if (!app.subtreeKeys) return;
+  for (const head of listEl.querySelectorAll('.grp')) {
+    const cb = head.querySelector('.grp-cb');
+    if (!cb) continue;
+    const keys = app.subtreeKeys.get(String(head.dataset.folder ?? '')) || [];
+    const picked = keys.filter((k) => app.selected.has(k)).length;
+    cb.checked = keys.length > 0 && picked === keys.length;
+    cb.indeterminate = picked > 0 && picked < keys.length;
+  }
+}
+
 function updateBulk() {
   const n = app.selected.size;
   const total = viewRows().length;
@@ -1372,6 +1427,7 @@ function updateBulk() {
     all.indeterminate = n > 0 && n < total;
   }
   if (!n) disarm();
+  syncGroupChecks();
 }
 
 // 与书签管理页同一套切分/校验：空格/逗号分开、引号包住保留内部空格、非法名丢弃

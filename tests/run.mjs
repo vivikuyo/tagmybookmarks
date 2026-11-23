@@ -2053,6 +2053,19 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pj.includes('const capLive = Math.max(60, capByList - offH);'), 'T176d 给列表的保底预算要把标题行扣掉');
 }
 
+// T177：目录组头的勾选框——勾上等于选中这一枝的书签
+{
+  const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  ok(pj.includes('app.subtreeKeys = new Map();') && pj.includes('arr.push(k);'), 'T177a 先按目录建一棵「这一枝有哪些书签行」的索引');
+  ok(pj.includes("cb.className = 'grp-cb';") && pj.includes('勾选这个目录里的全部书签'), 'T177b 组头有复选框，带说明');
+  ok(pj.includes('if (cb.checked) app.selected.add(k);') && pj.includes('else app.selected.delete(k);'), 'T177c 勾上选中整枝、取消清掉整枝');
+  ok(pj.includes('cb.indeterminate = picked > 0 && picked < keys.length;'), 'T177d 部分选中显示半选');
+  ok(pj.includes('function syncRowHighlights()') && pj.includes('li.dataset.rowKey = rowKey(item);'), 'T177e 勾选后只改行高亮，不重建列表（滚动不跳）');
+  ok(pj.includes('head.append(cb, caret, name, n);'), 'T177f 勾选框排在箭头之前');
+  ok(pc.includes('.grp-cb {'), 'T177g 勾选框有独立样式');
+}
+
 }
 
 // T165：点 @目录 chip 跳转时优先落在"那个目录里的那一份"（同 URL 多处收藏不再跳错目录）
