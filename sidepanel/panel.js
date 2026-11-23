@@ -116,8 +116,13 @@ function bind() {
   $('#foldBtn').addEventListener('click', () => {
     if (!app.foldIds) return;
     const ids = app.foldIds;
-    const anyOpen = ids.some((id) => !app.grpCollapsed.has(id));
-    app.grpCollapsed = anyOpen ? new Set(ids) : new Set();
+    const anyOpen = ids.some((id) => !isGroupCollapsed(id));
+    if (app.autoOpen) {
+      // 查询期间只改临时展开集合：不然"折叠全部"会把平时的手动记忆一起改掉
+      app.autoOpen = anyOpen ? new Set() : new Set(ids);
+    } else {
+      app.grpCollapsed = anyOpen ? new Set(ids) : new Set();
+    }
     applyFoldBtn();
     renderList();
   });
@@ -370,9 +375,6 @@ function renderCloud() {
   const needle = (app.filterText || '').toLowerCase();
   const filtered = needle ? list.filter((t) => t.tag.toLowerCase().includes(needle)) : list;
 
-  // 标签名和某个目录同名时，给标签 chip 也加 # 前缀：两朵云里出现同名 chip 时
-  // 一眼能看出哪一行是标签、哪一行是目录，点错了也不会再以为是扩展筛错
-  const dirKeys = new Set((app.dirTags || []).map((t) => t.key));
   filtered.slice(0, LIMIT).forEach((t) => {
     const btn = document.createElement('button');
     btn.className = 'tag' + (activeTags.has(t.tag.toLowerCase()) ? ' active' : '');
@@ -384,14 +386,7 @@ function renderCloud() {
     const cnt = document.createElement('span');
     cnt.className = 'c';
     cnt.textContent = t.count;
-    if (dirKeys.has(t.key)) {
-      const hash = document.createElement('span');
-      hash.className = 'hash';
-      hash.textContent = '#';
-      btn.append(hash, name, cnt);
-    } else {
-      btn.append(name, cnt);
-    }
+    btn.append(name, cnt);
 
     btn.addEventListener('click', (e) => {
       const mode = e.altKey ? 'not' : e.shiftKey ? 'or' : 'and';
@@ -503,9 +498,6 @@ function renderDirPane(enabled) {
       let text = shown.length !== list.length
         ? '· ' + shown.length + '/' + list.length + ' 相关'
         : '· ' + list.length;
-      // 手写 @目录 绕过了 chip 隐藏：不拦、不弹窗，只在计数行点明"必然空"
-      const qd = (app.data && app.data.queryDirs) || [];
-      if (qd.length > 1 && app.data && !app.data.total) text += ' · 所选不同枝，交集为空';
       cnt.textContent = text;
     }
   }
@@ -537,16 +529,12 @@ function renderDirPane(enabled) {
     btn.className = 'tag dir' + (activeDirs.has(t.key) ? ' active' : '');
     btn.style.color = colorFor(t.tag, app.colors);
     btn.title = `${t.tag} · ${t.count} 条\n点击 = 与（AND，插入 @${t.tag}）  Shift = 或（OR）  Alt = 非（NOT）  双击 = 只看这个目录（@${t.tag}）`;
-    // 目录 chip 一律带 @ 前缀：和同名标签 chip 长得一样时，用户分不清点的是哪一朵云
-    const at = document.createElement('span');
-    at.className = 'at';
-    at.textContent = '@';
     const name = document.createElement('span');
     name.textContent = t.tag;
     const c = document.createElement('span');
     c.className = 'c';
     c.textContent = t.count;
-    btn.append(at, name, c);
+    btn.append(name, c);
     btn.addEventListener('click', (e) => {
       const mode = e.altKey ? 'not' : e.shiftKey ? 'or' : 'and';
       applyTag(t.tag, mode, '@');
@@ -677,8 +665,53 @@ function rowInQueryDirs(row, dirs) {
   return folderNameKeys(row.parentId).some((k) => dirs.has(k));
 }
 
+/** 把某个目录连同它的所有子目录塞进集合（@目录 = 整枝命中） */
+function addSubtreeIds(id, out) {
+  const key = String(id ?? '');
+  if (!key || out.has(key)) return;
+  out.add(key);
+  const node = app.folderById && app.folderById.get(key);
+  for (const c of (node && node.children) || []) addSubtreeIds(String(c.id), out);
+}
+
+/** 目录 + 它各级祖先（要让命中的目录真的渲染出来，祖先必须展开） */
+function addWithAncestors(id, out) {
+  let cur = String(id ?? '');
+  while (cur && !out.has(cur)) {
+    out.add(cur);
+    cur = (app.folderParent && app.folderParent.get(cur)) || '';
+  }
+}
+
+/**
+ * 目录是否处于收起状态。
+ * 查询非空时有临时展开集合 app.autoOpen：不在里面的目录一律收起（视觉规则），
+ * 但不写进 app.grpCollapsed，清空查询即回到用户手动调出来的样子。
+ */
+function isGroupCollapsed(id) {
+  const key = String(id ?? '');
+  if (app.grpCollapsed.has(key)) return true;
+  if (app.autoOpen && !app.autoOpen.has(key)) return true;
+  return false;
+}
+
+/** 这一行是否落在"整枝命中"的目录里（@目录 或命中行的上级） */
+function rowInHitBranch(row) {
+  if (!app.hitDirs || !app.hitDirs.size) return false;
+  let pid = String(row.parentId ?? '');
+  let guard = 0;
+  while (pid && guard++ < 40) {
+    if (app.hitDirs.has(pid)) return true;
+    pid = (app.folderParent && app.folderParent.get(pid)) || '';
+  }
+  return false;
+}
+
 function jumpToFirstHit() {
   if (app.group !== 'dir') return;
+  // 空查询不算"命中"：空查询返回的是全部已打标签的书签，
+  // 以前会把它当成命中、把第一行闪起来，表现为"什么都没点却在闪"
+  if (!String(app.expr || '').trim()) return;
   if (!app.allRows || !app.data || !app.data.items.length) return;
 
   // 命中的 key → 在全书签清单里找 seq 最小的那一行（树序最靠前，而不是标题序）
@@ -697,17 +730,7 @@ function jumpToFirstHit() {
   }
   if (!target) return;
 
-  // 目标所在的目录链（含各级上级）全部展开，否则这一行根本没渲染
-  let pid = String(target.parentId ?? '');
-  let opened = false;
-  while (pid) {
-    if (app.grpCollapsed.has(pid)) { app.grpCollapsed.delete(pid); opened = true; }
-    pid = (app.folderParent && app.folderParent.get(pid)) || '';
-  }
-  if (opened) {
-    applyFoldBtn();
-    renderList();
-  }
+  // 展开交给 renderList 的临时展开集合（app.autoOpen），这里不再改用户手动的折叠状态
 
   let row = null;
   for (const li of listEl.querySelectorAll('.row')) {
@@ -715,8 +738,6 @@ function jumpToFirstHit() {
   }
   if (!row) return;
   row.scrollIntoView({ block: 'center' });
-  // 命中行一直闪，直到查询被改掉（renderList 重建 DOM，类名随之消失）。
-  row.classList.add('flash');
 }
 
 function renderList() {
@@ -738,14 +759,31 @@ function renderList() {
       listEl.append(div);
       return;
     }
-    // 命中目录：查非空时，命中的书签落在哪些目录 → 组头才亮强调色
-    app.hitFolders = new Set();
-    if (app.expr && data && data.items && data.items.length) {
+    // 命中集合：只在查询非空时算（空查询一律不着色，否则整屏都是"命中"色）
+    app.hitKeys = new Set();      // 命中的书签行
+    app.hitFolders = new Set();   // 命中行所在的目录（组头亮）
+    app.hitDirs = new Set();      // 查询 @出来的目录 → 整枝都要着色
+    app.autoOpen = null;          // 非空查询时的临时展开集合（不写回手动折叠状态）
+    if (String(app.expr || '').trim() && data && data.items && data.items.length) {
       const hit = new Set(data.items.map((i) => i.key));
-      for (const r of rows) if (hit.has(r.key)) app.hitFolders.add(String(r.parentId ?? ''));
+      app.hitKeys = hit;
+      for (const r of rows) {
+        if (!hit.has(r.key)) continue;
+        app.hitFolders.add(String(r.parentId ?? ''));
+      }
+      // 目录自身被查询命中（@目录 / 裸名命中同名目录）：整枝（含所有子目录）都算命中
+      const qd = new Set((data.queryDirs || []).filter(Boolean));
+      if (qd.size) {
+        for (const [id, node] of app.folderById || []) {
+          if (!qd.has(tagKey(node.title || ''))) continue;
+          addSubtreeIds(id, app.hitDirs);
+        }
+      }
+      // 临时展开：命中行所在目录 + 命中目录 + 它们各级祖先，其余一律收起
+      app.autoOpen = new Set();
+      for (const id of app.hitFolders) addWithAncestors(id, app.autoOpen);
+      for (const id of app.hitDirs) addWithAncestors(id, app.autoOpen);
     }
-    // 命中太分散（>8 个目录）就整片不亮，免得半个列表都是蓝组头
-    if (app.hitFolders.size > 8) app.hitFolders.clear();
     const foldBtn = $('#foldBtn');
     if (foldBtn) foldBtn.hidden = false;
     if (app.foldersTree) renderTreeRows();
@@ -801,7 +839,7 @@ function renderTreeRows() {
 function renderFolderNode(node) {
   listEl.append(renderFolderHead(node));
   const id = String(node.id);
-  if (app.grpCollapsed.has(id)) return;
+  if (isGroupCollapsed(id)) return;
   for (const child of node.children || []) renderFolderNode(child); // 文件夹在前
   const rows = (app.rowsByParent && app.rowsByParent.get(id)) || [];
   for (const row of rows) listEl.append(renderRow(row));            // 书签在后
@@ -815,14 +853,14 @@ function folderLabel(node) {
 
 function renderFolderHead(node) {
   const id = String(node.id);
-  const collapsed = app.grpCollapsed.has(id);
+  const collapsed = isGroupCollapsed(id);
   const head = document.createElement('div');
   // 只有「展开且确实有内容」的目录才亮；收起的、空壳目录保持中性灰
   const hasRows = ((app.rowsByParent && app.rowsByParent.get(id)) || []).length > 0;
   const open = !collapsed && ((node.children || []).length > 0 || hasRows);
-  // 只有"真的展开、且自己这一层就有命中行"的目录才亮强调色：
-  // 收起状态下变色会让人误以为它被展开了
-  const isHit = !collapsed && hasRows && !!(app.hitFolders && app.hitFolders.has(id));
+  // 命中：这一层有命中行，或整个目录被 @查询 点名（整枝命中）
+  const isHit = !!((app.hitFolders && app.hitFolders.has(id))
+    || (app.hitDirs && app.hitDirs.has(id)));
   head.className = 'grp'
     + (collapsed ? ' collapsed' : '')
     + (open ? ' grp-open' : '')
@@ -876,8 +914,17 @@ function renderFolderHead(node) {
 }
 
 function toggleFolder(id) {
-  if (app.grpCollapsed.has(id)) app.grpCollapsed.delete(id);
-  else app.grpCollapsed.add(id);
+  const key = String(id ?? '');
+  const collapsedNow = isGroupCollapsed(key);
+  if (app.autoOpen) {
+    // 查询期间的展开是临时的：手动点只改这份临时集合，不污染平时的手动折叠记忆
+    if (collapsedNow) app.autoOpen.add(key);
+    else app.autoOpen.delete(key);
+  } else if (app.grpCollapsed.has(key)) {
+    app.grpCollapsed.delete(key);
+  } else {
+    app.grpCollapsed.add(key);
+  }
   applyFoldBtn();
   renderList();
 }
@@ -887,7 +934,7 @@ function applyFoldBtn() {
   const btn = $('#foldBtn');
   if (!btn || !app.displayNodes) return;
   const ids = app.foldIds || [];
-  const anyOpen = ids.some((id) => !app.grpCollapsed.has(id));
+  const anyOpen = ids.some((id) => !isGroupCollapsed(id));
   btn.textContent = anyOpen ? '折叠全部' : '展开全部';
   btn.hidden = app.group !== 'dir';
 }
@@ -1083,7 +1130,11 @@ function nodeIdsOf(item) {
 
 function renderRow(item) {
   const li = document.createElement('li');
-  li.className = 'row' + (app.selected.has(rowKey(item)) ? ' selected' : '');
+  const hit = !!(app.hitKeys && app.hitKeys.has(item.key));
+  const inHitBranch = !hit && rowInHitBranch(item);
+  li.className = 'row'
+    + (app.selected.has(rowKey(item)) ? ' selected' : '')
+    + (hit ? ' hit' : inHitBranch ? ' hit-in' : '');
   li.dataset.key = item.key;
 
   const pick = document.createElement('input');

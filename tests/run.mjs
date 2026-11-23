@@ -1642,7 +1642,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.indexOf('for (const child of node.children || []) renderFolderNode(child);')
      < pn.indexOf('const rows = (app.rowsByParent && app.rowsByParent.get(id)) || [];', pn.indexOf('function renderFolderNode(node)')), 'T146f 每个文件夹先列下级文件夹、再列自己的书签');
   ok(pn.includes("n.textContent = `${node.total ?? 0} 条`") && pn.includes('function toggleFolder(id)'), 'T146h 组头显示条数，点击折叠/展开');
-  ok(pn.includes("+ (collapsed ? ' collapsed' : '')") && pn.includes('if (app.grpCollapsed.has(id)) return;'), 'T146i 折叠后不再渲染子文件夹与书签');
+  ok(pn.includes("+ (collapsed ? ' collapsed' : '')") && pn.includes('if (isGroupCollapsed(id)) return;'), 'T146i 折叠后不再渲染子文件夹与书签（含查询时的临时收起）');
   ok(pc.includes('.grp {') && pc.includes('.grp .grp-n {') && pc.includes('body[data-density="ultra"] .grp {'), 'T146j 组头样式含三档密度');
   ok(!pn.includes('renderGrouped(') && !pn.includes('renderGroupHead('), 'T146k 旧的平铺分组实现已完全移除（不并存两套渲染）');
 }
@@ -1660,9 +1660,9 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes("if (app.group === 'dir') await loadAllRows();") && pn.includes('jumpToFirstHit();'), 'T147f 每次查询后：先保全量、再跳转');
   ok(pn.includes('const hit = new Set(app.data.items.map((i) => i.key));')
      && pn.includes('if (!target || (r.seq ?? Infinity) < (target.seq ?? Infinity)) target = r;'), 'T147g 跳转目标 = 命中里树序最靠前的那一行');
-  ok(pn.includes('let pid = String(target.parentId ?? \'\');') && pn.includes("pid = (app.folderParent && app.folderParent.get(pid)) || '';"), 'T147h 跳转时把目标所在目录的祖先链全部展开再跳');
-  ok(pn.includes("row.scrollIntoView({ block: 'center' })") && pn.includes("row.classList.add('flash')") && !pn.includes("setTimeout(() => row.classList.remove('flash')"), 'T147i 滚到位置并一直闪（不再 0.9s 收回）');
-  ok(pc.includes('.row.flash {'), 'T147j 闪烁样式');
+  ok(pn.includes('function addWithAncestors(id, out)') && pn.includes('app.autoOpen = new Set();'), 'T147h 命中目录的祖先链由 autoOpen 临时展开（不写回手动折叠）');
+  ok(pn.includes("row.scrollIntoView({ block: 'center' })") && !pn.includes("classList.add('flash')"), 'T147i 只滚到位置，着色由渲染层的命中集合负责');
+  ok(pc.includes('.row.hit {') && pc.includes('.row.hit-in {'), 'T147j 命中与整枝命中两档着色样式');
   ok(pn.includes('`${app.allTotal} 条（全部）`') && !pn.includes('查询只跳转'), 'T147k 计数如实标「全部」，不再挂查询只跳转的提示');
 }
 
@@ -1689,8 +1689,9 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const ph = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
   ok(ph.includes('id="foldBtn"'), 'T149a 操作带加「折叠全部 / 展开全部」按钮');
-  ok(pn.includes("const anyOpen = ids.some((id) => !app.grpCollapsed.has(id));")
+  ok(pn.includes("const anyOpen = ids.some((id) => !isGroupCollapsed(id));")
      && pn.includes('app.grpCollapsed = anyOpen ? new Set(ids) : new Set();'), 'T149b 一键：有展开就全折叠，全折叠就全展开');
+  ok(pn.includes('app.autoOpen = anyOpen ? new Set() : new Set(ids);'), 'T149b2 查询期间只改临时展开集合，不动手动记忆');
   ok(pn.includes('function applyFoldBtn()') && pn.includes("btn.textContent = anyOpen ? '折叠全部' : '展开全部'"), 'T149c 按钮文案随状态切换');
   ok(pn.includes('function folderLabel(node)') && pn.includes('String(node.path).split(PATH_SEP).join('), 'T149d 组头带完整路径（上级\\上级\\自己）');
   ok(pn.includes("name.textContent = folderLabel(node);"), 'T149e 组头显示路径标签而不是只有末段名');
@@ -1701,7 +1702,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes("type: 'bookmarks:move'") && pn.includes('await refreshAll();'), 'T149j 移动走后台 bookmarks:move，成功后重取整份数据');
   ok(pn.includes("{ label: '重命名文件夹'") && pn.includes("await send({ type: 'node:rename', id: String(node.id), title: v });"), 'T149k 文件夹右键可重命名（走 node:rename）');
   ok(pn.includes("input.className = 'grp-rename'") && pc.includes('.grp-rename {') && pc.includes('.row.dragging {'), 'T149l 重命名输入框与拖动态样式');
-  ok(pn.includes("if (opened) {") && pn.includes('applyFoldBtn();'), 'T149m 跳转展开祖先链后同步刷新按钮文案');
+  ok(!pn.includes("if (opened) {") && pn.includes('app.autoOpen = new Set();'), 'T149m 临时展开由渲染层统一处理，不再就地改折叠状态');
 }
 
 
@@ -1730,9 +1731,9 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pc.includes('color-mix(in srgb'), 'T151d 底色用 accent 与 bg-soft 混色，深浅主题自适应');
   ok(pn.includes("+ (isHit ? ' grp-hit' : '')") && pn.includes('app.hitFolders.add(String(r.parentId'), 'T151e 命中所在目录才挂 grp-hit');
   ok(pc.includes('.grp.grp-hit {') && pc.includes('border-left: 2px solid var(--accent);'), 'T151f 命中目录用强调色竖条');
-  ok(pn.includes('if (app.expr && data && data.items && data.items.length)'), 'T151g 空查询不算命中（否则满屏都是蓝组头）');
-  ok(pn.includes('if (app.hitFolders.size > 8) app.hitFolders.clear();'), 'T151h 命中分散超过 8 个目录就整片不亮');
-  ok(pn.includes('const isHit = !collapsed && hasRows && !!(app.hitFolders'), 'T151i 收起的目录即使有命中也不变色（展开才亮）');
+  ok(pn.includes("if (String(app.expr || '').trim() && data && data.items && data.items.length)"), 'T151g 空查询不算命中（否则满屏都是命中色）');
+  ok(!pn.includes('if (app.hitFolders.size > 8) app.hitFolders.clear();'), 'T151h 取消 8 个目录的封顶（命中多少就亮多少）');
+  ok(pn.includes('const isHit = !!((app.hitFolders && app.hitFolders.has(id))') && pn.includes('|| (app.hitDirs && app.hitDirs.has(id)));'), 'T151i 命中目录与被 @点名的目录都亮（不再要求必须展开）');
 }
 
 
@@ -1765,7 +1766,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   ok(pn.includes('function rowKey(item) {'), 'T154a 新增 rowKey：行的选择身份');
   ok(pn.includes("return app.group === 'dir' ? `d:${item.id}` : `k:${item.key}`;"), 'T154b 目录模式按节点 id、清单模式按 URL key');
-  ok(pn.includes("li.className = 'row' + (app.selected.has(rowKey(item)) ? ' selected' : '');") && pn.includes('pick.checked = app.selected.has(rowKey(item));'), 'T154c 选中态与复选框都用 rowKey 判定');
+  ok(pn.includes("(app.selected.has(rowKey(item)) ? ' selected' : '')") && pn.includes('pick.checked = app.selected.has(rowKey(item));'), 'T154c 选中态与复选框都用 rowKey 判定');
   ok(pn.includes('if (on) app.selected.add(rowKey(item));') && pn.includes('else app.selected.delete(rowKey(item));'), 'T154d 勾选写入/移除也走 rowKey');
   ok(pn.includes('items.forEach((i) => app.selected.add(rowKey(i)));'), 'T154e 全选按行身份，不是按网址');
   ok(pn.includes('const alive = new Set(aliveRows.map((i) => rowKey(i)));'), 'T154f 查询后清理失效选择也按 rowKey 对齐');
@@ -1980,18 +1981,33 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
   ok(!pj.includes('查询只跳转'), 'T170a 状态行不再带「查询只跳转」');
   ok(pj.includes('条（全部）`') && !pj.includes('查询只跳转'), 'T170b 目录模式只报总条数');
-  ok(pc.includes('.row.flash { animation: hitFlash') && pc.includes('infinite'), 'T170c 命中行是无限循环动画');
-  ok(!pj.includes("setTimeout(() => row.classList.remove('flash')"), 'T170d 不再 0.9s 自动收回 ');
-  ok(pj.includes("at.className = 'at'") && pj.includes("at.textContent = '@'"), 'T170e 目录 chip 带 @ 前缀');
-  ok(pj.includes("btn.append(at, name, c)"), 'T170f 前缀渲染在名字前');
+  ok(pc.includes('.row.hit {') && !pc.includes('hitFlash'), 'T170c 命中改成静态着色，不再有闪烁动画');
+  ok(!pj.includes("classList.add('flash')"), 'T170d 跳转不再自己挂闪烁类');
+  ok(!pj.includes("at.className = 'at'"), 'T170e chip 不再带 @ 前缀（符号只写进查询框）');
+  ok(pj.includes("btn.append(name, c)"), 'T170f chip 只渲染名字与计数');
 }
 
 // T171：同名标签与同名目录在两朵云里必须可区分（标签加 #，目录加 @）
 {
   const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
-  ok(pj.includes('const dirKeys = new Set((app.dirTags || []).map((t) => t.key));'), 'T171a 标签云知道哪些名字同时是目录');
-  ok(pj.includes("hash.className = 'hash'") && pj.includes("hash.textContent = '#'"), 'T171b 同名标签 chip 加 # 前缀');
-  ok(pj.includes('if (dirKeys.has(t.key))') && pj.includes('} else {'), 'T171c 只有同名时才加前缀，其余 chip 保持干净');
+  ok(!pj.includes('dirKeys'), 'T171a 标签云不再按同名做前缀区分');
+  ok(!pj.includes("hash.className = 'hash'"), 'T171b 同名标签 chip 不再加 # ');
+  ok(!pj.includes('dirKeys.has'), 'T171c 前缀分支已整段移除');
+}
+
+// T172：目录模式的命中着色与「只展开命中目录」
+{
+  const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  ok(pj.includes("if (!String(app.expr || '').trim()) return;"), 'T172a 空查询不跳转（不再莫名其妙着色）');
+  ok(pj.includes('app.hitKeys = new Set();') && pj.includes('app.hitDirs = new Set();'), 'T172b 命中书签与命中目录两套集合');
+  ok(pj.includes('function addSubtreeIds(id, out)'), 'T172c @目录 命中算整枝（含子目录）');
+  ok(pj.includes('function isGroupCollapsed(id)') && pj.includes('if (app.autoOpen && !app.autoOpen.has(key)) return true;'), 'T172d 查询非空时只展开命中目录，其余临时收起');
+  ok(pj.includes('for (const id of app.hitFolders) addWithAncestors(id, app.autoOpen);'), 'T172e 命中行的目录与祖先链一起展开');
+  ok(pj.includes("(hit ? ' hit' : inHitBranch ? ' hit-in' : '')"), 'T172f 行分两档着色：直接命中 / 整枝内');
+  ok(pc.includes('.row.hit {') && pc.includes('.row.hit-in {') && pc.includes('.grp-hit'), 'T172g 行与目录组头都有着色');
+  ok(pj.includes('|| (app.hitDirs && app.hitDirs.has(id)));'), 'T172h 被 @点名的目录组头也亮');
+  ok(!pj.includes('所选不同枝，交集为空'), 'T172i 不再提示「所选不同枝，交集为空」');
 }
 
 // T165：点 @目录 chip 跳转时优先落在"那个目录里的那一份"（同 URL 多处收藏不再跳错目录）
