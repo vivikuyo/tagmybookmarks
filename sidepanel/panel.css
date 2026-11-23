@@ -270,9 +270,14 @@ body[data-density="ultra"] .load-more {
   cursor: pointer;
 }
 .grp:hover { background: var(--bg-hover); }
-/* 三角用 CSS 几何图形画（不依赖字体字形），只显示、不占自己的点击区 */
+/* 三角用 CSS 几何图形画（不依赖字体字形），只显示、不占自己的点击区
+   尺寸跟着列表密度走：标准 6×10、紧凑 5×8、极简 4×7（宽×高），盒子同步收 */
+body { --caret-w: 6px; --caret-h: 10px; --caret-box: 14px; }
+body[data-density="compact"] { --caret-w: 5px; --caret-h: 8px; --caret-box: 13px; }
+body[data-density="ultra"] { --caret-w: 4px; --caret-h: 7px; --caret-box: 12px; }
 .grp .grp-caret {
-  position: relative; flex: 0 0 auto; width: 16px; height: 16px;
+  position: relative; flex: 0 0 auto;
+  width: var(--caret-box); height: var(--caret-box);
   margin: 0; padding: 0; border: 0; background: transparent;
   font-size: 0; line-height: 0; color: var(--text);
   cursor: pointer;
@@ -281,9 +286,9 @@ body[data-density="ultra"] .load-more {
   content: '';
   position: absolute; top: 50%; left: 50%;
   width: 0; height: 0;
-  border-left: 7px solid currentColor;
-  border-top: 6px solid transparent;
-  border-bottom: 6px solid transparent;
+  border-left: var(--caret-w) solid currentColor;
+  border-top: calc(var(--caret-h) / 2) solid transparent;
+  border-bottom: calc(var(--caret-h) / 2) solid transparent;
   transform: translate(-50%, -50%);
   transition: transform .12s ease;
 }

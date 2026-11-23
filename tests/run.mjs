@@ -2075,7 +2075,10 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
 {
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
   ok(pc.includes('.grp .grp-caret::before'), 'T178a 三角改用 CSS 几何图形画，不依赖字体字形');
-  ok(pc.includes('border-left: 7px solid currentColor;') && pc.includes('border-top: 6px solid transparent;'), 'T178b 三角 12px 高、7px 宽，用主色 currentColor');
+  ok(pc.includes('border-left: var(--caret-w) solid currentColor;') && pc.includes('border-top: calc(var(--caret-h) / 2) solid transparent;'), 'T178b 三角宽高走变量，用主色 currentColor');
+  ok(pc.includes('body { --caret-w: 6px; --caret-h: 10px; --caret-box: 14px; }'), 'T178c 标准密度：三角 6×10、盒 14');
+  ok(pc.includes('body[data-density="compact"] { --caret-w: 5px; --caret-h: 8px; --caret-box: 13px; }'), 'T178d 紧凑密度：三角 5×8、盒 13');
+  ok(pc.includes('body[data-density="ultra"] { --caret-w: 4px; --caret-h: 7px; --caret-box: 12px; }'), 'T178e 极简密度：三角 4×7、盒 12');
   ok(pc.includes('.grp:not(.collapsed) .grp-caret::before { transform: translate(-50%, -50%) rotate(90deg); }'), 'T178c 展开时转 90°');
   ok(pj.includes('caret.textContent = \'\';'), 'T178e 不再塞字体字符（字形不居中才是错行的根）');
   ok(pc.includes('align-items: center; gap: 5px; min-height: 24px;'), 'T178d 组头与箭头纵向居中对齐，行高不再被撑大');
