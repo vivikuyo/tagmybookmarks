@@ -270,16 +270,14 @@ body[data-density="ultra"] .load-more {
   cursor: pointer;
 }
 .grp:hover { background: var(--bg-hover); }
+/* 三角只管显示：不设宽高和背景，不留一块自己的点击区（整行点击就够用） */
 .grp .grp-caret {
-  flex: 0 0 auto; width: 18px; height: 18px; padding: 0;
-  border: 0; border-radius: 4px; background: transparent; color: var(--text);
-  font: inherit; font-size: 16px; font-weight: 600; line-height: 18px;
-  text-align: center; cursor: pointer;
+  flex: 0 0 auto; margin: 0; padding: 0;
+  border: 0; background: transparent; color: var(--text);
+  font: inherit; font-size: 24px; font-weight: 600; line-height: 1;
+  cursor: pointer;
 }
-.grp .grp-caret:hover {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  color: var(--accent);
-}
+.grp .grp-caret:hover { color: var(--accent); }
 .grp.drop { box-shadow: inset 0 0 0 2px var(--accent); }
 .grp-rename {
   flex: 1 1 auto; min-width: 0;

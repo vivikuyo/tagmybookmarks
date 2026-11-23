@@ -2069,8 +2069,9 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
 // T178：目录展开箭头要看得见
 {
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
-  ok(pc.includes('width: 18px; height: 18px; padding: 0;'), 'T178a 箭头热区 18×18');
-  ok(pc.includes('font-size: 16px; font-weight: 600; line-height: 18px;'), 'T178b 三角字形 16px（原来 10px 太细看不出，30px 又太占地方）');
+  ok(pc.includes('font-size: 24px; font-weight: 600; line-height: 1;'), 'T178a 三角字形 24px');
+  ok(pc.includes('.grp .grp-caret {') && pc.includes('border: 0; background: transparent; color: var(--text);')
+     && !pc.includes('width: 18px; height: 18px; padding: 0;'), 'T178b 只显示三角，不再给它单独的点击区');
   ok(pc.includes('align-items: center; gap: 5px; min-height: 24px;'), 'T178d 组头与箭头纵向居中对齐，行高不再被撑大');
   ok(pc.includes('.grp.grp-open .grp-caret { color: var(--accent); }'), 'T178c 展开的目录箭头用强调色');
 }
