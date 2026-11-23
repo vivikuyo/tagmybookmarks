@@ -255,8 +255,9 @@ function bind() {
       toast(err.message || '操作失败', true);
     }
   };
+  // 浮条（#bulkFloat）是操作带的子节点，点击自带冒泡，只在这里绑一次；
+  // 绑两遍会让一次点击触发两遍 bulkAction，上膛的那次立刻被自己确认掉
   bulkEl.addEventListener('click', onBulkClick);
-  if (floatEl) floatEl.addEventListener('click', onBulkClick);
 
   tagInput.addEventListener('keydown', async (e) => {
     if (e.key !== 'Enter') return;
@@ -1400,11 +1401,17 @@ function disarm() {
 
 function armOrConfirm(act, btn) {
   if (app.armed === act) {
+    // 同一次点击的重复派发不能既上膛又确认，否则等于没有确认
+    if (Date.now() - (app.armedAt || 0) < 300) {
+      toast('再点一次确认');
+      return false;
+    }
     disarm();
     return true;
   }
   disarm();
   app.armed = act;
+  app.armedAt = Date.now();
   if (btn) {
     btn.textContent = ARM_TEXT[act][1];
     btn.classList.add('armed');

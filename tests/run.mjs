@@ -1919,7 +1919,9 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok((ph.slice(bulkAt, floatAt).match(/data-act="untag"/g) || []).length === 0, 'T164c 摘/清空/打开/删除已从常驻操作带移出');
   ok(ph.slice(floatAt).includes('data-act="untag"') && ph.slice(floatAt).includes('data-act="delete"'), 'T164d 动作都在浮条里');
   ok(pj.includes("float.hidden = n === 0;"), 'T164e 有选中才浮出');
-  ok(pj.includes("floatEl.addEventListener('click', onBulkClick)"), 'T164f 浮条按钮走同一套 bulkAction');
+  ok(pj.includes('bulkEl.addEventListener(\'click\', onBulkClick);')
+     && pj.includes("floatEl.addEventListener('click', onBulkClick)") === false,
+     'T164f 浮条按钮靠冒泡走同一套 bulkAction（只绑一次，避免一次点击执行两遍）');
   ok(pj.includes("if (act === 'unselect')"), 'T164g 浮条上的 × 清空选择');
   ok(pc.includes('.bulk-float {') && pc.includes('flex: 1 0 100%;') && !pc.includes('position: absolute; left: 50%'), 'T164h 动作行回到操作带里、贴着"已选 N"，不再悬浮到列表底部');
   ok(pc.includes('display: flex; align-items: center; gap: 4px;'), 'T164i 动作行横排一行');
@@ -2032,6 +2034,14 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pj.includes("x.textContent = '确认';") && pj.includes('armTimer = setTimeout(resetChip, 3000);'), 'T174c 行内 chip 的 × 点一次变「确认」，3 秒自动复位');
   ok(pj.includes("chip.classList.add('armed');") && pc.includes('.chip.armed'), 'T174d 上膛的 chip 有独立配色');
   ok(pj.includes('resetChip()') && pj.includes("await send({ type: 'tags:remove'"), 'T174e 只有第二次点击才真的摘');
+}
+
+// T175：一次点击不能被自己确认掉（否则二次确认形同虚设）
+{
+  const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  ok(pj.includes("if (Date.now() - (app.armedAt || 0) < 300)"), 'T175a 上膛后 300ms 内的重复事件当作同一次点击，仍要求再点');
+  ok(pj.includes('app.armedAt = Date.now();'), 'T175b 上膛时记时间戳');
+  ok(pj.includes("['清空', '确认清空？']"), 'T175c 清空本来就有二次确认（浮条上「清空」= 摘掉全部标签，不是取消选择）');
 }
 
 }
