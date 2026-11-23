@@ -57,7 +57,7 @@ Chrome 的书签只能放在一个文件夹里，由此产生几个限制：
 
 ## 安装
 
-**下载安装包**：到 [Releases](https://github.com/vivikuyo/tagmybookmarks/releases) 下载 `TagMyBookmarks-1.0.0.zip`，解压后得到 `manifest.json` 所在的文件夹。
+**下载安装包**：到 [Releases](https://github.com/vivikuyo/tagmybookmarks/releases) 下载 `TagMyBookmarks-1.0.1.zip`，解压后得到 `manifest.json` 所在的文件夹。
 
 1. 打开 `chrome://extensions`
 2. 右上角打开「开发者模式」
@@ -72,7 +72,7 @@ Chrome 的书签只能放在一个文件夹里，由此产生几个限制：
 - 建 `TagSpace 收件箱` 文件夹，用于给未收藏的页面打标签
 - 建好索引（5,000 条书签约 50ms）
 
-当前版本 **1.0.0**。支持 Chrome / Edge / Vivaldi 等 Chromium 内核浏览器；在 Vivaldi 上侧边栏会退化为独立小窗，因为该浏览器没有实现 `chrome.sidePanel`。
+当前版本 **1.0.1**。支持 Chrome / Edge / Vivaldi 等 Chromium 内核浏览器；在 Vivaldi 上侧边栏会退化为独立小窗，因为该浏览器没有实现 `chrome.sidePanel`。
 
 ## 关于命名
 
