@@ -1296,8 +1296,27 @@ function renderChip(item, tag) {
   x.className = 'x';
   x.textContent = '×';
   x.title = '摘掉这个标签';
+  // 摘标签会改写书签标题、没有撤销，所以点一次只上膛，3 秒内再点才真的摘
+  let armed = false;
+  let armTimer = 0;
+  const resetChip = () => {
+    armed = false;
+    clearTimeout(armTimer);
+    chip.classList.remove('armed');
+    x.textContent = '×';
+    x.title = '摘掉这个标签';
+  };
   x.addEventListener('click', async (e) => {
     e.stopPropagation();
+    if (!armed) {
+      armed = true;
+      chip.classList.add('armed');
+      x.textContent = '确认';
+      x.title = '再点一次确认摘掉';
+      armTimer = setTimeout(resetChip, 3000);
+      return;
+    }
+    resetChip();
     await send({ type: 'tags:remove', ids: nodeIdsOf(item), tags: [tag] });
     await run();
     toast(`已摘掉 #${tag}`);
@@ -1360,7 +1379,11 @@ const tagList = (input) =>
     .map(normalizeTagOrNull)
     .filter(Boolean);
 
-const ARM_TEXT = { clear: ['清空', '确认清空？'], delete: ['删除', '确认删除？'] };
+const ARM_TEXT = {
+  clear: ['清空', '确认清空？'],
+  delete: ['删除', '确认删除？'],
+  untag: ['摘', '确认摘掉？'],
+};
 
 // 侧边栏是内嵌视图，window.confirm 不弹窗、直接返回 false，用就地二次确认
 function disarm() {
@@ -1409,6 +1432,8 @@ async function bulkAction(act, btn) {
       tagInput.focus();
       return toast('先在左侧输入标签名');
     }
+    // 批量摘会一次改写很多条书签标题，同样要再点一次确认（输入框里的标签保留着）
+    if (act === 'untag' && !armOrConfirm(act, btn)) return;
     const r = await send({ type: act === 'add' ? 'tags:add' : 'tags:remove', ids, tags });
     tagInput.value = '';
     await run();

@@ -2023,6 +2023,17 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pj.includes("app.autoOpen = null;"), 'T173e 空查询把临时集合清掉，回到手动展开状态');
 }
 
+// T174：摘标签也要二次确认（批量「摘」+ 行内 chip 的 ×）
+{
+  const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  ok(pj.includes("untag: ['摘', '确认摘掉？']"), 'T174a 批量「摘」进了就地二次确认表');
+  ok(pj.includes("if (act === 'untag' && !armOrConfirm(act, btn)) return;"), 'T174b 批量「摘」先校验标签名再上膛，取消不清空输入框');
+  ok(pj.includes("x.textContent = '确认';") && pj.includes('armTimer = setTimeout(resetChip, 3000);'), 'T174c 行内 chip 的 × 点一次变「确认」，3 秒自动复位');
+  ok(pj.includes("chip.classList.add('armed');") && pc.includes('.chip.armed'), 'T174d 上膛的 chip 有独立配色');
+  ok(pj.includes('resetChip()') && pj.includes("await send({ type: 'tags:remove'"), 'T174e 只有第二次点击才真的摘');
+}
+
 }
 
 // T165：点 @目录 chip 跳转时优先落在"那个目录里的那一份"（同 URL 多处收藏不再跳错目录）

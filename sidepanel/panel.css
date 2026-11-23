@@ -370,6 +370,8 @@ body[data-density="ultra"] .grp .grp-n { font-size: 10px; }
   opacity: .55; font-size: 12px; line-height: 1; padding: 0 1px;
 }
 .chip .x:hover { opacity: 1; }
+.chip.armed { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+.chip.armed .x { opacity: 1; font-size: 11px; }
 
 /* 与 chip 同一套度量：同字号、同内边距、同线高，居中排 ⇒ 高度与基线一致 */
 .badge {
