@@ -1829,6 +1829,14 @@ function scheduleCloudLayout() {
  * 每朵还有一个 60px 保底（标题行 + 两行 chip），免得被削成光秃秃一条标题。
  */
 function allocateCloudHeights(needs, budget) {
+  const needSum = needs.reduce((a, b) => a + b, 0);
+  // 内容放不下时两朵云同权：预算对半分。短的那朵在自己那一份里留白，
+  // 长的那朵出滚动条——这样标签云和目录云都跟着面板高度/行密度一起换高度
+  const per = needs.length ? Math.floor(budget / needs.length) : 0;
+  if (needs.length > 1 && needSum > budget && per >= 44) {
+    return needs.map(() => per);
+  }
+  // 内容放得下：各取所需，谁都不留白
   const order = needs.map((_, i) => i).sort((a, b) => needs[a] - needs[b]);
   const out = new Array(needs.length).fill(0);
   let left = budget;
