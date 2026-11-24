@@ -1493,7 +1493,14 @@ function syncRowHighlights() {
   for (const li of listEl.querySelectorAll('li.row')) {
     const k = li.dataset.rowKey;
     if (!k) continue;
-    li.classList.toggle('selected', app.selected.has(k));
+    const on = app.selected.has(k);
+    li.classList.toggle('selected', on);
+    // 行内复选框也要跟着变：勾目录级联选中的书签，不能只染色不勾盒子
+    const pick = li.querySelector('input.pick');
+    if (pick) {
+      pick.checked = on;
+      pick.indeterminate = false;
+    }
   }
 }
 
@@ -1512,6 +1519,13 @@ function syncGroupChecks() {
   }
 }
 
+let toastSelTimer = 0;
+/** 选中变化的报数：去抖 260ms，连点几下只报最后一次 */
+function toastSel(text) {
+  clearTimeout(toastSelTimer);
+  toastSelTimer = setTimeout(() => toast(text), 260);
+}
+
 function updateBulk() {
   // 书签和目录分开数：混在一起会让人把目录当成书签条数
   let marks = 0, dirs = 0;
@@ -1521,7 +1535,10 @@ function updateBulk() {
   }
   const n = marks + dirs;
   const total = viewRows().length;
+  // 计数改成 toast：常驻一条「已选 N 条 + M 个目录」会挤掉右边的按钮
+  bulkCountEl.hidden = true;
   bulkCountEl.textContent = dirs ? `已选 ${marks} 条 + ${dirs} 个目录` : `已选 ${marks}`;
+  if (n) toastSel(dir ? `已勾选 ${marks} 条书签 + ${dirs} 个目录` : `已勾选 ${marks} 条书签`);
   // 上下文浮条：有选中才浮出来；平时不占一像素
   const float = $('#bulkFloat');
   if (float) {
