@@ -66,13 +66,17 @@ chrome.runtime.onMessage.addListener((m) => {
 });
 
 async function boot() {
+  // 先丢快照再干活：boot 里有一串 await，若拖到后面才清，
+  // 同时进行的 bulkAction.run() 会抢先读到旧缓存，表现为"标签有时刷有时不刷"
+  app.allRows = null;
+  app.foldersTree = null;
+  app.subtreeKeys = null;
+  app.subtreeFolders = null;
   bindSplitters();
   await loadDensity();
   await loadListRows();
   bindCloudSplit();
   await loadGroup();
-  app.allRows = null; // app:changed 会重新 boot，全量清单跟着重建
-  app.foldersTree = null;
   try {
     const st = await send({ type: 'state' });
     app.colors = st.config.colors || {};
@@ -241,7 +245,13 @@ function bind() {
   $('#bulkAll').addEventListener('change', (e) => {
     const items = viewRows();
     app.selected.clear();
-    if (e.target.checked) items.forEach((i) => app.selected.add(rowKey(i)));
+    if (e.target.checked) {
+      items.forEach((i) => app.selected.add(rowKey(i)));
+      // 目录也是可选对象：全选把当前列表里看得见的目录一并勾上（查询过滤时不越界）
+      for (const head of listEl.querySelectorAll('.grp')) {
+        if (head.dataset.folder) app.selected.add(folderKey(head.dataset.folder));
+      }
+    }
     render();
   });
 
@@ -309,7 +319,14 @@ async function run() {
     const aliveRows = app.group === 'dir' ? (app.allRows || []) : data.items;
     if (aliveRows.length) {
       const alive = new Set(aliveRows.map((i) => rowKey(i)));
+      // 目录也是选中对象：不放进 alive 集合的话，随便跑一次查询就会把勾选的目录清掉
+      if (app.group === 'dir' && app.folderById) {
+        for (const fid of app.folderById.keys()) alive.add(folderKey(fid));
+      }
       for (const k of [...app.selected]) if (!alive.has(k)) app.selected.delete(k);
+    }
+    if (app.group !== 'dir') {
+      for (const k of [...app.selected]) if (k.startsWith('f:')) app.selected.delete(k);
     }
 
     if (app.group === 'dir') await loadAllRows();
@@ -787,6 +804,18 @@ function renderList() {
       for (const id of app.hitFolders) addWithAncestors(id, app.autoOpen);
       for (const id of app.hitDirs) addWithAncestors(id, app.autoOpen);
     }
+    // 每个目录下（含各级子目录）有哪些后代目录：勾父目录要连带勾子目录
+    app.subtreeFolders = new Map();
+    for (const fid of (app.folderById ? app.folderById.keys() : [])) {
+      let cur = String(fid);
+      let guard = 0;
+      while (cur && guard++ < 60) {
+        let arr = app.subtreeFolders.get(cur);
+        if (!arr) { arr = []; app.subtreeFolders.set(cur, arr); }
+        if (!arr.includes(String(fid))) arr.push(String(fid));
+        cur = (app.folderParent && app.folderParent.get(cur)) || '';
+      }
+    }
     // 每个目录下（含各级子目录）有哪些书签行：给文件夹勾选框用，一趟扫完
     app.subtreeKeys = new Map();
     for (const r of rows) {
@@ -881,28 +910,26 @@ function renderFolderHead(node) {
     + (collapsed ? ' collapsed' : '')
     + (open ? ' grp-open' : '')
     + (isHit ? ' grp-hit' : '')
-    + (app.selected.has(folderKey(id)) ? ' on' : '')
+    + (branchKeys(id).some((k) => app.selected.has(k)) ? ' on' : '')
     + (node.depth === 0 ? ' grp-top' : '');
   head.dataset.folder = id;
   head.style.paddingLeft = '6px'; // 不做层级缩进，层级由路径标签体现
   head.title = `${folderLabel(node)} · ${node.total ?? 0} 条（右键可重命名）`;
 
-  // 文件夹勾选框：勾上 = 这一枝（含所有子目录）的书签全部选中，取消 = 全部取消
-  const keys = (app.subtreeKeys && app.subtreeKeys.get(id)) || [];
+  // 文件夹勾选框：勾上 = 这一枝（目录自己 + 各级子目录 + 里面所有书签）全选中，取消 = 全取消
+  const branch = branchKeys(id);
+  const picked = branch.filter((k) => app.selected.has(k)).length;
   const cb = document.createElement('input');
   cb.type = 'checkbox';
   cb.className = 'grp-cb';
-  // 勾选框选的是「这个目录」本身（f:<id>）：删除 = 整枝进回收站，空目录也能删
-  const fkey = folderKey(id);
-  cb.checked = app.selected.has(fkey);
-  cb.title = keys.length
-    ? `勾选这个目录（含 ${keys.length} 条书签）——删除会把整个目录移到回收站`
+  cb.checked = branch.length > 0 && picked === branch.length;
+  cb.indeterminate = picked > 0 && picked < branch.length;
+  cb.title = branch.length
+    ? `勾选这个目录（含子目录与 ${branch.length - 1} 个下级对象）——删除会把整个目录移到回收站`
     : '勾选这个空目录——删除会把它移到回收站';
   cb.addEventListener('click', (e) => e.stopPropagation());
   cb.addEventListener('change', () => {
-    if (cb.checked) app.selected.add(fkey);
-    else app.selected.delete(fkey);
-    head.classList.toggle('on', cb.checked);
+    setBranchSelected(id, cb.checked);
     syncRowHighlights();
     updateBulk();
   });
@@ -1042,10 +1069,8 @@ async function moveDragged(target) {
 
 /** 拖放后重取整份数据（书签树变了，索引/文件夹计数都要重算） */
 async function refreshAll() {
-  app.allRows = null;
-  app.foldersTree = null;
   app.selected.clear();
-  await run();
+  await reloadRows();
 }
 
 // ---------------------------------------------------------------- 右键菜单（复制网址 / 重命名）
@@ -1400,6 +1425,69 @@ function selectedFolderIds() {
   return [...app.selected].filter((k) => k.startsWith('f:')).map((k) => k.slice(2));
 }
 
+/**
+ * 一个目录"整枝"的选择键：目录自己 + 各级子目录 + 里面所有书签行。
+ * 勾一个目录 = 把这一串全部纳入选择，让"是目录还是书签"在选中集里同时成立。
+ */
+function branchKeys(id) {
+  const fid = String(id ?? '');
+  const out = [folderKey(fid)];
+  for (const c of (app.subtreeFolders && app.subtreeFolders.get(fid)) || []) {
+    const ck = folderKey(c);
+    if (!out.includes(ck)) out.push(ck);
+  }
+  for (const k of (app.subtreeKeys && app.subtreeKeys.get(fid)) || []) out.push(k);
+  return out;
+}
+
+/** 整枝一起加/取消（勾父目录时子目录跟着勾，取消跟着取消） */
+function setBranchSelected(id, on) {
+  for (const k of branchKeys(id)) {
+    if (on) app.selected.add(k);
+    else app.selected.delete(k);
+  }
+}
+
+/**
+ * 最上层被勾选的目录：子目录已经随父目录一起搬，不再单独发。
+ * 删除时若把父子目录都发过去，后台会重复搬同一棵子树。
+ */
+function selectedTopFolders() {
+  const sel = selectedFolderIds();
+  const set = new Set(sel);
+  return sel.filter((fid) => {
+    let p = app.folderParent && app.folderParent.get(fid);
+    let guard = 0;
+    while (p && guard++ < 60) {
+      if (set.has(String(p))) return false;
+      p = app.folderParent.get(p);
+    }
+    return true;
+  });
+}
+
+/** 删除的最小集：最上层目录 + 不落在这些目录里的书签（避免同一条被搬两次） */
+function deletableTargets() {
+  const folders = selectedTopFolders();
+  const covered = new Set();
+  for (const fid of folders) {
+    for (const k of (app.subtreeKeys && app.subtreeKeys.get(fid)) || []) covered.add(k);
+  }
+  const bookmarks = selectedItems()
+    .filter((i) => !covered.has(rowKey(i)))
+    .flatMap((i) => nodeIdsOf(i));
+  return { folders, bookmarks };
+}
+
+/** 数据已被后台改写（标签/删除/移动）：丢掉全库快照整份重取，否则列表拿旧标题渲染 */
+async function reloadRows() {
+  app.allRows = null;
+  app.foldersTree = null;
+  app.subtreeKeys = null;
+  app.subtreeFolders = null;
+  await run();
+}
+
 // 勾选变化后只改行的高亮，不重建列表（重建会把滚动位置弹回去）
 function syncRowHighlights() {
   for (const li of listEl.querySelectorAll('li.row')) {
@@ -1410,21 +1498,30 @@ function syncRowHighlights() {
 }
 
 // 文件夹勾选框的三态：跟着当前选择重算（不重建 DOM）
+// 判定单位是整枝：子目录或书签只选了一部分时显示半选
 function syncGroupChecks() {
   if (!app.subtreeKeys) return;
   for (const head of listEl.querySelectorAll('.grp')) {
     const cb = head.querySelector('.grp-cb');
     if (!cb) continue;
-    const fk = folderKey(head.dataset.folder ?? '');
-    cb.checked = app.selected.has(fk);
-    head.classList.toggle('on', cb.checked);
+    const branch = branchKeys(head.dataset.folder ?? '');
+    const picked = branch.filter((k) => app.selected.has(k)).length;
+    cb.checked = branch.length > 0 && picked === branch.length;
+    cb.indeterminate = picked > 0 && picked < branch.length;
+    head.classList.toggle('on', picked > 0);
   }
 }
 
 function updateBulk() {
-  const n = app.selected.size;
+  // 书签和目录分开数：混在一起会让人把目录当成书签条数
+  let marks = 0, dirs = 0;
+  for (const k of app.selected) {
+    if (k.startsWith('f:')) dirs++;
+    else marks++;
+  }
+  const n = marks + dirs;
   const total = viewRows().length;
-  bulkCountEl.textContent = `已选 ${n}`;
+  bulkCountEl.textContent = dirs ? `已选 ${marks} 条 + ${dirs} 个目录` : `已选 ${marks}`;
   // 上下文浮条：有选中才浮出来；平时不占一像素
   const float = $('#bulkFloat');
   if (float) {
@@ -1434,8 +1531,8 @@ function updateBulk() {
   for (const b of document.querySelectorAll('.bulk [data-act], .bulk-float [data-act]')) b.disabled = !n;
   const all = $('#bulkAll');
   if (all) {
-    all.checked = total > 0 && n === total;
-    all.indeterminate = n > 0 && n < total;
+    all.checked = total > 0 && marks === total;
+    all.indeterminate = n > 0 && !all.checked;
   }
   if (!n) disarm();
   syncGroupChecks();
@@ -1491,19 +1588,11 @@ function armOrConfirm(act, btn) {
 async function bulkAction(act, btn) {
   if (act === 'unselect') {
     app.selected.clear();
-    return renderList();
+    return render();
   }
   const fids = selectedFolderIds();
   const ids = selectedIds();
   if (!ids.length && !fids.length) return;
-  // 加/摘标签、清空、打开都只针对书签；只勾了目录时给一句话，而不是默默没反应
-  if (fids.length && !ids.length && act !== 'delete' && act !== 'unselect') {
-    return toast('只勾了目录：标签类操作只作用于书签，删除会把整个目录移进回收站');
-  }
-
-  if (act === 'clear' || act === 'delete') {
-    if (!armOrConfirm(act, btn)) return;
-  }
 
   if (act === 'add' || act === 'untag') {
     const tags = tagList(tagInput.value);
@@ -1511,38 +1600,49 @@ async function bulkAction(act, btn) {
       tagInput.focus();
       return toast('先在左侧输入标签名');
     }
+    // 目录只是选中容器：加/摘标签一律忽略目录，只写书签
+    if (!ids.length) return toast(act === 'add'
+      ? '选中的都是空目录：没有可加标签的书签'
+      : '选中的都是空目录：没有可摘标签的书签');
     // 批量摘会一次改写很多条书签标题，同样要再点一次确认（输入框里的标签保留着）
     if (act === 'untag' && !armOrConfirm(act, btn)) return;
     const r = await send({ type: act === 'add' ? 'tags:add' : 'tags:remove', ids, tags });
     tagInput.value = '';
-    await run();
+    await reloadRows();
     toast(`${act === 'add' ? '加标签' : '摘标签'}完成：改写 ${r.written} 条标题`);
     return;
   }
 
   if (act === 'clear') {
+    if (!ids.length) return toast('选中的都是空目录：没有可清空标签的书签');
+    if (!armOrConfirm(act, btn)) return;
     const r = await send({ type: 'tags:clear', ids });
-    await run();
+    await reloadRows();
     toast(`已清空：改写 ${r.written} 条标题`);
     return;
   }
 
   if (act === 'open') {
+    if (!ids.length) return toast('选中的都是空目录：没有可打开的书签');
     await send({ type: 'open', ids });
     return;
   }
 
   if (act === 'delete') {
-    let r = await send({ type: 'delete', ids: ids.concat(fids) });
+    if (!armOrConfirm(act, btn)) return;
+    // 只发最小集：最上层目录（整枝搬走）+ 不落在这些目录里的书签
+    const { folders, bookmarks } = deletableTargets();
+    if (!folders.length && !bookmarks.length) return toast('没有可删除的对象');
+    let r = await send({ type: 'delete', ids: folders.concat(bookmarks) });
     if (r.needTrash) {
       // 首次删除：先问回收站位置，同意默认位置后补删这批
       const ok = await askTrashSetup();
       if (!ok) return toast('已取消：先在管理页设置回收站');
-      r = await send({ type: 'delete', ids: ids.concat(fids) });
+      r = await send({ type: 'delete', ids: folders.concat(bookmarks) });
     }
     app.selected.clear();
-    await run();
-    const what = fids.length ? `（含 ${fids.length} 个目录）` : '';
+    await reloadRows();
+    const what = folders.length ? `（含 ${folders.length} 个目录）` : '';
     if (r.purged) toast(`已彻底删除 ${r.purged} 项${what}`);
     else toast(`已移入回收站 ${r.trashed || 0} 项${what}`);
   }

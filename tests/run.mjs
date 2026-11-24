@@ -2058,17 +2058,21 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
   ok(pj.includes('app.subtreeKeys = new Map();') && pj.includes('arr.push(k);'), 'T177a 先按目录建一棵「这一枝有哪些书签行」的索引');
-  ok(pj.includes("cb.className = 'grp-cb';") && pj.includes('勾选这个目录（含 ${keys.length} 条书签）'), 'T177b 组头有复选框，带说明');
-  ok(pj.includes('if (cb.checked) app.selected.add(fkey);') && pj.includes('else app.selected.delete(fkey);'), 'T177c 勾上记这个目录、取消清掉这个目录');
+  ok(pj.includes("cb.className = 'grp-cb';") && pj.includes('勾选这个目录（含子目录与 ${branch.length - 1} 个下级对象）'), 'T177b 组头有复选框，带说明');
+  ok(pj.includes('function branchKeys(id)') && pj.includes('setBranchSelected(id, cb.checked);'), 'T177c 勾一个目录 = 整枝（自己 + 子目录 + 书签）一起选/一起取消');
   ok(pj.includes('勾选这个空目录——删除会把它移到回收站'), 'T177d 空目录也能勾（删除 = 整枝移进回收站）');
   ok(pj.includes('function syncRowHighlights()') && pj.includes('li.dataset.rowKey = rowKey(item);'), 'T177e 勾选后只改行高亮，不重建列表（滚动不跳）');
   ok(pj.includes('head.append(cb, caret, name, n);'), 'T177f 勾选框排在箭头之前');
   ok(pc.includes('.grp-cb {'), 'T177g 勾选框有独立样式');
   ok(pj.includes('const folderKey = (id) => `f:${String(id ?? \'\')}`;'), 'T177h 目录用 f:<id> 单独记选中态，不和书签的行键混用');
   ok(pj.includes('function selectedFolderIds()') && pj.includes("startsWith('f:')"), 'T177i 取选中目录时把目录和书签分开');
-  ok(pj.includes('ids: ids.concat(fids)'), 'T177j 删除时把目录一起发给后台（后台按整枝移进回收站）');
+  ok(pj.includes('function selectedTopFolders()') && pj.includes('const { folders, bookmarks } = deletableTargets();'), 'T177j 删除发最小集：最上层目录 + 不落在目录里的书签，避免同一枝被搬两次');
   ok(pc.includes('.grp.on {'), 'T177k 勾中的目录行整行着色');
-  ok(pj.includes("return toast('只勾了目录：标签类操作只作用于书签，删除会把整个目录移进回收站');"), 'T177l 只勾目录时点标签操作有明确提示，不是没反应');
+  ok(pj.includes("'选中的都是空目录：没有可加标签的书签'") && pj.includes("'选中的都是空目录：没有可摘标签的书签'"), 'T177l 只勾空目录时点标签操作有明确提示，不是没反应');
+  ok(pj.includes('async function reloadRows()') && pj.includes('await reloadRows();'), 'T177m 打标签/删除后丢掉全库快照重取，标签才会立刻出现在书签行上');
+  ok(pj.includes('for (const fid of app.folderById.keys()) alive.add(folderKey(fid));'), 'T177n 跑查询时不会顺手把勾选的目录清掉');
+  ok(pj.includes("bulkCountEl.textContent = dirs ? `已选 ${marks} 条 + ${dirs} 个目录` :"), 'T177o 已选计数把书签条数和目录个数拆开显示');
+  ok(pj.includes("for (const head of listEl.querySelectorAll('.grp')) {") && pj.includes('if (head.dataset.folder) app.selected.add(folderKey(head.dataset.folder));'), 'T177p 全选也勾上当前列表里的目录（不越界到看不见的目录）');
 }
 
 // T178：目录展开箭头要看得见
