@@ -98,35 +98,6 @@ async function boot() {
   await run();
 }
 
-/** 顶栏 ⋯ ：视图设置（行密度 / 清单·目录 / 折叠全部）收在里面，点开才出现 */
-function bindViewMenu() {
-  const btn = $('#viewBtn');
-  const menu = $('#viewMenu');
-  if (!btn || !menu) return;
-  if (app.viewMenuBound) return;
-  app.viewMenuBound = true;
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (!menu.hidden) {
-      menu.hidden = true;
-      return;
-    }
-    menu.hidden = false;
-    const r = btn.getBoundingClientRect();
-    menu.style.top = `${Math.round((r.bottom || 0) + 5)}px`;
-    menu.style.right = '8px';
-  });
-  // 点浮层里的按钮不算"点外面"；密度切完就收起
-  menu.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const b = e.target && e.target.closest ? e.target.closest('button') : null;
-    if (b) menu.hidden = true;
-  });
-  document.addEventListener('click', () => {
-    if (!menu.hidden) menu.hidden = true;
-  });
-}
-
 function bind() {
   // 列表滚到底：上一页被截断就自动再拉一页，并保持当前滚动位置
   listEl.addEventListener('scroll', async () => {
@@ -184,8 +155,6 @@ function bind() {
       renderList();
     }
   });
-
-  bindViewMenu();
 
   $('#densityBtn').addEventListener('click', () => {
     const i = DENSITY.indexOf(app.density);
@@ -2051,10 +2020,23 @@ function bindCloudSplit() {
 const DENSITY = ['normal', 'compact', 'ultra'];
 const DENSITY_LABEL = { normal: '标准', compact: '紧凑', ultra: '极简' };
 
+// 行密度三档各一张图标：线越多越挤，图标本身就是当前档位的样子
+const DENSITY_ICON = {
+  normal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>',
+  compact: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 5h16"/><path d="M4 9.5h16"/><path d="M4 14h16"/><path d="M4 18.5h16"/></svg>',
+  ultra: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 4h16"/><path d="M4 7.8h16"/><path d="M4 11.6h16"/><path d="M4 15.4h16"/><path d="M4 19.2h16"/></svg>',
+};
+
 function applyDensity() {
   document.body.dataset.density = app.density;
   const btn = $('#densityBtn');
-  if (btn) btn.textContent = DENSITY_LABEL[app.density];
+  if (!btn) return;
+  const i = DENSITY.indexOf(app.density);
+  const next = DENSITY[(i + 1) % DENSITY.length];
+  btn.innerHTML = DENSITY_ICON[app.density] || DENSITY_ICON.normal;
+  const label = `行密度：${DENSITY_LABEL[app.density]}（点一下切到${DENSITY_LABEL[next]}）`;
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
 }
 
 async function loadDensity() {

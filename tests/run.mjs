@@ -1941,22 +1941,22 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const barAt = ph.indexOf('class="bar"');
   const bulkAt = ph.indexOf('id="bulk"');
   ok(ph.indexOf('id="count"') > barAt && ph.indexOf('id="count"') < bulkAt, 'T181a 条数不再是操作带里的一项，搬进顶栏');
-  ok(ph.includes('id="viewBtn"') && ph.includes('id="viewMenu"') && ph.indexOf('id="viewMenu"') > barAt, 'T181b 顶栏多一个 ⋯ 按钮，视图设置浮层挂在顶栏里');
+  ok(ph.indexOf('id="densityBtn"') > barAt && !ph.includes('id="viewMenu"'), 'T181b 行密度直接当图标放顶栏，不再收进 ⋯ 浮层');
   const menuAt = ph.indexOf('id="viewMenu"');
   ok(ph.indexOf('id="densityBtn"') > menuAt && ph.indexOf('id="groupSeg"') > bulkAt && ph.indexOf('id="foldBtn"') > bulkAt, 'T181c 只有行密度留在 ⋯ 里，显示方式与折叠回到列表上方的操作带');
   ok(ph.slice(bulkAt).includes('data-act="add"') && ph.slice(bulkAt).includes('data-act="delete"'), 'T181d 操作带只留全选与标签动作');
   ok(ph.indexOf('id="bulkFloat"') > bulkAt && !ph.slice(bulkAt, ph.indexOf('id="bulkFloat"')).includes('bulk-sep'), 'T181e 动作行紧接全选框，去掉了分隔线与中间那串数字');
 
   ok(pc.includes('display: flex; flex-wrap: nowrap;') || pc.includes('flex-wrap: nowrap'), 'T181f 操作带强制一行（nowrap），不再靠换行溢出');
-  ok(pc.includes('.view-menu {') && pc.includes('.view-row {'), 'T181g 浮层与行有样式');
+  ok(pc.includes('.density-btn {') && pc.includes('.density-btn svg {'), 'T181g 密度按钮是图标按钮，尺寸跟其它顶栏图标一致');
   ok(pc.includes('.seg {') && pc.includes('.seg-btn.on {'), 'T181h 显示方式是两段开关，当前那段有底色');
   ok(pc.includes('.icon-btn {') && pc.includes('.icon-btn.armed {'), 'T181i 批量动作是图标按钮，上膛时能撑成"确认"两字');
   ok(pj.includes('const ACT_ICON = {') && pj.includes('function paintAct(btn, act, armed)') && pj.includes("btn.innerHTML = armed && arm ? '确认' : ACT_ICON[act];"), 'T181j 图标有唯一来源，上膛/收起都走 paintAct');
   ok(pj.includes('const ACT_LABEL = {') && pj.includes("add: '加标签'") && pj.includes("open: '打开书签'"), 'T181o 五个动作各有常驻名字：加/打开没有上膛文案，不能去 ARM_TEXT 里取（曾在 boot 里炸）');
   ok(pj.includes('const arm = ARM_TEXT[act];') && pj.includes('armed && arm ? arm[1] : (ACT_LABEL[act] || act)'), 'T181p paintAct 对没有 ARM_TEXT 的动作兜住，不再 undefined[1]');
 
-  ok(pj.includes('function bindViewMenu()') && pj.includes("$('#viewBtn').addEventListener") === false, 'T181k ⋯ 的开关有独立函数，不会被重复绑');
-  ok(pj.includes('const btn = $(') && pj.includes("const menu = $('#viewMenu');"), 'T181l 浮层按按钮实际位置定位（不写死坐标）');
+  ok(!pj.includes('function bindViewMenu()') && !pj.includes('id="viewMenu"'), 'T181k ⋯ 浮层整套拆掉，没有残留的开关函数');
+  ok(pj.includes('const DENSITY_ICON = {') && pj.includes('btn.innerHTML = DENSITY_ICON[app.density]'), 'T181l 三档密度各一张图标，按钮画的就是当前档位');
   ok(pj.includes('Number.isFinite(data.nodes) ? data.nodes : (data.total || 0)'), 'T181m 平铺模式的条数优先用物理节点数，不为 0 才退回去重行数');
   ok(bg.includes('nodes: nodeCount') && bg.includes('nodeCount += (index.keyToNodes.get(k) || []).length'), 'T181n 后台把命中网址展开成书签节点计数，回给前端 nodes');
 }

@@ -55,16 +55,10 @@ body {
 
 .bar-actions { display: flex; gap: 4px; align-items: center; min-width: 0; }
 .bar-count { font-size: 11px; color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
-/* 视图设置浮层：三个按钮收进 ⋯ 里，点开才出现 */
-.view-menu {
-  position: fixed; right: 8px; z-index: 210; min-width: 176px; padding: 6px;
-  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .16);
-  display: flex; flex-direction: column; gap: 6px;
-}
-.view-row { display: flex; align-items: center; gap: 8px; }
-.view-row .view-k { font-size: 11px; color: var(--text-dim); flex: 0 0 auto; }
-.view-row .mini-btn { margin-left: auto; }
+/* 行密度：顶栏图标按钮，图标本身就是当前档位的样子，点一下切下一档 */
+.density-btn { color: var(--text-dim); }
+.density-btn:hover { color: var(--text); }
+.density-btn svg { width: 16px; height: 16px; }
 
 
 .icon {

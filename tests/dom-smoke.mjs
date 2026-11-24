@@ -318,7 +318,7 @@ src = src.replace(/^import[^\n]*\n/gm, '');
 const tail = `
 ;return { app, updateBulk, syncGroupChecks, syncRowHighlights, renderList, render, bulkAction,
   selectedFolderIds, branchKeys, folderKey, buildFolderIndex, toastEl, listEl, tagInput, toast,
-  renderRow, isGroupCollapsed, bindViewMenu, applyGroupBtn, paintAct, bind, ACT_ICON };`;
+  renderRow, isGroupCollapsed, applyGroupBtn, paintAct, bind, ACT_ICON, applyDensity, DENSITY_ICON };`;
 
 const doc = new Doc();
 const win = {
@@ -457,19 +457,24 @@ if (api) {
     fail.push('取消勾选的链路抛异常：' + e.message);
   }
 
-  // ⋯ 视图浮层：点一下要真的打开，再点收起
+  // 行密度图标：三档各画各的，标题写明当前与下一档
   try {
-    const btn = doc.querySelector('#viewBtn');
-    const menu = doc.querySelector('#viewMenu');
-    menu.hidden = true;
-    api.bindViewMenu();
-    btn.dispatch('click');
-    ok(menu.hidden === false, '点 ⋯ 会把视图设置浮层打开');
-    ok(typeof menu.style.top === 'string' && menu.style.top !== '', '浮层按按钮下沿定位（不是写死坐标）');
-    btn.dispatch('click');
-    ok(menu.hidden === true, '再点一次 ⋯ 收起');
+    const btn = doc.querySelector('#densityBtn');
+    app.density = 'normal';
+    api.applyDensity();
+    const normalHtml = btn.innerHTML;
+    ok(normalHtml.includes('<svg') && normalHtml.split('<path').length === 4, '标准档：图标是三根线');
+    app.density = 'compact';
+    api.applyDensity();
+    ok(btn.innerHTML !== normalHtml && btn.innerHTML.split('<path').length === 5, '紧凑档：四根线，图标跟着换');
+    app.density = 'ultra';
+    api.applyDensity();
+    ok(btn.innerHTML.split('<path').length === 6, '极简档：五根线');
+    ok(btn.title.includes('极简') && btn.title.includes('标准'), '标题写当前档位与点一下切到的下一档');
+    app.density = 'normal';
+    api.applyDensity();
   } catch (e) {
-    fail.push('⋯ 浮层的开关抛异常：' + e.message);
+    fail.push('applyDensity 抛异常：' + e.message);
   }
 
   // 操作行不再按选中数隐藏
