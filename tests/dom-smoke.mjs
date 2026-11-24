@@ -23,12 +23,18 @@ function matchCompound(el, tok) {
   if (!tok || tok === '*' || tok === ':scope') return true;
   let name = tok;
   const attrs = [];
-  name = name.replace(/\[([\w-]+)(?:=("[^"]*"|'[^']*'|[^\]]*))?\]/g, (_, k) => {
-    attrs.push(k);
+  name = name.replace(/\[([\w-]+)(?:=("[^"]*"|'[^']*'|[^\]]*))?\]/g, (_, k, v) => {
+    attrs.push([k, v]);
     return '';
   });
-  for (const k of attrs) {
-    if (!(k in el.dataset) && !el.attrs.has(k)) return false;
+  for (const [k, v] of attrs) {
+    const dk = k.startsWith('data-') ? k.slice(5) : null;
+    const actual = dk && dk in el.dataset ? el.dataset[dk] : el.attrs.get(k);
+    if (actual === undefined || actual === null) return false;
+    if (v) {
+      const want = String(v).replace(/^["']|["']$/g, '');
+      if (String(actual) !== want) return false;
+    }
   }
   if (!name) return true;
   if (name.startsWith('#')) return el.id === name.slice(1);
@@ -312,7 +318,7 @@ src = src.replace(/^import[^\n]*\n/gm, '');
 const tail = `
 ;return { app, updateBulk, syncGroupChecks, syncRowHighlights, renderList, render, bulkAction,
   selectedFolderIds, branchKeys, folderKey, buildFolderIndex, toastEl, listEl, tagInput, toast,
-  renderRow, isGroupCollapsed, bindViewMenu, applyGroupBtn, paintAct };`;
+  renderRow, isGroupCollapsed, bindViewMenu, applyGroupBtn, paintAct, bind, ACT_ICON };`;
 
 const doc = new Doc();
 const win = {
@@ -382,6 +388,28 @@ if (api) {
   app.colors = {};
   app.prefs = {};
   app.dirEnabled = true;
+
+  // 先把操作带的大致结构搭出来（桩里没有 HTML 解析，得手工建按钮）
+  const floatEl2 = doc.querySelector('#bulkFloat');
+  floatEl2.className = 'bulk-float';
+  for (const act of ['add', 'untag', 'clear', 'open', 'delete', 'unselect']) {
+    const b = new El('button');
+    b.dataset.act = act;
+    floatEl2.append(b);
+  }
+
+  // bind()：图标注入走一遍五个动作（add / open 没有上膛文案，曾经在这里炸过）
+  try {
+    api.bind();
+    const acts = Object.keys(api.ACT_ICON);
+    const missing = acts.filter((a) => {
+      const b = doc.querySelector(`[data-act="${a}"]`);
+      return !b || !b.innerHTML || !b.title;
+    });
+    ok(missing.length === 0, '五个动作按钮都注入了图标与说明（缺：' + missing.join(',') + '）');
+  } catch (e) {
+    fail.push('bind() 注入图标时抛异常：' + e.message);
+  }
 
   try {
     api.buildFolderIndex();
@@ -488,6 +516,20 @@ if (api) {
     ok(b.classList.contains('armed') === false && /<svg/.test(b.innerHTML), '取消上膛后图标回来了（不是留下"删除"俩字）');
   } catch (e) {
     fail.push('图标按钮上膛抛异常：' + e.message);
+  }
+
+  // 上膛的三件 vs 不需要上膛的两件
+  try {
+    const del = doc.querySelector('[data-act="delete"]');
+    api.paintAct(del, 'delete', true);
+    ok(del.innerHTML === '确认' && del.classList.contains('armed'), '删除上膛后显示「确认」并变红');
+    api.paintAct(del, 'delete', false);
+    ok(del.innerHTML.includes('<svg') && !del.classList.contains('armed'), '取消上膛还原成图标');
+    const addBtn = doc.querySelector('[data-act="add"]');
+    api.paintAct(addBtn, 'add', true);
+    ok(addBtn.innerHTML.includes('<svg') && !addBtn.classList.contains('armed'), '加标签不做上膛：就算被叫上膛也只画图标');
+  } catch (e) {
+    fail.push('paintAct 抛异常：' + e.message);
   }
 
   // 加标签：目录进不了请求，只发书签

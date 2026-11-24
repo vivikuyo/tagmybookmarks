@@ -1608,6 +1608,12 @@ const tagList = (input) =>
 
 // 批量动作的图标（HTML 里只放空按钮，图标在这里统一注入：
  // 上膛时要把图标换成"确认"两字，收起时再换回来，图标必须有唯一来源）
+const ARM_TEXT = {
+  clear: ['清空', '确认清空？'],
+  delete: ['删除', '确认删除？'],
+  untag: ['摘', '确认摘掉？'],
+};
+
 const ACT_ICON = {
   add: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   untag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg>',
@@ -1616,21 +1622,25 @@ const ACT_ICON = {
   delete: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/></svg>',
 };
 
+/** 五个动作的常驻名字：加、打开这两件不需要二次确认，没有 ARM_TEXT */
+const ACT_LABEL = {
+  add: '加标签',
+  untag: '摘标签',
+  clear: '清空标签',
+  open: '打开书签',
+  delete: '删除到回收站',
+};
+
 /** 动作按钮的状态画一次：常态是图标，上膛是"确认"两字 + 红底 */
 function paintAct(btn, act, armed) {
   if (!btn || !ACT_ICON[act]) return;
-  const label = armed ? ARM_TEXT[act][1] : ARM_TEXT[act][0];
-  btn.classList.toggle('armed', !!armed);
+  const arm = ARM_TEXT[act];
+  const label = armed && arm ? arm[1] : (ACT_LABEL[act] || act);
+  btn.classList.toggle('armed', !!(armed && arm));
   btn.title = label;
   btn.setAttribute('aria-label', label);
-  btn.innerHTML = armed ? '确认' : ACT_ICON[act];
+  btn.innerHTML = armed && arm ? '确认' : ACT_ICON[act];
 }
-
-const ARM_TEXT = {
-  clear: ['清空', '确认清空？'],
-  delete: ['删除', '确认删除？'],
-  untag: ['摘', '确认摘掉？'],
-};
 
 // 侧边栏是内嵌视图，window.confirm 不弹窗、直接返回 false，用就地二次确认
 function disarm() {

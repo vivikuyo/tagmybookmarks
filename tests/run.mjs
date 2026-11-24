@@ -1951,7 +1951,9 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pc.includes('.view-menu {') && pc.includes('.view-row {'), 'T181g 浮层与行有样式');
   ok(pc.includes('.seg {') && pc.includes('.seg-btn.on {'), 'T181h 显示方式是两段开关，当前那段有底色');
   ok(pc.includes('.icon-btn {') && pc.includes('.icon-btn.armed {'), 'T181i 批量动作是图标按钮，上膛时能撑成"确认"两字');
-  ok(pj.includes('const ACT_ICON = {') && pj.includes('function paintAct(btn, act, armed)') && pj.includes("btn.innerHTML = armed ? '确认' : ACT_ICON[act];"), 'T181j 图标有唯一来源，上膛/收起都走 paintAct');
+  ok(pj.includes('const ACT_ICON = {') && pj.includes('function paintAct(btn, act, armed)') && pj.includes("btn.innerHTML = armed && arm ? '确认' : ACT_ICON[act];"), 'T181j 图标有唯一来源，上膛/收起都走 paintAct');
+  ok(pj.includes('const ACT_LABEL = {') && pj.includes("add: '加标签'") && pj.includes("open: '打开书签'"), 'T181o 五个动作各有常驻名字：加/打开没有上膛文案，不能去 ARM_TEXT 里取（曾在 boot 里炸）');
+  ok(pj.includes('const arm = ARM_TEXT[act];') && pj.includes('armed && arm ? arm[1] : (ACT_LABEL[act] || act)'), 'T181p paintAct 对没有 ARM_TEXT 的动作兜住，不再 undefined[1]');
 
   ok(pj.includes('function bindViewMenu()') && pj.includes("$('#viewBtn').addEventListener") === false, 'T181k ⋯ 的开关有独立函数，不会被重复绑');
   ok(pj.includes('const btn = $(') && pj.includes("const menu = $('#viewMenu');"), 'T181l 浮层按按钮实际位置定位（不写死坐标）');
