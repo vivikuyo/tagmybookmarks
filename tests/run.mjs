@@ -1958,6 +1958,15 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(!pj.includes('function bindViewMenu()') && !pj.includes('id="viewMenu"'), 'T181k ⋯ 浮层整套拆掉，没有残留的开关函数');
   ok(pj.includes('const DENSITY_ICON = {') && pj.includes('btn.innerHTML = DENSITY_ICON[app.density]'), 'T181l 三档密度各一张图标，按钮画的就是当前档位');
   ok(pj.includes('Number.isFinite(data.nodes) ? data.nodes : (data.total || 0)'), 'T181m 平铺模式的条数优先用物理节点数，不为 0 才退回去重行数');
+  ok((() => {
+    const tags = [];
+    const lines = pc.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes('[data-density') && lines[i].includes('.tag')) tags.push(lines[i].trim());
+    }
+    return tags.length === 0;
+  })(), 'T181s 密度不碰标签 chip：云里标签大小只跟面板高度走，和目录标签同一套');
+  ok(pc.includes('  font-size: 12px;\n  line-height: 1.45;') && pc.includes('  min-height: 20px;'), 'T181t 标签 chip 的度量是写死的 12px/20px，不随密度档位变');
   ok(bg.includes('nodes: nodeCount') && bg.includes('nodeCount += (index.keyToNodes.get(k) || []).length'), 'T181n 后台把命中网址展开成书签节点计数，回给前端 nodes');
 }
 

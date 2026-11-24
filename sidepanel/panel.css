@@ -211,7 +211,11 @@ body {
   .pane-head { padding: 2px 8px 1px; font-size: 11px; }
 }
 
-/* 行密度三档：只覆写度量，不隐藏任何信息（标签再多也是换行，不截断） */
+/* 行密度三档：只覆写度量，不隐藏任何信息（标签再多也是换行，不截断）。
+   范围只到列表：.row / .chips / .grp / 三角。云里的标签 chip 和三档密度无关，
+   它的大小只跟面板高度走（见上面两个 max-height 断点），和目录标签同一套度量；
+   密度改的是云区能拿到多少高度，不是 chip 本身的字号。 */
+
 body[data-density="compact"] .row { padding: 3px 6px 2px; }
 body[data-density="compact"] .row .pick { margin: 0 0 0; }
 body[data-density="compact"] .row-title { line-height: 1.25; }
