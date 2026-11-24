@@ -2,7 +2,7 @@
 
 给书签打标签，查的时候用标签组合条件，不需要回忆它当初被塞进了哪个文件夹。
 
-作者 vivikuyo。仓库 <https://github.com/vivikuyo/tagmybookmarks>。当前版本 1.0.1。
+作者 vivikuyo。仓库 <https://github.com/vivikuyo/tagmybookmarks>。当前版本 1.0.2。
 
 ## 一、它解决什么
 
@@ -81,7 +81,7 @@ Chrome 扩展开发入门 [#书签文件夹A][#Chrome] [**p:1]
 
 ## 七、安装
 
-去 [Releases](https://github.com/vivikuyo/tagmybookmarks/releases) 下 `TagMyBookmarks-1.0.1.zip`，解压，得到一个含 `manifest.json` 的文件夹。
+去 [Releases](https://github.com/vivikuyo/tagmybookmarks/releases) 下 `TagMyBookmarks-1.0.2.zip`，解压，得到一个含 `manifest.json` 的文件夹。
 
 1. 打开 `chrome://extensions`
 2. 右上角打开「开发者模式」
