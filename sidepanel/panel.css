@@ -168,12 +168,15 @@ body {
 .icon-btn.armed svg { display: none; }
 .bulk-float .bulk-tagwrap { flex: 1 1 60px; min-width: 0; }
 .bulk-float [data-act="add"] { margin-right: 4px; }
-.bulk-float-x {
-  width: 22px; height: 20px; border: none; border-radius: 50%;
+/* 取消选择：放在操作带最左、紧挨「清单/目录」之前，和全选框一起构成"选择"这一组 */
+.bulk-x {
+  flex: 0 0 auto;
+  width: 20px; height: 20px; border: none; border-radius: 50%;
   background: transparent; color: var(--text-dim); cursor: pointer; font-size: 14px; line-height: 1;
   display: inline-flex; align-items: center; justify-content: center;
 }
-.bulk-float-x:hover { background: var(--bg-hover); color: var(--text); }
+.bulk-x:hover { background: var(--bg-hover); color: var(--text); }
+.bulk-x:disabled { opacity: .4; cursor: default; background: transparent; }
 
 /* 两朵云装进一个可定高的区域：默认按视口算出"列表至少 6 行"后剩下的部分，
    也可以拖下面的分隔条自己改比例；云内部自己滚动，标签再多也顶不走列表 */

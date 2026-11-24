@@ -53,6 +53,7 @@
     <div id="bulk" class="bulk">
       <input type="checkbox" id="bulkAll" title="全选 / 取消全选（当前列表）" />
       <span id="bulkCount" class="bulk-count" hidden>已选 0</span>
+      <button class="bulk-x" data-act="unselect" title="取消选择（清空勾选）" aria-label="取消选择">×</button>
       <div id="groupSeg" class="seg" role="group" aria-label="显示方式">
         <button type="button" class="seg-btn" data-view="flat" title="清单（平铺）：只列命中的书签">清单</button>
         <button type="button" class="seg-btn" data-view="dir" title="目录：按文件夹分段，可折叠，可拖放">目录</button>
@@ -68,7 +69,6 @@
         <button class="icon-btn" data-act="clear" title="清空选中书签的全部标签" aria-label="清空标签"></button>
         <button class="icon-btn" data-act="open" title="打开选中的书签" aria-label="打开"></button>
         <button class="icon-btn danger" data-act="delete" title="删除：移到回收站，再点一次确认" aria-label="删除"></button>
-        <button class="bulk-float-x" data-act="unselect" title="取消选择">×</button>
       </div>
     </div>
     <ul id="list" class="list"></ul>
