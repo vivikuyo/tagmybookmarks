@@ -119,7 +119,8 @@ tagspace/
 ```
 
 ```
-node tests/run.mjs        纯逻辑单测 890 项
+node tests/run.mjs        纯逻辑单测 921 项
+node tests/dom-smoke.mjs  手写 DOM 桩真跑侧栏 panel.js，14 项（能抓运行时崩溃）
 node tests/e2e-mock.mjs   假 chrome API 跑真 background.js，218 项
 ```
 
