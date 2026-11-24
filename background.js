@@ -1099,12 +1099,18 @@ async function doQuery(expr, opts = {}) {
   relatedDirs = sortDirTagsByTree(index, relatedDirs);
   const untaggedCount = [...keys].filter((k) => index.untaggedKeys.has(k)).length;
 
+  // 物理条数：命中的网址展开成书签节点后的总数（同一网址收藏多次就多算一条）。
+  // 列表仍按网址去重成一行，所以数字可能大于行数，这是刻意的：条数说真实收藏数。
+  let nodeCount = 0;
+  for (const k of keys) nodeCount += (index.keyToNodes.get(k) || []).length;
+
   const items = buildItems(keys, !!ast);
   // 默认一次给 1000 条；侧边栏「显示更多」会带着更大的 limit 再来一次
   const LIMIT = Math.min(Math.max(Number(opts.limit) || 1000, 1), 20000);
 
   return {
     total: items.length,
+    nodes: nodeCount,
     truncated: items.length > LIMIT,
     items: items.slice(0, LIMIT),
     related,

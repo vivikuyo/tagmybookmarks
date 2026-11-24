@@ -98,6 +98,38 @@ async function boot() {
   await run();
 }
 
+/** 顶栏 ⋯ ：视图设置（行密度 / 清单·目录 / 折叠全部）收在里面，点开才出现 */
+function bindViewMenu() {
+  const btn = $('#viewBtn');
+  const menu = $('#viewMenu');
+  if (!btn || !menu) return;
+  if (app.viewMenuBound) return;
+  app.viewMenuBound = true;
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!menu.hidden) {
+      menu.hidden = true;
+      return;
+    }
+    menu.hidden = false;
+    const r = btn.getBoundingClientRect();
+    menu.style.top = `${Math.round((r.bottom || 0) + 5)}px`;
+    menu.style.right = '8px';
+  });
+  // 点浮层里的按钮不算"点外面"
+  menu.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (e.target.closest && e.target.closest('[data-act]') === null && e.target.closest('button')) {
+      // 密度/显示方式切完就收起，折叠按钮留着方便再点
+      const inFold = e.target.closest('#foldBtn');
+      if (!inFold) menu.hidden = true;
+    }
+  });
+  document.addEventListener('click', () => {
+    if (!menu.hidden) menu.hidden = true;
+  });
+}
+
 function bind() {
   // 列表滚到底：上一页被截断就自动再拉一页，并保持当前滚动位置
   listEl.addEventListener('scroll', async () => {
@@ -144,6 +176,8 @@ function bind() {
       renderList();
     }
   });
+
+  bindViewMenu();
 
   $('#densityBtn').addEventListener('click', () => {
     const i = DENSITY.indexOf(app.density);
@@ -771,7 +805,7 @@ function renderList() {
       countEl.textContent = '加载全部书签…';
       return;
     }
-    countEl.textContent = `${app.allTotal} 条（全部）`;
+    countEl.textContent = `${app.allTotal} 条`;
     if (!rows.length) {
       const div = document.createElement('div');
       div.className = 'empty';
@@ -844,8 +878,11 @@ function renderList() {
   }
 
   const shown = data.items.length;
-  countEl.textContent = data.total
-    ? `${data.total} 条${data.truncated ? `（显示前 ${shown} 条）` : ''}`
+  // 条数按"有多少书签就多少"：data.nodes 是命中网址展开成书签节点的条数，
+  // data.total 是去重后的网址行数，两者不同时，以实物条数为准
+  const total = Number.isFinite(data.nodes) ? data.nodes : (data.total || 0);
+  countEl.textContent = total
+    ? `${total} 条${data.truncated ? `（列表显示前 ${shown} 行）` : ''}`
     : '0 条';
 
   if (!data.items.length) {
@@ -1539,11 +1576,9 @@ function updateBulk() {
   bulkCountEl.hidden = true;
   bulkCountEl.textContent = dirs ? `已选 ${marks} 条 + ${dirs} 个目录` : `已选 ${marks}`;
   if (n) toastSel(dirs ? `已勾选 ${marks} 条书签 + ${dirs} 个目录` : `已勾选 ${marks} 条书签`);
-  // 上下文浮条：有选中才浮出来；平时不占一像素
+  // 动作行固定在一行里：不再按选中数显示/隐藏，免得整块高度来回跳
   const float = $('#bulkFloat');
-  if (float) {
-    float.hidden = n === 0;
-  }
+  if (float && float.hidden) float.hidden = false;
   // 无选中时动作按钮置灰，全选框反映当前选择状态
   for (const b of document.querySelectorAll('.bulk [data-act], .bulk-float [data-act]')) b.disabled = !n;
   const all = $('#bulkAll');

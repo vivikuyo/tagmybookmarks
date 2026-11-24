@@ -53,7 +53,20 @@ body {
 .icon svg { width: 17px; height: 17px; }
 .brand span { color: var(--accent); }
 
-.bar-actions { display: flex; gap: 4px; }
+.bar-actions { display: flex; gap: 4px; align-items: center; min-width: 0; }
+.bar-count { font-size: 11px; color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* 视图设置浮层：三个按钮收进 ⋯ 里，点开才出现 */
+.view-menu {
+  position: fixed; right: 8px; z-index: 210; min-width: 176px; padding: 6px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .16);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.view-row { display: flex; align-items: center; gap: 8px; }
+.view-row .view-k { font-size: 11px; color: var(--text-dim); flex: 0 0 auto; }
+.view-row .mini-btn { margin-left: auto; }
+/* 折叠按钮在非目录模式隐藏，整行跟着消失 */
+.view-row:has(button[hidden]) { display: none; }
 
 .icon {
   width: 27px; height: 27px;
@@ -127,12 +140,9 @@ body {
 
 /* 上下文动作行：勾选后在操作带里多出一行（挨着"已选 N"），平时 hidden 不占高度 */
 .bulk-float {
-  flex: 1 0 100%;
+  flex: 1 1 auto; min-width: 0;
   display: flex; align-items: center; gap: 4px;
   justify-content: flex-start;
-  padding-top: 4px;
-  border-top: 1px dashed var(--line);
-  margin-top: 1px;
 }
 .bulk-float .mini-btn { padding: 2px 8px; }
 .bulk-float .bulk-tagwrap { flex: 1 1 60px; min-width: 0; }
@@ -406,8 +416,8 @@ body[data-density="ultra"] .grp .grp-n { font-size: 10px; }
 .badge.warn { color: #b07d1a; border-color: #b07d1a; }
 
 .bulk {
-  /* 常态化操作带：无外框无底色，用上下分割线与云区/列表分隔，省一行高度 */
-  display: flex; flex-wrap: wrap; gap: 5px; align-items: center;
+  /* 常态化操作带：一行到底（视图设置与条数已挪到顶栏），不再换行 */
+  display: flex; flex-wrap: nowrap; gap: 5px; align-items: center; min-width: 0;
   margin: 0; padding: 5px 10px;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);

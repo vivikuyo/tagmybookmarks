@@ -311,7 +311,7 @@ src = src.replace(/^import[^\n]*\n/gm, '');
 const tail = `
 ;return { app, updateBulk, syncGroupChecks, syncRowHighlights, renderList, render, bulkAction,
   selectedFolderIds, branchKeys, folderKey, buildFolderIndex, toastEl, listEl, tagInput, toast,
-  renderRow, isGroupCollapsed };`;
+  renderRow, isGroupCollapsed, bindViewMenu };`;
 
 const doc = new Doc();
 const win = {
@@ -426,6 +426,31 @@ if (api) {
     ok(picks.every((p) => p && !p.checked), '取消后行内复选框也回空');
   } catch (e) {
     fail.push('取消勾选的链路抛异常：' + e.message);
+  }
+
+  // ⋯ 视图浮层：点一下要真的打开，再点收起
+  try {
+    const btn = doc.querySelector('#viewBtn');
+    const menu = doc.querySelector('#viewMenu');
+    menu.hidden = true;
+    api.bindViewMenu();
+    btn.dispatch('click');
+    ok(menu.hidden === false, '点 ⋯ 会把视图设置浮层打开');
+    ok(typeof menu.style.top === 'string' && menu.style.top !== '', '浮层按按钮下沿定位（不是写死坐标）');
+    btn.dispatch('click');
+    ok(menu.hidden === true, '再点一次 ⋯ 收起');
+  } catch (e) {
+    fail.push('⋯ 浮层的开关抛异常：' + e.message);
+  }
+
+  // 操作行不再按选中数隐藏
+  try {
+    const floatEl = doc.querySelector('#bulkFloat');
+    floatEl.hidden = true;
+    api.updateBulk();
+    ok(floatEl.hidden === false, '动作行固定显示，不随选中数忽隐忽现');
+  } catch (e) {
+    fail.push('updateBulk 清 hidden 时抛异常：' + e.message);
   }
 
   // 加标签：目录进不了请求，只发书签

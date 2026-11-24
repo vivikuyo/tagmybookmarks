@@ -918,7 +918,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
   const ph = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
   ok(pc.includes('.bulk input[type="text"] {'), 'T102a 文本框样式不再命中勾选框');
-  ok(ph.indexOf('id="bulkAll"') < ph.indexOf('id="count"'), 'T102b 勾选框+已选计数在总条数左侧');
+  ok(ph.indexOf('id="count"') < ph.indexOf('id="bulkAll"'), 'T102b 条数移到顶栏：顶栏在操作带之前，操作带里只剩全选');
   ok(!/\.bulk input {/.test(pc.replace('.bulk input[type="text"] {', '.bulk-x {')), 'T102c 旧的 .bulk input 通配样式已收窄');
 }
 
@@ -1663,7 +1663,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes('function addWithAncestors(id, out)') && pn.includes('app.autoOpen = new Set();'), 'T147h 命中目录的祖先链由 autoOpen 临时展开（不写回手动折叠）');
   ok(pn.includes("row.scrollIntoView({ block: 'center' })") && !pn.includes("classList.add('flash')"), 'T147i 只滚到位置，着色由渲染层的命中集合负责');
   ok(pc.includes('.row.hit {') && pc.includes('.row.hit-in {'), 'T147j 命中与整枝命中两档着色样式');
-  ok(pn.includes('`${app.allTotal} 条（全部）`') && !pn.includes('查询只跳转'), 'T147k 计数如实标「全部」，不再挂查询只跳转的提示');
+  ok(pn.includes('`${app.allTotal} 条`') && !pn.includes('查询只跳转'), 'T147k 目录模式的条数是全部书签的物理条数');
 }
 
 
@@ -1912,23 +1912,49 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const ph = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
   const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
-  ok(ph.includes('id="bulkFloat"') && ph.includes('class="bulk-float" hidden'), 'T164a 浮条默认 hidden，不占高度');
+  ok(ph.includes('id="bulkFloat"') && !ph.includes('class="bulk-float" hidden'), 'T164a 动作行不再默认隐藏：固定并进同一行，免得高度一跳一跳');
   const bulkAt = ph.indexOf('id="bulk"');
   const floatAt = ph.indexOf('id="bulkFloat"');
   ok(bulkAt > -1 && floatAt > bulkAt, 'T164b 浮条在操作带之后');
   ok((ph.slice(bulkAt, floatAt).match(/data-act="untag"/g) || []).length === 0, 'T164c 摘/清空/打开/删除已从常驻操作带移出');
   ok(ph.slice(floatAt).includes('data-act="untag"') && ph.slice(floatAt).includes('data-act="delete"'), 'T164d 动作都在浮条里');
-  ok(pj.includes("float.hidden = n === 0;"), 'T164e 有选中才浮出');
+  ok(pj.includes('if (float && float.hidden) float.hidden = false;'), 'T164e 不按选中数隐藏动作行，只有历史遗留的 hidden 会被清掉');
   ok(pj.includes('bulkEl.addEventListener(\'click\', onBulkClick);')
      && pj.includes("floatEl.addEventListener('click', onBulkClick)") === false,
      'T164f 浮条按钮靠冒泡走同一套 bulkAction（只绑一次，避免一次点击执行两遍）');
   ok(pj.includes("if (act === 'unselect')"), 'T164g 浮条上的 × 清空选择');
-  ok(pc.includes('.bulk-float {') && pc.includes('flex: 1 0 100%;') && !pc.includes('position: absolute; left: 50%'), 'T164h 动作行回到操作带里、贴着"已选 N"，不再悬浮到列表底部');
+  ok(pc.includes('.bulk-float {') && pc.includes('flex: 1 1 auto; min-width: 0;') && !pc.includes('position: absolute; left: 50%'), 'T164h 动作行与全选框同一行（不再占满一行、也不悬浮）');
   ok(pc.includes('display: flex; align-items: center; gap: 4px;'), 'T164i 动作行横排一行');
   ok(pc.includes('.bulk-float[hidden]') === false && !pc.includes('has-sel'), 'T164j 不再需要给列表补底部留白');
   const f = ph.indexOf('id="bulkFloat"');
   ok(f > 0 && ph.indexOf('id="tagInput"') > f && ph.indexOf('data-act="add"') > ph.indexOf('id="tagInput"') && ph.indexOf('data-act="untag"') > ph.indexOf('data-act="add"'), 'T164k 输入框和"加"放进勾选后才出现的动作行，排在"摘"之前');
   ok(pc.includes('.bulk-float .bulk-tagwrap { flex: 1 1 60px; min-width: 0; }') && pc.includes('.bulk input[type="text"] {\n  flex: 1 1 60px; min-width: 0;'), 'T164l 输入框最小宽度归零，占位文案允许被截断');
+}
+
+// T181：条数进顶栏 + 视图设置收进 ⋯ + 操作带并成一行
+{
+  const ph = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
+  const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+
+  const barAt = ph.indexOf('class="bar"');
+  const bulkAt = ph.indexOf('id="bulk"');
+  ok(ph.indexOf('id="count"') > barAt && ph.indexOf('id="count"') < bulkAt, 'T181a 条数不再是操作带里的一项，搬进顶栏');
+  ok(ph.includes('id="viewBtn"') && ph.includes('id="viewMenu"') && ph.indexOf('id="viewMenu"') > barAt, 'T181b 顶栏多一个 ⋯ 按钮，视图设置浮层挂在顶栏里');
+  const menuAt = ph.indexOf('id="viewMenu"');
+  ok(ph.indexOf('id="densityBtn"') > menuAt && ph.indexOf('id="groupBtn"') > menuAt && ph.indexOf('id="foldBtn"') > menuAt, 'T181c 密度 / 清单·目录 / 折叠全部三个开关都收进浮层');
+  ok(ph.slice(bulkAt).includes('data-act="add"') && ph.slice(bulkAt).includes('data-act="delete"'), 'T181d 操作带只留全选与标签动作');
+  ok(ph.indexOf('id="bulkFloat"') > bulkAt && !ph.slice(bulkAt, ph.indexOf('id="bulkFloat"')).includes('bulk-sep'), 'T181e 动作行紧接全选框，去掉了分隔线与中间那串数字');
+
+  ok(pc.includes('display: flex; flex-wrap: nowrap;') || pc.includes('flex-wrap: nowrap'), 'T181f 操作带强制一行（nowrap），不再靠换行溢出');
+  ok(pc.includes('.view-menu {') && pc.includes('.view-row {'), 'T181g 浮层与行有样式');
+  ok(pc.includes('.view-row:has(button[hidden]) { display: none; }'), 'T181h 折叠按钮在非目录模式隐藏时整行一起消失');
+
+  ok(pj.includes('function bindViewMenu()') && pj.includes("$('#viewBtn').addEventListener") === false, 'T181i ⋯ 的开关有独立函数，不会被重复绑');
+  ok(pj.includes('const btn = $(') && pj.includes("const menu = $('#viewMenu');"), 'T181j 浮层按按钮实际位置定位（不写死坐标）');
+  ok(pj.includes('Number.isFinite(data.nodes) ? data.nodes : (data.total || 0)'), 'T181k 平铺模式的条数优先用物理节点数，不为 0 才退回去重行数');
+  ok(bg.includes('nodes: nodeCount') && bg.includes('nodeCount += (index.keyToNodes.get(k) || []).length'), 'T181l 后台把命中网址展开成书签节点计数，回给前端 nodes');
 }
 
 // T166：概览页的求打赏区块（两张本地静态收款码，不联网、不换功能）
@@ -1982,7 +2008,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const pj = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
   ok(!pj.includes('查询只跳转'), 'T170a 状态行不再带「查询只跳转」');
-  ok(pj.includes('条（全部）`') && !pj.includes('查询只跳转'), 'T170b 目录模式只报总条数');
+  ok(pj.includes('`${app.allTotal} 条`') && !pj.includes('查询只跳转'), 'T170b 目录模式只报总条数（物理书签条数，不按网址去重）');
   ok(pc.includes('.row.hit {') && !pc.includes('hitFlash'), 'T170c 命中改成静态着色，不再有闪烁动画');
   ok(!pj.includes("classList.add('flash')"), 'T170d 跳转不再自己挂闪烁类');
   ok(!pj.includes("at.className = 'at'"), 'T170e chip 不再带 @ 前缀（符号只写进查询框）');

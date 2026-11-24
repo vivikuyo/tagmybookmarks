@@ -10,6 +10,15 @@
   <header class="bar">
     <div class="brand">Tag<span>MyBookmarks</span></div>
     <div class="bar-actions">
+      <span id="count" class="pane-title bar-count">—</span>
+      <button id="viewBtn" class="icon" title="视图设置：行密度 / 显示方式 / 折叠">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+      </button>
+      <div id="viewMenu" class="view-menu" hidden>
+        <div class="view-row"><span class="view-k">行密度</span><button id="densityBtn" class="mini-btn" title="标准 / 紧凑 / 极简（只存本机，不进 Sync）">标准</button></div>
+        <div class="view-row"><span class="view-k">显示方式</span><button id="groupBtn" class="mini-btn" title="清单（平铺）/ 目录（按文件夹插组头，可折叠）">清单</button></div>
+        <div class="view-row"><span class="view-k">文件夹</span><button id="foldBtn" class="mini-btn" title="折叠 / 展开所有文件夹（仅目录模式）" hidden>折叠全部</button></div>
+      </div>
       <button id="btnSpace" class="icon" title="管理台（全页）"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
       <button id="btnRebuild" class="icon" title="重建索引"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
     </div>
@@ -46,16 +55,11 @@
   <div id="cloudSplit" class="cloud-split" title="拖动：交换标签云与列表的空间（默认/双击回到列表 6 行）"></div>
 
   <section class="pane list-pane">
+    <!-- 操作带：一行到底。视图设置收进顶栏的 ⋯，条数移到顶栏，这里只剩全选 + 标签动作 -->
     <div id="bulk" class="bulk">
       <input type="checkbox" id="bulkAll" title="全选 / 取消全选（当前列表）" />
-      <span id="bulkCount" class="bulk-count">已选 0</span>
-      <span class="bulk-sep"></span>
-      <span id="count" class="pane-title">—</span>
-      <button id="densityBtn" class="mini-btn" title="行密度：标准 / 紧凑 / 极简（只存本机，不进 Sync）">标准</button>
-      <button id="groupBtn" class="mini-btn" title="显示方式：清单（平铺）/ 分组（按目录插组头，可折叠）">清单</button>
-      <button id="foldBtn" class="mini-btn" title="折叠 / 展开所有文件夹（仅目录模式）" hidden>折叠全部</button>
-      <!-- 上下文动作行：勾选了才出现，平时完全不占高度 -->
-      <div id="bulkFloat" class="bulk-float" hidden>
+      <span id="bulkCount" class="bulk-count" hidden>已选 0</span>
+      <div id="bulkFloat" class="bulk-float">
         <span class="bulk-tagwrap">
           <input id="tagInput" type="text" placeholder='可连续输入标签，空格 or , 分开；带空格标签用 ""' autocomplete="off" />
           <button id="tagClear" class="clear" title="清空输入">×</button>
