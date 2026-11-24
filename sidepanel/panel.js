@@ -1538,7 +1538,7 @@ function updateBulk() {
   // 计数改成 toast：常驻一条「已选 N 条 + M 个目录」会挤掉右边的按钮
   bulkCountEl.hidden = true;
   bulkCountEl.textContent = dirs ? `已选 ${marks} 条 + ${dirs} 个目录` : `已选 ${marks}`;
-  if (n) toastSel(dir ? `已勾选 ${marks} 条书签 + ${dirs} 个目录` : `已勾选 ${marks} 条书签`);
+  if (n) toastSel(dirs ? `已勾选 ${marks} 条书签 + ${dirs} 个目录` : `已勾选 ${marks} 条书签`);
   // 上下文浮条：有选中才浮出来；平时不占一像素
   const float = $('#bulkFloat');
   if (float) {

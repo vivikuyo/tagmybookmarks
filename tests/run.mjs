@@ -2073,6 +2073,8 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pj.includes('for (const fid of app.folderById.keys()) alive.add(folderKey(fid));'), 'T177n 跑查询时不会顺手把勾选的目录清掉');
   ok(pj.includes("bulkCountEl.textContent = dirs ? `已选 ${marks} 条 + ${dirs} 个目录` :"), 'T177o 已选计数把书签条数和目录个数拆开显示');
   ok(pj.includes("for (const head of listEl.querySelectorAll('.grp')) {") && pj.includes('if (head.dataset.folder) app.selected.add(folderKey(head.dataset.folder));'), 'T177p 全选也勾上当前列表里的目录（不越界到看不见的目录）');
+  ok(pj.includes('toastSel(dirs ?') && !pj.includes('toastSel(dir ?'), 'T177q 报数用的是算出来的 dirs，不是没定义的 dir（曾把侧栏点崩）');
+  ok(pj.includes("const pick = li.querySelector('input.pick');") && pj.includes('pick.checked = on;'), 'T177r 级联选中时行内复选框跟着勾，不只有底色');
 }
 
 // T178：目录展开箭头要看得见
