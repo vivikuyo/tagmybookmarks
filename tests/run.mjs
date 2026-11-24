@@ -909,7 +909,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(/\.dir-pane\.off \.[\s\S]{0,80}display: none/.test(pc), 'T101j 目录关闭时整栏收起');
   ok(!pj.includes('目录标签已关闭'), 'T101k 已关闭提示文案删除');
   ok(pj.includes('splitTagInput(input)') && pj.includes('normalizeTagOrNull'), 'T101l 打标签切分规则与书签管理页一致');
-  ok(ph.includes("placeholder='可连续输入标签，空格 or , 分开；带空格标签用 \"\"'"), 'T101m 占位文案：可连续输入、空格/逗号分开、带空格用双引号');
+  ok(ph.includes("placeholder='标签：空格 or , 分隔'"), 'T101m 占位文案写明空格/逗号分隔（一行放不下长句，双引号用法在输入框旁边的提示里）');
   ok(ph.includes('id="tagClear"'), 'T101n 打标签输入带 × 清除');
 }
 
@@ -1634,7 +1634,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   const ph = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
   const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
-  ok(ph.includes('id="groupBtn"') && pn.includes("group: 'flat'"), 'T146a 操作带加「清单/目录」切换，默认平铺');
+  ok(ph.includes('id="groupSeg"') && ph.includes('data-view="flat"') && ph.includes('data-view="dir"') && pn.includes("group: 'flat'"), 'T146a 操作带是「清单/目录」两段开关，默认平铺');
   ok(pn.includes("chrome.storage.local.set({ 'panel.group': app.group })") && pn.includes("chrome.storage.local.get('panel.group')"), 'T146b 显示方式只存本机、重开沿用');
   ok(pn.includes("const rows = app.allRows;") && pn.includes('if (app.foldersTree) renderTreeRows();'), 'T146c 目录模式渲染全库 + 文件夹树');
   ok(pn.includes('const PATH_SEP = String.fromCharCode(31);'), 'T146d 路径按后台 PATH_SEP 切（文件夹名里的 / 不算层级）');
@@ -1692,7 +1692,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes("const anyOpen = ids.some((id) => !isGroupCollapsed(id));")
      && pn.includes('app.grpCollapsed = anyOpen ? new Set(ids) : new Set();'), 'T149b 一键：有展开就全折叠，全折叠就全展开');
   ok(pn.includes('app.autoOpen = anyOpen ? new Set() : new Set(ids);'), 'T149b2 查询期间只改临时展开集合，不动手动记忆');
-  ok(pn.includes('function applyFoldBtn()') && pn.includes("btn.textContent = anyOpen ? '折叠全部' : '展开全部'"), 'T149c 按钮文案随状态切换');
+  ok(pn.includes('function applyFoldBtn()') && pn.includes("const label = anyOpen ? '折叠全部' : '展开全部';") && pn.includes('btn.title = label;'), 'T149c 折叠按钮改成图标后，状态写在 tooltip/aria 里');
   ok(pn.includes('function folderLabel(node)') && pn.includes('String(node.path).split(PATH_SEP).join('), 'T149d 组头带完整路径（上级\\上级\\自己）');
   ok(pn.includes("name.textContent = folderLabel(node);"), 'T149e 组头显示路径标签而不是只有末段名');
   ok(pn.includes('for (const child of node.children || []) renderFolderNode(child);') && pn.includes('for (const row of rows) listEl.append(renderRow(row));'), 'T149f 文件夹在前、书签在后');
@@ -1943,18 +1943,20 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(ph.indexOf('id="count"') > barAt && ph.indexOf('id="count"') < bulkAt, 'T181a 条数不再是操作带里的一项，搬进顶栏');
   ok(ph.includes('id="viewBtn"') && ph.includes('id="viewMenu"') && ph.indexOf('id="viewMenu"') > barAt, 'T181b 顶栏多一个 ⋯ 按钮，视图设置浮层挂在顶栏里');
   const menuAt = ph.indexOf('id="viewMenu"');
-  ok(ph.indexOf('id="densityBtn"') > menuAt && ph.indexOf('id="groupBtn"') > menuAt && ph.indexOf('id="foldBtn"') > menuAt, 'T181c 密度 / 清单·目录 / 折叠全部三个开关都收进浮层');
+  ok(ph.indexOf('id="densityBtn"') > menuAt && ph.indexOf('id="groupSeg"') > bulkAt && ph.indexOf('id="foldBtn"') > bulkAt, 'T181c 只有行密度留在 ⋯ 里，显示方式与折叠回到列表上方的操作带');
   ok(ph.slice(bulkAt).includes('data-act="add"') && ph.slice(bulkAt).includes('data-act="delete"'), 'T181d 操作带只留全选与标签动作');
   ok(ph.indexOf('id="bulkFloat"') > bulkAt && !ph.slice(bulkAt, ph.indexOf('id="bulkFloat"')).includes('bulk-sep'), 'T181e 动作行紧接全选框，去掉了分隔线与中间那串数字');
 
   ok(pc.includes('display: flex; flex-wrap: nowrap;') || pc.includes('flex-wrap: nowrap'), 'T181f 操作带强制一行（nowrap），不再靠换行溢出');
   ok(pc.includes('.view-menu {') && pc.includes('.view-row {'), 'T181g 浮层与行有样式');
-  ok(pc.includes('.view-row:has(button[hidden]) { display: none; }'), 'T181h 折叠按钮在非目录模式隐藏时整行一起消失');
+  ok(pc.includes('.seg {') && pc.includes('.seg-btn.on {'), 'T181h 显示方式是两段开关，当前那段有底色');
+  ok(pc.includes('.icon-btn {') && pc.includes('.icon-btn.armed {'), 'T181i 批量动作是图标按钮，上膛时能撑成"确认"两字');
+  ok(pj.includes('const ACT_ICON = {') && pj.includes('function paintAct(btn, act, armed)') && pj.includes("btn.innerHTML = armed ? '确认' : ACT_ICON[act];"), 'T181j 图标有唯一来源，上膛/收起都走 paintAct');
 
-  ok(pj.includes('function bindViewMenu()') && pj.includes("$('#viewBtn').addEventListener") === false, 'T181i ⋯ 的开关有独立函数，不会被重复绑');
-  ok(pj.includes('const btn = $(') && pj.includes("const menu = $('#viewMenu');"), 'T181j 浮层按按钮实际位置定位（不写死坐标）');
-  ok(pj.includes('Number.isFinite(data.nodes) ? data.nodes : (data.total || 0)'), 'T181k 平铺模式的条数优先用物理节点数，不为 0 才退回去重行数');
-  ok(bg.includes('nodes: nodeCount') && bg.includes('nodeCount += (index.keyToNodes.get(k) || []).length'), 'T181l 后台把命中网址展开成书签节点计数，回给前端 nodes');
+  ok(pj.includes('function bindViewMenu()') && pj.includes("$('#viewBtn').addEventListener") === false, 'T181k ⋯ 的开关有独立函数，不会被重复绑');
+  ok(pj.includes('const btn = $(') && pj.includes("const menu = $('#viewMenu');"), 'T181l 浮层按按钮实际位置定位（不写死坐标）');
+  ok(pj.includes('Number.isFinite(data.nodes) ? data.nodes : (data.total || 0)'), 'T181m 平铺模式的条数优先用物理节点数，不为 0 才退回去重行数');
+  ok(bg.includes('nodes: nodeCount') && bg.includes('nodeCount += (index.keyToNodes.get(k) || []).length'), 'T181n 后台把命中网址展开成书签节点计数，回给前端 nodes');
 }
 
 // T166：概览页的求打赏区块（两张本地静态收款码，不联网、不换功能）

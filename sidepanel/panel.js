@@ -116,14 +116,11 @@ function bindViewMenu() {
     menu.style.top = `${Math.round((r.bottom || 0) + 5)}px`;
     menu.style.right = '8px';
   });
-  // 点浮层里的按钮不算"点外面"
+  // 点浮层里的按钮不算"点外面"；密度切完就收起
   menu.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (e.target.closest && e.target.closest('[data-act]') === null && e.target.closest('button')) {
-      // 密度/显示方式切完就收起，折叠按钮留着方便再点
-      const inFold = e.target.closest('#foldBtn');
-      if (!inFold) menu.hidden = true;
-    }
+    const b = e.target && e.target.closest ? e.target.closest('button') : null;
+    if (b) menu.hidden = true;
   });
   document.addEventListener('click', () => {
     if (!menu.hidden) menu.hidden = true;
@@ -149,6 +146,12 @@ function bind() {
   if (app.bound) return; // app:changed 会反复 boot()，监听只能挂一次
   app.bound = true;
 
+  // 图标按钮：载入时注入图标（HTML 里是空按钮，图标以 ACT_ICON 为准）
+  for (const act of Object.keys(ACT_ICON)) {
+    const b = document.querySelector(`.bulk [data-act="${act}"], .bulk-float [data-act="${act}"]`);
+    paintAct(b, act, false);
+  }
+
   $('#foldBtn').addEventListener('click', () => {
     if (!app.foldIds) return;
     const ids = app.foldIds;
@@ -163,8 +166,13 @@ function bind() {
     renderList();
   });
 
-  $('#groupBtn').addEventListener('click', () => {
-    app.group = app.group === 'dir' ? 'flat' : 'dir';
+  const segEl = $('#groupSeg');
+  if (segEl) segEl.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('[data-view]') : null;
+    if (!b) return;
+    const want = b.dataset.view === 'dir' ? 'dir' : 'flat';
+    if (want === app.group) return; // 已经在这个视图，不用重跑
+    app.group = want;
     app.selected.clear(); // 换视图清空选择（与管理页同一条规则）
     applyGroupBtn();
     chrome.storage.local.set({ 'panel.group': app.group });
@@ -1039,7 +1047,9 @@ function applyFoldBtn() {
   if (!btn || !app.displayNodes) return;
   const ids = app.foldIds || [];
   const anyOpen = ids.some((id) => !isGroupCollapsed(id));
-  btn.textContent = anyOpen ? '折叠全部' : '展开全部';
+  const label = anyOpen ? '折叠全部' : '展开全部';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
   btn.hidden = app.group !== 'dir';
 }
 
@@ -1596,6 +1606,26 @@ const tagList = (input) =>
     .map(normalizeTagOrNull)
     .filter(Boolean);
 
+// 批量动作的图标（HTML 里只放空按钮，图标在这里统一注入：
+ // 上膛时要把图标换成"确认"两字，收起时再换回来，图标必须有唯一来源）
+const ACT_ICON = {
+  add: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  untag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg>',
+  clear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h7l7 7-6 6-7-7V5z"/><path d="M15 13l3 3"/></svg>',
+  open: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>',
+  delete: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/></svg>',
+};
+
+/** 动作按钮的状态画一次：常态是图标，上膛是"确认"两字 + 红底 */
+function paintAct(btn, act, armed) {
+  if (!btn || !ACT_ICON[act]) return;
+  const label = armed ? ARM_TEXT[act][1] : ARM_TEXT[act][0];
+  btn.classList.toggle('armed', !!armed);
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+  btn.innerHTML = armed ? '确认' : ACT_ICON[act];
+}
+
 const ARM_TEXT = {
   clear: ['清空', '确认清空？'],
   delete: ['删除', '确认删除？'],
@@ -1606,12 +1636,9 @@ const ARM_TEXT = {
 function disarm() {
   clearTimeout(app.armTimer);
   app.armed = null;
-  for (const [act, [idle]] of Object.entries(ARM_TEXT)) {
+  for (const act of Object.keys(ARM_TEXT)) {
     const b = document.querySelector(`.bulk [data-act="${act}"], .bulk-float [data-act="${act}"]`);
-    if (b) {
-      b.textContent = idle;
-      b.classList.remove('armed');
-    }
+    paintAct(b, act, false);
   }
 }
 
@@ -1628,10 +1655,7 @@ function armOrConfirm(act, btn) {
   disarm();
   app.armed = act;
   app.armedAt = Date.now();
-  if (btn) {
-    btn.textContent = ARM_TEXT[act][1];
-    btn.classList.add('armed');
-  }
+  if (btn) paintAct(btn, act, true);
   app.armTimer = setTimeout(disarm, 3000);
   toast('再点一次确认');
   return false;
@@ -2036,12 +2060,9 @@ async function loadDensity() {
 // ---------------------------------------------------------------- 显示方式（清单 / 分组）
 
 function applyGroupBtn() {
-  const btn = $('#groupBtn');
-  if (!btn) return;
-  btn.textContent = app.group === 'dir' ? '目录' : '清单';
-  btn.title = app.group === 'dir'
-    ? '当前：目录模式（全部书签按目录分段；点标签只是跳到位置，不过滤）'
-    : '当前：平铺清单（只显示命中；点此改为目录模式）';
+  for (const b of document.querySelectorAll('#groupSeg .seg-btn')) {
+    b.classList.toggle('on', b.dataset.view === app.group);
+  }
 }
 
 async function loadGroup() {

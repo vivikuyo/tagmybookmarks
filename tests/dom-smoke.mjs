@@ -31,6 +31,7 @@ function matchCompound(el, tok) {
     if (!(k in el.dataset) && !el.attrs.has(k)) return false;
   }
   if (!name) return true;
+  if (name.startsWith('#')) return el.id === name.slice(1);
   const parts = name.split('.');
   if (parts[0] && parts[0] !== '*' && el.tagName !== parts[0].toUpperCase()) return false;
   for (const c of parts.slice(1)) if (c && !el._class.has(c)) return false;
@@ -311,7 +312,7 @@ src = src.replace(/^import[^\n]*\n/gm, '');
 const tail = `
 ;return { app, updateBulk, syncGroupChecks, syncRowHighlights, renderList, render, bulkAction,
   selectedFolderIds, branchKeys, folderKey, buildFolderIndex, toastEl, listEl, tagInput, toast,
-  renderRow, isGroupCollapsed, bindViewMenu };`;
+  renderRow, isGroupCollapsed, bindViewMenu, applyGroupBtn, paintAct };`;
 
 const doc = new Doc();
 const win = {
@@ -451,6 +452,42 @@ if (api) {
     ok(floatEl.hidden === false, '动作行固定显示，不随选中数忽隐忽现');
   } catch (e) {
     fail.push('updateBulk 清 hidden 时抛异常：' + e.message);
+  }
+
+  // 分段视图：两段开关只亮当前那段
+  try {
+    const seg = doc.querySelector('#groupSeg');
+    const flat = doc.createElement('button');
+    flat.dataset.view = 'flat';
+    flat.className = 'seg-btn';
+    const dirB = doc.createElement('button');
+    dirB.dataset.view = 'dir';
+    dirB.className = 'seg-btn';
+    seg.append(flat, dirB);
+    app.group = 'dir';
+    api.applyGroupBtn();
+    ok(dirB.classList.contains('on') && !flat.classList.contains('on'), '目录视图时只有「目录」那一段高亮');
+    app.group = 'flat';
+    api.applyGroupBtn();
+    ok(flat.classList.contains('on') && !dirB.classList.contains('on'), '切回清单时高亮跟着换');
+    app.group = 'dir'; // 后面的用例还在目录模式里跑
+    api.applyGroupBtn();
+  } catch (e) {
+    fail.push('分段视图高亮抛异常：' + e.message);
+  }
+
+  // 图标按钮：常态是图标，上膛是"确认"
+  try {
+    const b = doc.createElement('button');
+    api.paintAct(b, 'delete', false);
+    ok(b.classList.contains('armed') === false && /<svg/.test(b.innerHTML), '动作按钮常态是图标');
+    api.paintAct(b, 'delete', true);
+    ok(b.classList.contains('armed') === true && b.innerHTML === '确认', '上膛时图标换成"确认"两个字');
+    ok(b.title === '确认删除？' && b.getAttribute('aria-label') === '确认删除？', '上膛时 tooltip/aria 一起改，图标按钮不会变成哑巴');
+    api.paintAct(b, 'delete', false);
+    ok(b.classList.contains('armed') === false && /<svg/.test(b.innerHTML), '取消上膛后图标回来了（不是留下"删除"俩字）');
+  } catch (e) {
+    fail.push('图标按钮上膛抛异常：' + e.message);
   }
 
   // 加标签：目录进不了请求，只发书签

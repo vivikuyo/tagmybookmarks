@@ -65,8 +65,7 @@ body {
 .view-row { display: flex; align-items: center; gap: 8px; }
 .view-row .view-k { font-size: 11px; color: var(--text-dim); flex: 0 0 auto; }
 .view-row .mini-btn { margin-left: auto; }
-/* 折叠按钮在非目录模式隐藏，整行跟着消失 */
-.view-row:has(button[hidden]) { display: none; }
+
 
 .icon {
   width: 27px; height: 27px;
@@ -144,7 +143,35 @@ body {
   display: flex; align-items: center; gap: 4px;
   justify-content: flex-start;
 }
-.bulk-float .mini-btn { padding: 2px 8px; }
+/* 显示方式：两段小开关（清单 / 目录），比一个"点一下切一次"的按钮直观 */
+.seg {
+  display: inline-flex; align-items: stretch; flex: 0 0 auto;
+  border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+}
+.seg-btn {
+  border: 0; background: var(--bg); color: var(--text-dim);
+  font: inherit; font-size: 10.5px; line-height: 1.5; padding: 1px 6px; cursor: pointer;
+}
+.seg-btn + .seg-btn { border-left: 1px solid var(--line); }
+.seg-btn.on { background: color-mix(in srgb, var(--accent) 14%, var(--bg)); color: var(--text); }
+.seg-btn:hover { background: var(--bg-hover); }
+/* 批量动作：图标按钮，文字让位给输入框宽度（tooltip + aria-label 说明用途） */
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: 26px; height: 24px; padding: 0;
+  border: 1px solid var(--line); border-radius: 5px;
+  background: var(--bg); color: var(--text); cursor: pointer;
+}
+.icon-btn svg { width: 14px; height: 14px; }
+.icon-btn:hover { background: var(--bg-hover); }
+.icon-btn:disabled { opacity: .45; cursor: default; }
+.icon-btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--line)); }
+/* 上膛：临时撑成文字按钮，让"确认"两个字放得下 */
+.icon-btn.armed {
+  width: auto; min-width: 26px; padding: 0 6px;
+  background: var(--danger); border-color: var(--danger); color: #fff; font-size: 10.5px;
+}
+.icon-btn.armed svg { display: none; }
 .bulk-float .bulk-tagwrap { flex: 1 1 60px; min-width: 0; }
 .bulk-float [data-act="add"] { margin-right: 4px; }
 .bulk-float-x {
@@ -425,7 +452,7 @@ body[data-density="ultra"] .grp .grp-n { font-size: 10px; }
 }
 .bulk-sep { flex: 0 0 1px; width: 1px; height: 16px; background: var(--line); }
 .bulk-count { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
-.bulk .mini-btn:disabled { opacity: .45; cursor: default; }
+
 .bulk-tagwrap { position: relative; flex: 1 1 60px; min-width: 0; display: inline-flex; }
 .bulk-tagwrap input[type="text"] { width: 100%; padding-right: 26px; }
 .bulk-tagwrap .clear { right: 4px; }

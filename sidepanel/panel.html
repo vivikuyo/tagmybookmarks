@@ -16,8 +16,6 @@
       </button>
       <div id="viewMenu" class="view-menu" hidden>
         <div class="view-row"><span class="view-k">行密度</span><button id="densityBtn" class="mini-btn" title="标准 / 紧凑 / 极简（只存本机，不进 Sync）">标准</button></div>
-        <div class="view-row"><span class="view-k">显示方式</span><button id="groupBtn" class="mini-btn" title="清单（平铺）/ 目录（按文件夹插组头，可折叠）">清单</button></div>
-        <div class="view-row"><span class="view-k">文件夹</span><button id="foldBtn" class="mini-btn" title="折叠 / 展开所有文件夹（仅目录模式）" hidden>折叠全部</button></div>
       </div>
       <button id="btnSpace" class="icon" title="管理台（全页）"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
       <button id="btnRebuild" class="icon" title="重建索引"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
@@ -55,20 +53,26 @@
   <div id="cloudSplit" class="cloud-split" title="拖动：交换标签云与列表的空间（默认/双击回到列表 6 行）"></div>
 
   <section class="pane list-pane">
-    <!-- 操作带：一行到底。视图设置收进顶栏的 ⋯，条数移到顶栏，这里只剩全选 + 标签动作 -->
+    <!-- 操作带：一行到底。条数在顶栏，行密度在 ⋯ 里；显示方式与折叠留在列表上方，
+         五个批量动作改成图标以让出输入框的宽度 -->
     <div id="bulk" class="bulk">
       <input type="checkbox" id="bulkAll" title="全选 / 取消全选（当前列表）" />
       <span id="bulkCount" class="bulk-count" hidden>已选 0</span>
+      <div id="groupSeg" class="seg" role="group" aria-label="显示方式">
+        <button type="button" class="seg-btn" data-view="flat" title="清单（平铺）：只列命中的书签">清单</button>
+        <button type="button" class="seg-btn" data-view="dir" title="目录：按文件夹分段，可折叠，可拖放">目录</button>
+      </div>
+      <button id="foldBtn" class="icon-btn" title="折叠全部" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4l4 4 4-4"/><path d="M8 20l4-4 4 4"/></svg></button>
       <div id="bulkFloat" class="bulk-float">
         <span class="bulk-tagwrap">
-          <input id="tagInput" type="text" placeholder='可连续输入标签，空格 or , 分开；带空格标签用 ""' autocomplete="off" />
+          <input id="tagInput" type="text" placeholder='标签：空格 or , 分隔' autocomplete="off" />
           <button id="tagClear" class="clear" title="清空输入">×</button>
         </span>
-        <button class="mini-btn" data-act="add">加</button>
-        <button class="mini-btn" data-act="untag">摘</button>
-        <button class="mini-btn" data-act="clear">清空</button>
-        <button class="mini-btn" data-act="open">打开</button>
-        <button class="mini-btn danger" data-act="delete">删除</button>
+        <button class="icon-btn" data-act="add" title="给选中的书签加标签" aria-label="加标签"></button>
+        <button class="icon-btn" data-act="untag" title="摘掉选中的书签上的这些标签" aria-label="摘标签"></button>
+        <button class="icon-btn" data-act="clear" title="清空选中书签的全部标签" aria-label="清空标签"></button>
+        <button class="icon-btn" data-act="open" title="打开选中的书签" aria-label="打开"></button>
+        <button class="icon-btn danger" data-act="delete" title="删除：移到回收站，再点一次确认" aria-label="删除"></button>
         <button class="bulk-float-x" data-act="unselect" title="取消选择">×</button>
       </div>
     </div>
