@@ -1995,6 +1995,16 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(sp.includes('class="reward-src"') && sp.includes('rel="noopener"'), 'T167d 打赏块尾部一行小字，外链带 noopener');
 }
 
+// T182：三个界面的产品名统一为 TagMyBookmarks；TagSpace 只作为数据目录/文件名保留
+{
+  const pu = readFileSync(new URL('../popup/popup.html', import.meta.url), 'utf8');
+  const ph = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
+  const sp2 = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
+  ok(pu.includes('<span class="brand">Tag<span>MyBookmarks</span></span>'), 'T182a 弹窗标题是 TagMyBookmarks');
+  ok(ph.includes('<div class="brand">Tag<span>MyBookmarks</span></div>'), 'T182b 侧边栏标题是 TagMyBookmarks');
+  ok(sp2.includes('<h1>TagMyBookmarks</h1>'), 'T182c 管理台标题是 TagMyBookmarks');
+}
+
 // T168：页脚那句"这三个文件只存全局配置"只在配置页显示，其他页只留通用那句
 {
   const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');

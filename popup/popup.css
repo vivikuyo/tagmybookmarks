@@ -35,7 +35,7 @@ body {
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--bg-soft);
 }
-.brand { font-weight: 650; }
+.brand { font-weight: 650; white-space: nowrap; }
 .bar-actions { display: flex; align-items: center; gap: 6px; }
 .icon {
   width: 26px; height: 26px;
