@@ -620,6 +620,13 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(/armOrConfirm/.test(js), 'T46b 删除/清空改成就地二次确认');
 }
 
+// T46h：弹窗回车必须绑在整个弹窗上——纯确认框（输入框隐藏）也要能回车执行
+{
+  const js = readFileSync(new URL('../space/tags.js', import.meta.url), 'utf8');
+  ok(/\$\('#modal'\)\.addEventListener\('keydown'/.test(js), 'T46h 弹窗回车绑在弹窗容器上');
+  ok(/else setTimeout\(\(\) => \$\('#modalOk'\)\.focus\(\)/.test(js), 'T46i 纯确认框聚焦确定按钮');
+}
+
 // T46c：行密度三档（侧边栏），标签不做截断
 {
   const html = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');

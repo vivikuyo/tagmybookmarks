@@ -52,7 +52,9 @@ export function modal({ title, desc = '', input = null, okText = '确定', cance
   $('#modalOk').textContent = okText;
   $('#modalCancel').textContent = cancelText;
   box.hidden = false;
+  // 有输入框就聚焦输入框；纯确认框把焦点放到「确定」上，这样回车和空格都能直接触发
   if (input !== null) setTimeout(() => inp.focus(), 50);
+  else setTimeout(() => $('#modalOk').focus(), 50);
 
   return new Promise((resolve) => {
     modalResolve = resolve;
@@ -1066,9 +1068,17 @@ export function init() {
     const inp = $('#modalInput');
     closeModal(inp.hidden ? true : inp.value);
   });
-  $('#modalInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') $('#modalOk').click();
-    if (e.key === 'Escape') closeModal(null);
+  // 回车确认 / Esc 取消：绑在整个弹窗上，输入框和纯确认框都生效
+  // （焦点在「取消」上时不抢，回车就走取消，和系统对话框一致）
+  $('#modal').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeModal(null);
+      return;
+    }
+    if (e.key !== 'Enter') return;
+    if (e.target === $('#modalCancel')) return;
+    e.preventDefault();
+    $('#modalOk').click();
   });
 
   document.addEventListener('click', (e) => {
