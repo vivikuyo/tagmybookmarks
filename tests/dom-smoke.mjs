@@ -318,7 +318,8 @@ src = src.replace(/^import[^\n]*\n/gm, '');
 const tail = `
 ;return { app, updateBulk, syncGroupChecks, syncRowHighlights, renderList, render, bulkAction,
   selectedFolderIds, branchKeys, folderKey, buildFolderIndex, toastEl, listEl, tagInput, toast,
-  renderRow, isGroupCollapsed, applyGroupBtn, paintAct, bind, ACT_ICON, applyDensity, DENSITY_ICON, buildExpr, qEl, qTextEl, tagMenuEl, renderTagMenu, insertMenuTag, closeTagMenu };`;
+  renderRow, isGroupCollapsed, applyGroupBtn, paintAct, bind, ACT_ICON, applyDensity, DENSITY_ICON, buildExpr, qEl, qTextEl, tagMenuEl, renderTagMenu, insertMenuTag, closeTagMenu,
+  onFakeClick, enterPrivateView, exitPrivateView, resetFakeSeq };`;
 
 const doc = new Doc();
 const win = {
@@ -615,6 +616,52 @@ if (api) {
 }
 
 // ---------------------------------------------------------------- 输出
+
+
+// ---------------------------------------------------------------- 隐私视图入口
+
+if (api) {
+  try {
+    api.app.fakes = [
+      { name: '阅读', count: 4 },
+      { name: '收藏', count: 7 },
+      { name: '稍后', count: 2 },
+    ];
+    respond = (msg) => {
+      if (msg.type === 'state') {
+        return {
+          ok: true,
+          config: { colors: {} },
+          prefs: {},
+          tags: [{ tag: '前端', count: 1 }],
+          dirTags: [],
+          dirStats: { folders: 0, deepFolders: 0, tags: 0 },
+          privacy: { fakes: api.app.fakes },
+        };
+      }
+      if (msg.type === 'query') {
+        return { ok: true, items: [], total: 0, counts: { all: 0, untagged: 0 }, related: [], allTags: [], untaggedTotal: 0 };
+      }
+      return { ok: true };
+    };
+    api.qEl.value = '前端';
+    api.onFakeClick(0);
+    api.onFakeClick(2);
+    ok(api.app.privView === false, '顺序不对不进入隐私视图');
+    api.resetFakeSeq();
+    api.qEl.value = '前端';
+    api.onFakeClick(0);
+    api.onFakeClick(1);
+    api.onFakeClick(2);
+    ok(api.app.privView === true, '三个伪装按钮按顺序点完进入隐私视图');
+    ok(api.qEl.value === '', '进入后清空查询（避免把伪装标签条件留在框里）');
+    await api.exitPrivateView();
+    ok(api.app.privView === false, '退出隐私视图');
+    ok(api.qEl.value === '前端', '退出后还原进入前的查询');
+  } catch (e) {
+    fail.push('隐私入口抛异常：' + e.message);
+  }
+}
 
 console.log(`dom-smoke：通过 ${pass.length} 项，失败 ${fail.length} 项`);
 for (const f of fail) console.log(' ✗ ' + f);

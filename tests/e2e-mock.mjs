@@ -894,6 +894,61 @@ if (srcId) {
   const drBad = await call({ type: 'dir:rows', key: 'no-such-dir' });
   eq(drBad.total, 0, 'E200 未知 key 返回空表而不是报错');
 }
+
+// 隐私组：标签 + 目录整枝 + 侧边栏/管理台两种视图
+{
+  const before = await call({ type: 'query', expr: '前端' });
+  const st0 = await call({ type: 'state', includePrivate: true });
+  const vueCount = (st0.tags.find((t) => t.tag === 'Vue') || {}).count || 0;
+
+  // 1) 隐私标签：Vue 进组后，侧边栏看不到它，前端条数相应减少
+  const set1 = await call({ type: 'privacy:set', tags: ['Vue'], fakes: [
+    { name: '阅读', count: 4 }, { name: '收藏', count: 7 }, { name: '稍后', count: 2 },
+  ] });
+  ok(set1.ok && set1.tags.includes('Vue'), 'E201 隐私标签写入成功');
+  const lockedTags = await call({ type: 'state' });
+  ok(!lockedTags.tags.some((t) => t.tag === 'Vue'), 'E202 侧边栏 state 不含隐私标签');
+  ok(lockedTags.privacy && lockedTags.privacy.fakes && lockedTags.privacy.fakes.length === 3, 'E203 侧边栏仍拿到三个伪装入口');
+  ok(lockedTags.privacy && !lockedTags.privacy.tags, 'E204 侧边栏 state 不回传隐私名单');
+  const lockedQ = await call({ type: 'query', expr: '前端' });
+  eq(lockedQ.total, before.total - vueCount, 'E205 隐私标签命中的书签在侧边栏消失');
+  ok(!(lockedQ.related || []).some((t) => t.tag === 'Vue'), 'E206 相关标签也不含隐私标签');
+  const openQ = await call({ type: 'query', expr: '前端', includePrivate: true });
+  eq(openQ.total, before.total, 'E207 隐私视图/管理台仍能查全量');
+
+  // 2) 隐私目录：整枝隐藏，侧栏计数按可见集合算
+  const stDir = await call({ type: 'state', includePrivate: true });
+  const exDir = stDir.privacy.allDirs.find((p) => p.endsWith('program/ff'));
+  ok(!!exDir, 'E208 目录名单能拿到完整路径');
+  const set2 = await call({ type: 'privacy:set', dirs: [exDir] });
+  ok(set2.ok && set2.dirs.includes(exDir), 'E209 隐私目录写入成功');
+  const qDirLocked = await call({ type: 'query', expr: '@"program/ff"' });
+  eq(qDirLocked.total, 0, 'E210 隐私目录整枝在侧边栏不可见');
+  const qDirOpen = await call({ type: 'query', expr: '@"program/ff"', includePrivate: true });
+  ok(qDirOpen.total >= 2, 'E211 隐私视图里目录书签完整');
+  const lockedDirState = await call({ type: 'state' });
+  ok(!lockedDirState.dirTags.some((t) => t.tag === 'program/ff'), 'E212 侧栏目录云不含隐私目录');
+
+  // 3) 隐私与排除互斥
+  await call({ type: 'dirs:exclude', tag: 'program/ff', excluded: true });
+  const mutual = await call({ type: 'privacy:set', dirs: [exDir] });
+  ok(mutual.ok, 'E213 重新设隐私成功');
+  const stEx = await call({ type: 'state', includePrivate: true });
+  ok(!stEx.excludedDirs.some((p) => String(p) === String(exDir)), 'E214 设为隐私后自动取消排除');
+
+  // 4) 隐私标签改名/删除时名单跟随
+  await call({ type: 'privacy:set', tags: ['Vue'] });
+  const rn = await call({ type: 'tags:merge', froms: ['Vue'], to: 'VueJS' });
+  ok(rn.ok, 'E215 隐私标签改名成功');
+  const stRn = await call({ type: 'state', includePrivate: true });
+  ok(stRn.privacy.tags.includes('VueJS') && !stRn.privacy.tags.includes('Vue'), 'E216 改名后隐私名单跟随');
+  const pg = await call({ type: 'tags:purge', tags: ['VueJS'] });
+  ok(pg.ok, 'E217 删除隐私标签成功');
+  const stPg = await call({ type: 'state', includePrivate: true });
+  ok(!stPg.privacy.tags.includes('VueJS'), 'E218 删除后自动移出隐私名单');
+
+  await call({ type: 'privacy:set', tags: [], dirs: [] });
+}
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);

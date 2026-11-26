@@ -25,7 +25,7 @@ function send(msg) {
 }
 
 async function loadState() {
-  const st = await send({ type: 'state' });
+  const st = await send({ type: 'state', includePrivate: true });
   const counts = st.counts || {};
   $('#counts').textContent = `当前索引：${counts.keys || 0} 条书签 / ${counts.tags || 0} 个标签 / ${counts.nodes || 0} 个位置。`;
 
@@ -238,7 +238,7 @@ async function handleHash() {
     await showView('config');
     const expr = hash.slice(2);
     try {
-      const r = await send({ type: 'query', expr });
+      const r = await send({ type: 'query', expr, includePrivate: true });
       $('#resultSection').hidden = false;
       $('#resultCount').textContent = expr ? `“${expr}” · ${r.total} 条` : `全部已标签 · ${r.total} 条`;
       const ul = $('#resultList');

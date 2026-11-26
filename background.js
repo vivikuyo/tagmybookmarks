@@ -1026,6 +1026,88 @@ function blockedDirKeys() {
   return new Set(blockedDirList().map((x) => tagKey(x)));
 }
 
+// ------------------------------------------------------------ 隐私组
+// 两类成员：标签名（大小写不敏感）、目录完整路径（整枝）。只作用于侧边栏；
+// 管理台传 includePrivate:true 拿全量。
+
+let privacyCache = { idx: null, sig: '', keys: null, tagKeys: null, dirPaths: null };
+
+function privacyTagNames() {
+  return splitList(config.prefs.privateTags);
+}
+
+function privacyDirEntries() {
+  return splitList(config.prefs.privateDirs);
+}
+
+/** 一次算出"哪些网址在隐私里"：带隐私标签，或任一收藏位置落在隐私目录（含子树） */
+function privacyInfo() {
+  const sig = `${config.prefs.privateTags || ''}\u0001${config.prefs.privateDirs || ''}`;
+  if (privacyCache.idx === index && privacyCache.sig === sig) return privacyCache;
+
+  const tagNames = privacyTagNames();
+  const tagKeys = new Set(tagNames.map((t) => tagKey(t)));
+  const dirEntries = privacyDirEntries();
+  // 存的是内部 PATH_SEP 路径；resolveDirEntries 负责老数据兼容
+  const folderPaths = ((index && index.folders) || []).map((f) => f.path);
+  const dirPaths = index ? resolveDirEntries(dirEntries, folderPaths) : [];
+  const keys = new Set();
+
+  if (index) {
+    for (const key of index.allKeys) {
+      const tags = index.keyToTags.get(key) || [];
+      if (tags.some((t) => tagKeys.has(tagKey(t)))) {
+        keys.add(key);
+        continue;
+      }
+      const nodes = index.keyToNodes.get(key) || [];
+      if (nodes.some((r) => dirPaths.some((p) => r.path === p || String(r.path).startsWith(`${p}${PATH_SEP}`)))) {
+        keys.add(key);
+      }
+    }
+  }
+
+  privacyCache = { idx: index, sig, keys, tagKeys, dirPaths, tagNames, dirEntries };
+  return privacyCache;
+}
+
+function fakeEntryList() {
+  const out = [];
+  for (let i = 1; i <= 3; i++) {
+    const name = String(config.prefs[`fakeName${i}`] || '').trim();
+    const num = Number(config.prefs[`fakeCount${i}`]);
+    out.push({ name, count: Number.isFinite(num) ? Math.max(0, Math.round(num)) : 0 });
+  }
+  return out;
+}
+
+/** 管理台读的隐私状态：成员、失效项、入口三槽 */
+function privacyState() {
+  const info = privacyInfo();
+  const tagNames = privacyTagNames();
+  const dirEntries = privacyDirEntries(); // 内部用 PATH_SEP 存（目录名里可能带 /，不能拿 / 拆分）
+  const knownTagKeys = new Set((index ? [...index.tagForm.keys()] : []));
+  const missingTags = tagNames.filter((t) => !knownTagKeys.has(tagKey(t)));
+  const invalidDirs = dirEntries.filter((d) => !info.dirPaths.includes(d));
+  return {
+    tags: tagNames,
+    dirs: dirEntries,
+    allDirs: [...new Set([
+      ...((index && index.folders) || []).map((f) => String(f.path)),
+      // 正被"排除"的目录不在索引里，但用户可能想把它改成隐私，选择框里要能看见
+      ...excludedDirList(),
+    ])],
+    missingTags,
+    invalidDirs,
+    fakes: fakeEntryList(),
+    counts: {
+      tags: tagNames.length,
+      dirs: dirEntries.length,
+      hiddenKeys: info.keys.size,
+    },
+  };
+}
+
 /** 某个目录名下所有下级目录的显示名（含自己） */
 function descendantDirNames(name) {
   const k = tagKey(name);
@@ -1042,13 +1124,19 @@ function descendantDirNames(name) {
 }
 
 /** 目录标签频次（给侧边栏"目录"一栏与标签页）；屏蔽的不出现 */
-function dirTagCounts(idx) {
+function dirTagCounts(idx, excludeKeys) {
   if (!idx) return [];
   const blocked = blockedDirKeys();
   const out = [];
   for (const [k, keys] of idx.dirTagToKeys) {
     if (blocked.has(k)) continue;
-    out.push({ key: k, tag: idx.dirTagForm.get(k) || k, count: keys.size });
+    let count = keys.size;
+    if (excludeKeys && excludeKeys.size) {
+      count = 0;
+      for (const key of keys) if (!excludeKeys.has(key)) count++;
+    }
+    if (!count) continue;
+    out.push({ key: k, tag: idx.dirTagForm.get(k) || k, count });
   }
   // 目录结构序：按目录树 DFS 位次（父目录在前、子目录紧随其后），次数只做平手裁决
   return sortDirTagsByTree(idx, out);
@@ -1056,13 +1144,18 @@ function dirTagCounts(idx) {
 
 async function doQuery(expr, opts = {}) {
   const { ast, errors } = parseQuery(expr);
+  // 侧边栏默认不含隐私；管理台与隐私视图传 includePrivate:true
+  const includePrivate = !!opts.includePrivate;
+  const hidden = includePrivate ? null : privacyInfo().keys;
   // 默认空查询 = 已打标签的书签；侧边栏点「全部书签」时传 includeUntagged，才把未打标签的也算进来
   const taggedKeys = new Set(index.allKeys);
   for (const k of index.untaggedKeys) taggedKeys.delete(k);
+  if (hidden) for (const k of hidden) taggedKeys.delete(k);
   const dirEnabled = String(config.prefs.folderTags ?? '1') !== '0';
   const keys = ast
     ? evaluate(ast, index, { resolveAlias: (k) => aliasMap.get(k) || k, dirEnabled })
     : new Set(opts.includeUntagged ? index.allKeys : taggedKeys);
+  if (hidden) for (const k of [...keys]) if (hidden.has(k)) keys.delete(k);
   const queryTags = collectQueryTags(ast);
   const queryDirs = [...collectQueryDirs(ast)];
   // 裸名（mac）会同时命中同名目录，所以目录栏的高亮与「同枝收窄」也要把它算进去。
@@ -1108,6 +1201,16 @@ async function doQuery(expr, opts = {}) {
   // 默认一次给 1000 条；侧边栏「显示更多」会带着更大的 limit 再来一次
   const LIMIT = Math.min(Math.max(Number(opts.limit) || 1000, 1), 20000);
 
+  // 隐私模式下未打标签总数、全部/未打标签计数都要按可见集合算
+  let visibleUntagged = index.untaggedKeys.size;
+  let visibleAll = index.counts.keys;
+  if (hidden) {
+    visibleUntagged = 0;
+    for (const k of index.untaggedKeys) if (!hidden.has(k)) visibleUntagged++;
+    visibleAll = index.allKeys.size;
+    for (const k of hidden) visibleAll--;
+  }
+
   return {
     total: items.length,
     nodes: nodeCount,
@@ -1115,16 +1218,37 @@ async function doQuery(expr, opts = {}) {
     items: items.slice(0, LIMIT),
     related,
     untaggedCount,
-    untaggedTotal: index.untaggedKeys.size,
-    counts: { all: index.counts.keys, untagged: index.untaggedKeys.size },
+    untaggedTotal: visibleUntagged,
+    counts: { all: visibleAll, untagged: visibleUntagged },
     queryTags: [...queryTags],
     queryDirs,
     dirRelated,
     relatedDirs,
     errors,
     ast: !!ast,
-    allTags: opts.allTags ? globalTagCounts(index) : null,
+    allTags: opts.allTags ? globalTagCounts(index, hidden) : null,
   };
+}
+
+/** 标签改名/合并后，隐私组名单跟着走：来源移出，目标加入（目标本来就在则不重复） */
+async function syncPrivacyAfterMerge(froms, to) {
+  const priv = privacyTagNames();
+  const fromKeys = new Set((froms || []).map((t) => tagKey(t)));
+  if (!priv.some((t) => fromKeys.has(tagKey(t)))) return;
+  const kept = priv.filter((t) => !fromKeys.has(tagKey(t)));
+  if (to && !kept.some((t) => tagKey(t) === tagKey(to))) kept.push(to);
+  await writePrefs({ privateTags: joinList(kept) });
+  privacyCache.sig = ''; // 立即失效，下一次查询按新名单算
+}
+
+/** 删除标签后，把它从隐私组里拿掉（这些书签会重新出现在侧边栏） */
+async function syncPrivacyAfterPurge(tags) {
+  const priv = privacyTagNames();
+  const keys = new Set((tags || []).map((t) => tagKey(t)));
+  if (!priv.some((t) => keys.has(tagKey(t)))) return;
+  const kept = priv.filter((t) => !keys.has(tagKey(t)));
+  await writePrefs({ privateTags: joinList(kept) });
+  privacyCache.sig = '';
 }
 
 // ---------------------------------------------------------------- 对外接口
@@ -1147,7 +1271,9 @@ async function handle(msg) {
     const plan = planReplaceTags(index, froms, v.tag);
     const spec = { type: 'tags:merge', froms, to: v.tag };
     const label = `${froms.length > 1 ? '合并' : '重命名'} ${froms.join(' / ')} → ${v.tag}`;
-    return { ok: true, froms, to: v.tag, ...(await runTitleBatch(label, plan, !!msg.dryRun, spec)) };
+    const result = await runTitleBatch(label, plan, !!msg.dryRun, spec);
+    if (!msg.dryRun) await syncPrivacyAfterMerge(froms, v.tag);
+    return { ok: true, froms, to: v.tag, ...result };
   }
 
   if (type === 'tags:purge') {
@@ -1157,7 +1283,9 @@ async function handle(msg) {
     if (!tags.length) throw new Error('没有选中标签');
     const plan = planReplaceTags(index, tags, '');
     const label = `删除标签 ${tags.join(' / ')}`;
-    return { ok: true, ...(await runTitleBatch(label, plan, !!msg.dryRun, { type: 'tags:purge', tags })) };
+    const result = await runTitleBatch(label, plan, !!msg.dryRun, { type: 'tags:purge', tags });
+    if (!msg.dryRun) await syncPrivacyAfterPurge(tags);
+    return { ok: true, ...result };
   }
 
   if (type === 'bulk:progress') {
@@ -1266,28 +1394,71 @@ async function handle(msg) {
   if (type === 'state') {
     await ready;
     if (rebuildPending) await rebuild();
+    const includePrivate = !!msg.includePrivate;
+    const hidden = includePrivate ? null : privacyInfo().keys;
+    const tags = globalTagCounts(index, hidden);
+    const dirTags = dirTagCounts(index, hidden);
+    let visibleUntagged = index ? index.untaggedKeys.size : 0;
+    let visibleAll = index ? index.counts.keys : 0;
+    let visibleNodes = index ? index.counts.nodes : 0;
+    let visibleFolders = 0;
+    let visibleDeep = 0;
+    if (index) {
+      if (hidden) {
+        visibleUntagged = 0;
+        for (const k of index.untaggedKeys) if (!hidden.has(k)) visibleUntagged++;
+        visibleAll = index.allKeys.size;
+        visibleNodes = 0;
+        for (const k of index.allKeys) {
+          if (!hidden.has(k)) visibleNodes += (index.keyToNodes.get(k) || []).length;
+        }
+        for (const k of hidden) visibleAll--;
+      }
+      const paths = new Set();
+      for (const k of index.allKeys) {
+        if (hidden && hidden.has(k)) continue;
+        for (const rec of index.keyToNodes.get(k) || []) if (rec.path) paths.add(rec.path);
+      }
+      visibleFolders = paths.size;
+      visibleDeep = [...paths].filter((p) => String(p).includes(PATH_SEP)).length;
+    }
+    const prefsOut = { ...config.prefs };
+    if (!includePrivate) {
+      // 隐私名单不发给侧边栏（伪装入口的配置单独由 privacy.fakes 给）
+      delete prefsOut.privateTags;
+      delete prefsOut.privateDirs;
+      delete prefsOut.fakeName1;
+      delete prefsOut.fakeName2;
+      delete prefsOut.fakeName3;
+      delete prefsOut.fakeCount1;
+      delete prefsOut.fakeCount2;
+      delete prefsOut.fakeCount3;
+    }
     return {
       ok: true,
-      counts: index ? index.counts : null,
+      counts: index
+        ? { ...index.counts, keys: visibleAll, nodes: visibleNodes, untagged: visibleUntagged }
+        : null,
       configFolderId,
       configFiles: Object.fromEntries(
         Object.entries(configNodes).map(([k, n]) => [k, { id: n.id, title: n.title, url: n.url }])
       ),
-      config: { colors: config.colors, aliases: config.aliases, prefs: config.prefs },
+      config: { colors: config.colors, aliases: config.aliases, prefs: prefsOut },
       configErrors,
       configDuplicates,
-      untagged: index ? index.untaggedKeys.size : 0,
+      untagged: visibleUntagged,
       stats: { ...stats },
-      prefs: config.prefs,
-      tags: globalTagCounts(index),
-      dirTags: dirTagCounts(index),
+      prefs: prefsOut,
+      tags,
+      dirTags,
       blockedDirs: blockedDirList(),
       excludedDirs: resolvedExcluded.length ? resolvedExcluded : excludedDirList(),
       dirStats: {
-        folders: (index.counts && index.counts.folders) || 0,
-        deepFolders: (index.counts && index.counts.deepFolders) || 0,
-        tags: (index.counts && index.counts.dirTags) || 0,
+        folders: visibleFolders,
+        deepFolders: visibleDeep,
+        tags: dirTags.length,
       },
+      privacy: includePrivate ? privacyState() : { fakes: fakeEntryList() },
     };
   }
 
@@ -1300,6 +1471,7 @@ async function handle(msg) {
       ...(await doQuery(msg.expr || '', {
         allTags: !!msg.allTags,
         includeUntagged: !!msg.includeUntagged,
+        includePrivate: !!msg.includePrivate,
         limit: msg.limit,
       })),
     };
@@ -1369,7 +1541,14 @@ async function handle(msg) {
       }
     }
     // 落盘仍用 PATH_SEP（encodeListName 会把它编成 %1F，配置串里不出现控制字符）
-    await writePrefs({ excludeDirs: joinList(list) });
+    const patch = { excludeDirs: joinList(list) };
+    if (msg.excluded && targets.length) {
+      // 与隐私组互斥：设为排除时，把这些路径从隐私目录里拿掉
+      const priv = privacyDirEntries();
+      const kept = priv.filter((p) => !targets.includes(p));
+      if (kept.length !== priv.length) patch.privateDirs = joinList(kept);
+    }
+    await writePrefs(patch);
     await rebuild();
     // writePrefs 的广播发生在 rebuild 之前，侧边栏那时拿到的还是旧索引；
     // 重建完成后再广播一次，否则界面永远停留在"上一次开关"的状态
@@ -1431,6 +1610,76 @@ async function handle(msg) {
   if (type === 'prefs:set') {
     await ready;
     return { ok: true, ...(await writePrefs(msg.patch || {})) };
+  }
+
+  // ---------------------------------------------------------- 隐私组
+  if (type === 'privacy:get') {
+    await ready;
+    if (rebuildPending) await rebuild();
+    return { ok: true, ...privacyState() };
+  }
+
+  if (type === 'privacy:set') {
+    await ready;
+    if (rebuildPending) await rebuild();
+    const patch = {};
+
+    if (Array.isArray(msg.tags)) {
+      const names = [];
+      const seen = new Set();
+      for (const raw of msg.tags) {
+        const v = normalizeTagOrNull(raw);
+        if (!v) throw new Error(`标签名不合法：${String(raw)}`);
+        const k = tagKey(v);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        names.push(v);
+      }
+      patch.privateTags = joinList(names);
+    }
+
+    if (Array.isArray(msg.dirs)) {
+      const entries = msg.dirs
+        .map((d) => String(d == null ? '' : d).trim())
+        .filter(Boolean);
+      // 用完整书签树校验：目录可能正被"排除"，此时索引里没有它，但仍应允许改成隐私
+      const tree = await chrome.bookmarks.getTree();
+      const folderPaths = collectFolderPaths(tree);
+      const resolved = resolveDirEntries(entries, folderPaths);
+      const bad = entries.filter((e) => !resolved.includes(e));
+      if (bad.length) throw new Error(`目录路径不存在：${bad.map((x) => x.split(PATH_SEP).join(' › ')).join('、')}`);
+      if (resolved.some((p) => !String(p).includes(PATH_SEP))) throw new Error('不能把根目录设为隐私');
+      patch.privateDirs = joinList(resolved);
+      // 和「排除」互斥：设为隐私时把同一路径从 excludeDirs 里拿掉
+      const ex = excludedDirList();
+      const kept = ex.filter((e) => !resolved.includes(String(e)));
+      if (kept.length !== ex.length) patch.excludeDirs = joinList(kept);
+    }
+
+    if (Array.isArray(msg.fakes)) {
+      for (let i = 1; i <= 3; i++) {
+        const item = msg.fakes[i - 1] || {};
+        const name = String(item.name == null ? '' : item.name).trim();
+        if (/[\n\r;\[\]]/.test(name)) throw new Error('伪装按钮名称不能含换行、分号或方括号');
+        if (Array.from(name).length > 120) throw new Error(`伪装按钮名称过长：${name}`);
+        let count = Number(item.count);
+        if (!Number.isFinite(count)) count = 0;
+        count = Math.min(9999, Math.max(0, Math.round(count)));
+        patch[`fakeName${i}`] = name;
+        patch[`fakeCount${i}`] = String(count);
+      }
+    }
+
+    if (!Object.keys(patch).length) return { ok: true, ...privacyState() };
+    await writePrefs(patch);
+    // 目录名单变了：如果刚从"排除"转成隐私，索引必须重建，否则后台仍看不到这些书签
+    if (Array.isArray(msg.dirs)) {
+      await rebuild();
+      try {
+        await chrome.runtime.sendMessage({ type: 'app:changed', reason: 'privacy' });
+      } catch {}
+    }
+    return { ok: true, ...privacyState() };
   }
 
   if (type === 'config:read') {

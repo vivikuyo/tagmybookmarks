@@ -172,7 +172,7 @@ function renderStats(stats) {
 
 export async function refresh() {
   try {
-    const st = await send({ type: 'state' });
+    const st = await send({ type: 'state', includePrivate: true });
     const scan = await send({ type: 'diag:scan' });
     renderCards(scan);
     renderIssues(scan);

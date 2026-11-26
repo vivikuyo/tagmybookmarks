@@ -17,6 +17,8 @@ const bulkCountEl = $('#bulkCount');
 const tagInput = $('#tagInput');
 const tagMenuEl = $('#tagMenu');   // 点输入框弹出的已有标签候选
 const toastEl = $('#toast');
+const privHintEl = $('#privHint');
+const barEl = document.querySelector('.bar');
 
 const app = {
   expr: '',
@@ -42,6 +44,9 @@ const app = {
   loadingMore: false,   // 正在自动加载下一页（防重复触发）
   listRows: 6,          // 列表保底几行（硬底线 6，拖动只能往上加；云区高度按内容自适应）
   grpCollapsed: new Set(), // 折叠的组（会话内有效，不落盘）
+  privView: false,      // 隐私视图（只在本次打开期间有效，不落盘）
+  privPrev: null,       // 进入前的查询，退出还原
+  fakes: [],            // 三个伪装按钮：{name,count}
 };
 
 function send(msg) {
@@ -80,15 +85,7 @@ async function boot() {
   bindCloudSplit();
   await loadGroup();
   try {
-    const st = await send({ type: 'state' });
-    app.colors = st.config.colors || {};
-    app.prefs = st.prefs || {};
-    app.allTags = st.tags || [];
-    app.dirTags = st.dirTags || [];
-    app.dirStats = st.dirStats || { folders: 0, deepFolders: 0, tags: 0 };
-    $('#relatedOnly').checked = String(app.prefs.relatedOnly ?? '1') !== '0';
-    app.dirEnabled = String(app.prefs.folderTags ?? '1') !== '0';
-    renderDirPane(app.dirEnabled);
+    await fetchState(app.privView);
   } catch (e) {
     toast(e.message, true);
   }
@@ -99,6 +96,131 @@ async function boot() {
 
   bind();
   await run();
+}
+
+/** 取一份界面状态；includePrivate=false 时后台已把隐私成员全部剔掉 */
+async function fetchState(includePrivate) {
+  const st = await send({ type: 'state', includePrivate: !!includePrivate });
+  app.colors = (st.config && st.config.colors) || {};
+  app.prefs = st.prefs || {};
+  app.allTags = st.tags || [];
+  app.dirTags = st.dirTags || [];
+  app.dirStats = st.dirStats || { folders: 0, deepFolders: 0, tags: 0 };
+  const p = st.privacy || {};
+  app.fakes = (p.fakes || []).map((f) => ({ name: String(f.name || ''), count: Number(f.count) || 0 }));
+  $('#relatedOnly').checked = String(app.prefs.relatedOnly ?? '1') !== '0';
+  app.dirEnabled = String(app.prefs.folderTags ?? '1') !== '0';
+  renderDirPane(app.dirEnabled);
+  return st;
+}
+
+// ---------------------------------------------------------------- 隐私视图
+// 入口：在全量标签云里依次点三个伪装按钮（每步 2.5 秒、整体 10 秒）。
+// 退出：双击顶栏空白/品牌、Esc、10 分钟无操作、侧边栏关闭。
+
+const FAKE_GAP = 2500;
+const FAKE_TOTAL = 10000;
+const PRIV_IDLE = 10 * 60 * 1000;
+let fakeSeq = { buf: [], last: 0, started: 0 };
+let privIdleTimer = null;
+
+function resetFakeSeq() {
+  fakeSeq.buf = [];
+  fakeSeq.last = 0;
+  fakeSeq.started = 0;
+}
+
+function armPrivIdle() {
+  clearTimeout(privIdleTimer);
+  if (!app.privView) return;
+  privIdleTimer = setTimeout(() => exitPrivateView(), PRIV_IDLE);
+}
+
+function onFakeClick(idx) {
+  if (app.privView) return;
+  const now = Date.now();
+  if (!fakeSeq.buf.length || now - fakeSeq.started > FAKE_TOTAL || now - fakeSeq.last > FAKE_GAP) {
+    fakeSeq.buf = [];
+    fakeSeq.started = now;
+  }
+  if (idx === fakeSeq.buf.length) {
+    fakeSeq.buf.push(idx);
+    fakeSeq.last = now;
+    if (fakeSeq.buf.length === 3) {
+      resetFakeSeq();
+      enterPrivateView();
+    }
+    return;
+  }
+  // 点错：从第一个重新开始（不提示、不影响正常标签操作）
+  fakeSeq.buf = idx === 0 ? [0] : [];
+  fakeSeq.started = idx === 0 ? now : 0;
+  fakeSeq.last = idx === 0 ? now : 0;
+}
+
+async function enterPrivateView() {
+  if (app.privView) return;
+  app.privView = true;
+  app.privPrev = { expr: qEl.value, text: qTextEl ? qTextEl.value : '' };
+  qEl.value = '';
+  if (qTextEl) qTextEl.value = '';
+  app.pageLimit = 1000;
+  app.jumpOnce = false;
+  document.body.classList.add('priv-view');
+  if (privHintEl) privHintEl.hidden = false;
+  try {
+    await fetchState(true);
+  } catch {}
+  armPrivIdle();
+  await run();
+}
+
+async function exitPrivateView() {
+  if (!app.privView) return;
+  app.privView = false;
+  clearTimeout(privIdleTimer);
+  privIdleTimer = null;
+  const prev = app.privPrev;
+  app.privPrev = null;
+  document.body.classList.remove('priv-view');
+  if (privHintEl) privHintEl.hidden = true;
+  if (listEl) listEl.textContent = '';
+  qEl.value = prev && prev.expr ? prev.expr : '';
+  if (qTextEl) qTextEl.value = prev && prev.text ? prev.text : '';
+  app.pageLimit = 1000;
+  app.jumpOnce = false;
+  try {
+    await fetchState(false);
+  } catch {}
+  await run();
+}
+
+function bindPrivacyExit() {
+  if (barEl) {
+    barEl.addEventListener('dblclick', (e) => {
+      if (!app.privView) return;
+      const t = e.target;
+      if (t && t.closest && t.closest('button, input, .bar-count')) return;
+      e.preventDefault();
+      exitPrivateView();
+    });
+  }
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      if (!app.privView) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        exitPrivateView();
+      } else {
+        armPrivIdle();
+      }
+    },
+    true
+  );
+  document.addEventListener('pointerdown', () => armPrivIdle(), true);
+  document.addEventListener('wheel', () => armPrivIdle(), { capture: true, passive: true });
 }
 
 function bind() {
@@ -119,6 +241,7 @@ function bind() {
 
   if (app.bound) return; // app:changed 会反复 boot()，监听只能挂一次
   app.bound = true;
+  bindPrivacyExit();
 
   // 图标按钮：载入时注入图标（HTML 里是空按钮，图标以 ACT_ICON 为准）
   for (const act of Object.keys(ACT_ICON)) {
@@ -168,6 +291,7 @@ function bind() {
   });
   let typing = null;
   qEl.addEventListener('input', () => {
+    resetFakeSeq();
     // 边打字边收窄两朵云：不等后台查询回来，纯前端过滤
     const cur = currentToken();
     app.filterText = cur ? cur.token.replace(/^[@#]/, '') : '';
@@ -239,6 +363,7 @@ function bind() {
     };
     syncTextClear();
     qTextEl.addEventListener('input', () => {
+      resetFakeSeq();
       syncTextClear();
       app.pageLimit = 1000;
       app.jumpOnce = true;
@@ -418,6 +543,7 @@ async function run() {
       expr: app.expr,
       limit: app.group === 'dir' ? 20000 : app.pageLimit,
       allTags: !$('#relatedOnly').checked,
+      includePrivate: !!app.privView,
     });
     app.data = data;
     if (data.allTags) app.allTags = data.allTags;
@@ -499,10 +625,25 @@ function renderCloud() {
   const LIMIT = 60;
   const needle = (app.filterText || '').toLowerCase();
   const filtered = needle ? list.filter((t) => t.tag.toLowerCase().includes(needle)) : list;
+  // 伪装按钮只在"全量标签云"里出现：查询为空、或用户关掉了相关收窄
+  const fullCloud = inputEmpty() || !relatedOnly;
+  // 三个伪装按钮按名字排在标签云里，入口顺序就取这个从左到右的顺序；
+  // 过滤标签时不出伪装按钮，免得只看见其中一两个、序列对不上。
+  const fakeItems =
+    fullCloud && !needle && app.fakes.length === 3 && app.fakes.every((f) => f.name)
+      ? app.fakes
+          .map((f) => ({ tag: f.name, count: f.count, fake: true, idx: 0 }))
+          .sort((a, b) => String(a.tag).localeCompare(String(b.tag), 'zh'))
+          .map((f, idx) => ({ ...f, idx }))
+      : [];
 
-  filtered.slice(0, LIMIT).forEach((t) => {
+  const shown = [...filtered.slice(0, LIMIT).map((t) => ({ ...t, fake: false })), ...fakeItems].sort(
+    (a, b) => String(a.tag).localeCompare(String(b.tag), 'zh') || (b.count || 0) - (a.count || 0)
+  );
+
+  shown.forEach((t) => {
     const btn = document.createElement('button');
-    btn.className = 'tag' + (activeTags.has(t.tag.toLowerCase()) ? ' active' : '');
+    btn.className = 'tag' + (!t.fake && activeTags.has(t.tag.toLowerCase()) ? ' active' : '');
     btn.style.color = colorFor(t.tag, app.colors);
     btn.title = `${t.tag} · ${t.count} 条\n点击 = 与（AND）  Shift = 或（OR）  Alt = 非（NOT）  双击 = 只看这个`;
 
@@ -513,14 +654,29 @@ function renderCloud() {
     cnt.textContent = t.count;
     btn.append(name, cnt);
 
-    btn.addEventListener('click', (e) => {
-      const mode = e.altKey ? 'not' : e.shiftKey ? 'or' : 'and';
-      applyTag(t.tag, mode, '#');
-    });
-    btn.addEventListener('dblclick', (e) => {
-      e.preventDefault();
-      applyTag(t.tag, 'only', '#');
-    });
+    if (t.fake) {
+      // 伪装按钮：不写查询、不筛选，只喂入口序列
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onFakeClick(t.idx);
+      });
+      btn.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+    } else {
+      btn.addEventListener('click', (e) => {
+        resetFakeSeq();
+        const mode = e.altKey ? 'not' : e.shiftKey ? 'or' : 'and';
+        applyTag(t.tag, mode, '#');
+      });
+      btn.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        resetFakeSeq();
+        applyTag(t.tag, 'only', '#');
+      });
+    }
     cloudEl.append(btn);
   });
 
@@ -566,6 +722,7 @@ function renderCloud() {
 }
 
 function applyTag(tag, mode, prefix = '') {
+  resetFakeSeq();
   qEl.value = insertTag(qEl.value, tag, mode, prefix);
   app.pageLimit = 1000;
   app.jumpOnce = true;
@@ -1908,7 +2065,7 @@ function insertMenuTag(tag) {
 async function ensureTagList() {
   if (app.allTags && app.allTags.length) return app.allTags;
   try {
-    const d = await send({ type: 'query', expr: '', limit: 40, allTags: true });
+    const d = await send({ type: 'query', expr: '', limit: 40, allTags: true, includePrivate: !!app.privView });
     if (d && d.allTags) app.allTags = d.allTags;
   } catch { /* 取不到就显示空列表，不影响手动输入 */ }
   return app.allTags || [];

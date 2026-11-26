@@ -1797,7 +1797,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.indexOf('cloudEl.append(allBtn);') > pn.indexOf("btn.addEventListener('click', () => applyTag('未打标签', 'only'));"), 'T155g 渲染位置紧挨未打标签，不再排在云首');
   ok(pn.includes('const allTotal = (data.counts && data.counts.all) || 0;'), 'T155c 计数取 counts.all');
   ok(pn.includes("applyTag('全部书签', 'only'); // 写纯文本「全部书签」，不带 #") && pn.includes("qEl.value.trim() === '全部书签'"), 'T155d 点它写纯文本「全部书签」，再点一次取消');
-  ok(bg.includes('counts: { all: index.counts.keys, untagged: index.untaggedKeys.size },'), 'T155e query 回包补 counts.all');
+  ok(bg.includes('counts: { all: visibleAll, untagged: visibleUntagged },'), 'T155e query 回包补 counts.all');
 }
 
 // T156：空查询 = 全部书签（含未打标签）
@@ -1806,7 +1806,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(bg.includes('const taggedKeys = new Set(index.allKeys);') && bg.includes('for (const k of index.untaggedKeys) taggedKeys.delete(k);'), 'T156a 默认空查询仍只算已打标签');
   ok(bg.includes(': new Set(opts.includeUntagged ? index.allKeys : taggedKeys);'), 'T156b includeUntagged 时才把未打标签算进来');
   ok(bg.includes("includeUntagged: !!msg.includeUntagged"), 'T156d query 通道透传 includeUntagged');
-  ok(bg.includes('counts: { all: index.counts.keys, untagged: index.untaggedKeys.size },'), 'T156c counts 同时给全部与未打标签');
+  ok(bg.includes('counts: { all: visibleAll, untagged: visibleUntagged },'), 'T156c counts 同时给全部与未打标签');
 }
 
 // T157：列表不再固定 1000 条（可「显示更多」），标签框没勾选时不吞输入

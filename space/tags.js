@@ -5,7 +5,7 @@ import { PATH_SEP } from '../lib/index.js';
 
 const $ = (sel) => document.querySelector(sel);
 
-let state = { tags: [], colors: {}, aliases: {}, dirTags: [], blockedDirs: [], excludedDirs: [] };
+let state = { tags: [], colors: {}, aliases: {}, dirTags: [], blockedDirs: [], excludedDirs: [], privacy: null };
 let dirKeyword = '';
 let dirFilter = 'all';
 let selected = new Set();
@@ -302,7 +302,7 @@ async function openDrawer(tag, isDir = false, dirKey = null) {
   try {
     const r = isDir && dirKey
       ? await send({ type: 'dir:rows', key: dirKey })
-      : await send({ type: 'query', expr: (isDir ? '@' : '#') + quoteTag(tag) });
+      : await send({ type: 'query', expr: (isDir ? '@' : '#') + quoteTag(tag), includePrivate: true });
     body.textContent = '';
     const head = document.createElement('p');
     head.className = 'hint';
@@ -471,9 +471,14 @@ async function deleteDrawerItem(item) {
 
 async function doReplace(tags) {
   const label = tags.length > 1 ? `把 ${tags.length} 个标签合并到` : `把「${tags[0]}」重命名为`;
+  const priv = (state.privacy && state.privacy.tags) || [];
+  const inPriv = tags.filter((t) => priv.some((p) => String(p).toLowerCase() === String(t).toLowerCase()));
+  const privNote = inPriv.length
+    ? `\n其中 ${inPriv.join('、')} 在隐私组：改名后这些书签仍然隐藏；若并入公开标签，目标会一并进入隐私组。`
+    : '';
   const to = await modal({
     title: label,
-    desc: '输入新的标签名。若该标签已存在，则相当于合并（不会出现两个同名标签）。\n下一步只是预览影响，确认之后才改写。',
+    desc: '输入新的标签名。若该标签已存在，则相当于合并（不会出现两个同名标签）。\n下一步只是预览影响，确认之后才改写。' + privNote,
     input: tags.length === 1 ? tags[0] : '',
     okText: '下一步',
   });
@@ -509,9 +514,14 @@ async function doReplace(tags) {
 }
 
 async function doPurge(tags) {
+  const priv = (state.privacy && state.privacy.tags) || [];
+  const inPriv = tags.filter((t) => priv.some((p) => String(p).toLowerCase() === String(t).toLowerCase()));
+  const privNote = inPriv.length
+    ? `\n注意：${inPriv.join('、')} 在隐私组，删除后这些书签会重新出现在侧边栏（管理台本来就看得到）。`
+    : '';
   const ok = await modal({
     title: `删除标签 ${tags.join(' / ')}`,
-    desc: '只摘掉标签，书签本身保留。此操作会改写用到这些标签的书签标题。',
+    desc: '只摘掉标签，书签本身保留。此操作会改写用到这些标签的书签标题。' + privNote,
     input: null,
     okText: '删除',
   });
@@ -954,10 +964,184 @@ function bindAlias() {
   }
 }
 
+
+// ------------------------------------------------------------ 隐私组
+
+function privTagCount(name) {
+  const k = String(name).toLowerCase();
+  const t = state.tags.find((x) => String(x.tag).toLowerCase() === k);
+  return t ? t.count : 0;
+}
+
+function renderPrivacy() {
+  const p = state.privacy;
+  if (!p) return;
+
+  const tagBox = $('#privTagRows');
+  if (tagBox) {
+    tagBox.textContent = '';
+    if (!p.tags.length) {
+      const h = document.createElement('span');
+      h.className = 'hint';
+      h.textContent = '还没有隐私标签。';
+      tagBox.append(h);
+    }
+    for (const name of p.tags) {
+      const chip = document.createElement('span');
+      chip.className = 'dir-chip priv-tag-chip';
+      const code = document.createElement('code');
+      code.textContent = name;
+      const cnt = document.createElement('span');
+      cnt.className = 'c';
+      cnt.textContent = privTagCount(name);
+      const rm = document.createElement('button');
+      rm.className = 'btn ghost small danger-text';
+      rm.textContent = '移出';
+      rm.addEventListener('click', () => savePrivacy({ tags: p.tags.filter((x) => x !== name) }));
+      chip.append(code, cnt, rm);
+      tagBox.append(chip);
+    }
+    const meta = $('#privTagMeta');
+    if (meta) meta.textContent = `· ${p.tags.length} 个`;
+  }
+
+  const dirBox = $('#privDirRows');
+  if (dirBox) {
+    dirBox.textContent = '';
+    if (!p.dirs.length) {
+      const h = document.createElement('span');
+      h.className = 'hint';
+      h.textContent = '还没有隐私目录。';
+      dirBox.append(h);
+    }
+    for (const path of p.dirs) {
+      const chip = document.createElement('span');
+      chip.className = 'dir-chip';
+      const code = document.createElement('code');
+      code.textContent = String(path).split(PATH_SEP).join(' › ');
+      const rm = document.createElement('button');
+      rm.className = 'btn ghost small danger-text';
+      rm.textContent = '移出';
+      rm.addEventListener('click', () => savePrivacy({ dirs: p.dirs.filter((x) => x !== path) }));
+      chip.append(code, rm);
+      dirBox.append(chip);
+    }
+    const meta = $('#privDirMeta');
+    if (meta) meta.textContent = `· ${p.dirs.length} 个 · 整枝生效`;
+  }
+
+  const sel = $('#privDirSelect');
+  if (sel) {
+    const keep = sel.value;
+    sel.textContent = '';
+    const opt0 = document.createElement('option');
+    opt0.value = '';
+    opt0.textContent = '选择目录…';
+    sel.append(opt0);
+    for (const path of p.allDirs || []) {
+      if (p.dirs.includes(path)) continue;
+      const o = document.createElement('option');
+      o.value = path;
+      o.textContent = String(path).split(PATH_SEP).join(' › ');
+      sel.append(o);
+    }
+    if (keep) sel.value = keep;
+  }
+
+  const warn = $('#privWarn');
+  if (warn) {
+    const bits = [];
+    if (p.invalidDirs && p.invalidDirs.length) bits.push(`路径已失效（目录改名或移动了）：${p.invalidDirs.map((x) => String(x).split(PATH_SEP).join(' › ')).join('、')}`);
+    if (p.missingTags && p.missingTags.length) bits.push(`标签已不存在：${p.missingTags.join('、')}`);
+    warn.textContent = bits.join('；');
+    warn.hidden = !bits.length;
+  }
+
+  const fakeBox = $('#privFakeRows');
+  if (fakeBox) {
+    fakeBox.textContent = '';
+    for (let i = 0; i < 3; i++) {
+      const f = (p.fakes && p.fakes[i]) || { name: '', count: 0 };
+      const row = document.createElement('div');
+      row.className = 'priv-fake';
+      const idx = document.createElement('span');
+      idx.className = 'idx';
+      idx.textContent = String(i + 1);
+      const name = document.createElement('input');
+      name.className = 'input name fake-name';
+      name.value = f.name || '';
+      name.placeholder = `第 ${i + 1} 个按钮名`;
+      const count = document.createElement('input');
+      count.className = 'input count fake-count';
+      count.type = 'number';
+      count.min = '0';
+      count.max = '9999';
+      count.value = String(f.count || 0);
+      row.append(idx, name, count);
+      fakeBox.append(row);
+    }
+  }
+}
+
+async function savePrivacy(patch) {
+  try {
+    await send({ type: 'privacy:set', ...patch });
+    toast('已更新隐私组');
+    await refresh();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function bindPrivacy() {
+  const addTag = $('#privTagAdd');
+  if (addTag) {
+    const doAdd = () => {
+      const p = state.privacy;
+      const name = $('#privTagInput').value.trim();
+      if (!name || !p) return;
+      if (p.tags.some((x) => x.toLowerCase() === name.toLowerCase())) {
+        toast('已经在隐私组里了');
+        return;
+      }
+      $('#privTagInput').value = '';
+      savePrivacy({ tags: [...p.tags, name] });
+    };
+    addTag.addEventListener('click', doAdd);
+    $('#privTagInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') doAdd();
+    });
+  }
+
+  const addDir = $('#privDirAdd');
+  if (addDir) {
+    addDir.addEventListener('click', () => {
+      const p = state.privacy;
+      const path = $('#privDirSelect').value;
+      if (!path || !p) return;
+      savePrivacy({ dirs: [...p.dirs, path] });
+    });
+  }
+
+  const saveFakes = $('#privFakeSave');
+  if (saveFakes) {
+    saveFakes.addEventListener('click', () => {
+      const names = [...document.querySelectorAll('.fake-name')].map((x) => x.value.trim());
+      const counts = [...document.querySelectorAll('.fake-count')].map((x) => Number(x.value) || 0);
+      if (names.some((n) => !n)) {
+        toast('三个伪装按钮都要填名字', true);
+        return;
+      }
+      const fakes = names.map((name, i) => ({ name, count: counts[i] }));
+      savePrivacy({ fakes });
+    });
+  }
+}
+
 // ------------------------------------------------------------ 生命周期
 
 export async function refresh() {
-  const st = await send({ type: 'state' });
+  const st = await send({ type: 'state', includePrivate: true });
   state.tags = st.tags || [];
   state.colors = (st.config && st.config.colors) || {};
   state.aliases = (st.config && st.config.aliases) || {};
@@ -971,10 +1155,12 @@ export async function refresh() {
   state.blockedDirs = st.blockedDirs || [];
   state.excludedDirs = st.excludedDirs || [];
   state.dirStats = st.dirStats || { folders: 0, deepFolders: 0, tags: 0 };
+  state.privacy = st.privacy || null;
   renderDirTags();
   renderBlockedDirs();
   renderExcludedDirs();
   renderAliases();
+  renderPrivacy();
   await renderUndo();
   await renderJournal();
 }
@@ -985,6 +1171,7 @@ chrome.runtime.onMessage.addListener((m) => {
 
 export function init() {
   bindAlias();
+  bindPrivacy();
   const undoMore = $('#undoMore');
   if (undoMore) {
     undoMore.addEventListener('click', () => {

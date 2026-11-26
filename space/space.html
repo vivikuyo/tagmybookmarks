@@ -147,6 +147,41 @@
 
     <div class="alias-sec">
       <div class="health-head">
+        <h2>隐私组</h2>
+        <span class="hint">只作用于侧边栏：组内标签和组内目录（整枝）在侧边栏整体隐藏，管理台始终全量可见。没有密码，也没有显式入口，只能靠下面配置的三个伪装按钮进入。</span>
+      </div>
+      <div class="priv-grid">
+        <div class="priv-block">
+          <h3>隐私标签 <span id="privTagMeta" class="hint"></span></h3>
+          <div id="privTagRows" class="dir-rows"></div>
+          <div class="priv-add">
+            <input id="privTagInput" class="input" list="tagDatalist" placeholder="标签名，如 体检" />
+            <button id="privTagAdd" class="btn small">加入</button>
+          </div>
+        </div>
+        <div class="priv-block">
+          <h3>隐私目录 <span id="privDirMeta" class="hint"></span></h3>
+          <div id="privDirRows" class="dir-rows"></div>
+          <div class="priv-add">
+            <select id="privDirSelect" class="input"></select>
+            <button id="privDirAdd" class="btn small">加入</button>
+          </div>
+        </div>
+      </div>
+      <p id="privWarn" class="hint priv-warn" hidden></p>
+
+      <div class="priv-block priv-entry">
+        <h3>入口：三个伪装按钮 <span class="hint">三个按钮按名字字母序混在全量标签云里，从左到右依次点完进入隐私视图；按钮不筛选、不参与查询，单独点击没有反应。</span></h3>
+        <div id="privFakeRows" class="priv-fakes"></div>
+        <div class="priv-add">
+          <button id="privFakeSave" class="btn small">保存入口</button>
+          <span class="hint">每步 2.5 秒、整体 10 秒；双击侧边栏顶栏退出，Esc 或 10 分钟无操作也会退出。</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="alias-sec">
+      <div class="health-head">
         <h2>别名</h2>
         <span class="hint">输入别名等于查询规范标签。查询、omnibox 都生效；不会改任何书签标题。</span>
       </div>

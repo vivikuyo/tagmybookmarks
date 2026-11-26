@@ -2154,7 +2154,7 @@ async function loadCloud() {
     return;
   }
   // 空查询：立刻回全量
-  const s = await send({ type: 'state' });
+  const s = await send({ type: 'state', includePrivate: true });
   cloudTags = s.tags || [];
   cloudDirs = s.dirTags || [];
   fullDirs = s.dirTags || [];
@@ -2181,7 +2181,7 @@ async function syncFilterNote() {
   if (dirTerms.length) {
     if (!fullDirs.length) {
       try {
-        const s = await send({ type: 'state' });
+        const s = await send({ type: 'state', includePrivate: true });
         fullDirs = s.dirTags || [];
       } catch {}
     }
@@ -2724,7 +2724,7 @@ function bindSearchClear() {
 export async function init() {
   bind();
   try {
-    const s = await send({ type: 'state' });
+    const s = await send({ type: 'state', includePrivate: true });
     colors = (s.config && s.config.colors) || {};
   } catch {}
   // 目录折叠状态（下拉树 + 按目录分组共用，存本机）

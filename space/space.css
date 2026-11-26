@@ -1021,3 +1021,19 @@ input.input, select.input { min-height: 28px; border-radius: 8px; box-sizing: bo
 /* 组头名字可下钻：与箭头区分（箭头=折叠，名字=下钻） */
 .bm-group-name { cursor: pointer; border: 0; background: none; color: inherit; font: inherit; font-weight: 600; letter-spacing: .3px; }
 .bm-group-name:hover { color: var(--accent); }
+
+/* 隐私组：两类成员 + 入口三槽 */
+.priv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 12px; }
+.priv-block { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.priv-block h3 { margin: 0; font-size: 13px; font-weight: 650; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.priv-add { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
+.priv-add .input { min-width: 180px; }
+.priv-warn { margin-top: 10px; color: #b4541f; }
+.priv-entry { margin-top: 16px; }
+.priv-fakes { display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+.priv-fake { display: flex; align-items: center; gap: 6px; }
+.priv-fake .idx { color: var(--text-dim); font-size: 11px; width: 16px; }
+.priv-fake input.name { width: 120px; }
+.priv-fake input.count { width: 56px; }
+.priv-tag-chip .c { font-size: 11px; color: var(--text-dim); }
+@media (max-width: 860px) { .priv-grid { grid-template-columns: 1fr; } }
