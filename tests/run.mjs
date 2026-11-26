@@ -2174,6 +2174,14 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const jump = pj.slice(pj.indexOf('function jumpToFirstHit()'), pj.indexOf('function renderList()'));
   ok(jump.includes('const dirs = new Set((app.data.queryDirs || []).filter(Boolean));') && jump.includes('const near = dirs.size ? picks.filter((r) => rowInQueryDirs(r, dirs)) : [];') && jump.includes('const pool = near.length ? near : picks;'), 'T165d 有 @目录 时先在同目录副本里挑，再按树序取最靠前');
 }
+// T184：关闭行内加标签编辑时只撤编辑控件，不能把整个标签格删掉
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  ok(!/editor\.box\.remove\(\)/.test(bm), 'T184a 关闭编辑不删除标签格');
+  ok(/editor\.input\.remove\(\);\s*editor\.tip\.remove\(\);\s*editor\.sug\.remove\(\)/.test(bm), 'T184b 逐个撤掉输入框/提示/推荐');
+  ok(bm.includes('editor = { row, input, box, sug, tip };'), 'T184c 编辑态保存提示节点');
+}
+
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);

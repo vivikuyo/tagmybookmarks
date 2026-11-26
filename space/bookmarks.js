@@ -1529,8 +1529,10 @@ function renderTagChips(box, row) {
 
 function closeEditor() {
   if (!editor) return;
+  // 只撤掉行内编辑控件，绝不能删掉整个标签格（否则原有标签会一起消失）
   editor.input.remove();
-  editor.box.remove();
+  editor.tip.remove();
+  editor.sug.remove();
   editor = null;
 }
 
@@ -1550,7 +1552,7 @@ function openEditor(box, row) {
   box.append(sug);
   input.focus();
 
-  editor = { row, input, box, sug };
+  editor = { row, input, box, sug, tip };
 
   input.addEventListener('input', () => {
     clearTimeout(sugTimer);
