@@ -155,7 +155,10 @@
           <h3>隐私标签 <span id="privTagMeta" class="hint"></span></h3>
           <div id="privTagRows" class="dir-rows"></div>
           <div class="priv-add">
-            <input id="privTagInput" class="input" list="tagDatalist" placeholder="标签名，如 体检" />
+            <div class="priv-tag-field">
+              <input id="privTagInput" class="input" placeholder="标签名，如 体检" autocomplete="off" />
+              <div id="privTagSuggest" class="priv-suggest" hidden></div>
+            </div>
             <button id="privTagAdd" class="btn small">加入</button>
           </div>
         </div>

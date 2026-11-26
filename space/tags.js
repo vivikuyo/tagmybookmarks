@@ -975,6 +975,7 @@ function privTagCount(name) {
 
 function renderPrivacy() {
   const p = state.privacy;
+  hidePrivTagSuggest();
   if (!p) return;
 
   const tagBox = $('#privTagRows');
@@ -1093,23 +1094,131 @@ async function savePrivacy(patch) {
   }
 }
 
+// 隐私标签候选浮层：照侧边栏「打标签」候选框做彩色胶囊，不用浏览器原生 datalist
+let privSuggestItems = [];
+let privSuggestActive = -1;
+
+function privSuggestEl() {
+  return $('#privTagSuggest');
+}
+
+function privSuggestInput() {
+  return $('#privTagInput');
+}
+
+function hidePrivTagSuggest() {
+  const box = privSuggestEl();
+  if (box) box.hidden = true;
+  privSuggestActive = -1;
+}
+
+function renderPrivTagSuggest() {
+  const box = privSuggestEl();
+  const input = privSuggestInput();
+  if (!box || !input) return;
+  const used = new Set(((state.privacy && state.privacy.tags) || []).map((x) => String(x).toLowerCase()));
+  const needle = input.value.trim().toLowerCase();
+  const items = state.tags
+    .filter((t) => !used.has(String(t.tag).toLowerCase()))
+    .filter((t) => !needle || String(t.tag).toLowerCase().includes(needle))
+    .slice(0, 200);
+
+  box.textContent = '';
+  privSuggestActive = -1;
+  if (!items.length) {
+    const h = document.createElement('span');
+    h.className = 'priv-suggest-empty';
+    h.textContent = needle && used.has(needle) ? '这个标签已经在隐私组里了' : '没有匹配的标签';
+    box.append(h);
+  } else {
+    items.forEach((t) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'priv-suggest-chip';
+      b.style.setProperty('--tc', colorFor(t.tag, state.colors));
+      b.title = `${t.tag}：${t.count} 条书签`;
+      const n = document.createElement('span');
+      n.textContent = t.tag;
+      const c = document.createElement('span');
+      c.className = 'n';
+      c.textContent = t.count;
+      b.append(n, c);
+      // 点候选只填进输入框，是否加入仍由旁边的「加入」或回车决定
+      b.addEventListener('mousedown', (e) => e.preventDefault());
+      b.addEventListener('click', () => {
+        input.value = t.tag;
+        hidePrivTagSuggest();
+        input.focus();
+      });
+      box.append(b);
+    });
+  }
+  privSuggestItems = items;
+  box.hidden = false;
+}
+
+function movePrivTagSuggest(delta) {
+  const box = privSuggestEl();
+  if (!box || box.hidden || !privSuggestItems.length) return false;
+  const buttons = [...box.querySelectorAll('.priv-suggest-chip')];
+  if (privSuggestActive < 0) privSuggestActive = delta > 0 ? 0 : buttons.length - 1;
+  else privSuggestActive = (privSuggestActive + delta + buttons.length) % buttons.length;
+  buttons.forEach((b, i) => b.classList.toggle('active', i === privSuggestActive));
+  buttons[privSuggestActive].scrollIntoView({ block: 'nearest' });
+  return true;
+}
+
 function bindPrivacy() {
   const addTag = $('#privTagAdd');
   if (addTag) {
+    const input = $('#privTagInput');
     const doAdd = () => {
       const p = state.privacy;
-      const name = $('#privTagInput').value.trim();
+      const name = input.value.trim();
       if (!name || !p) return;
       if (p.tags.some((x) => x.toLowerCase() === name.toLowerCase())) {
         toast('已经在隐私组里了');
         return;
       }
-      $('#privTagInput').value = '';
+      input.value = '';
+      hidePrivTagSuggest();
       savePrivacy({ tags: [...p.tags, name] });
     };
     addTag.addEventListener('click', doAdd);
-    $('#privTagInput').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') doAdd();
+    input.addEventListener('focus', renderPrivTagSuggest);
+    input.addEventListener('input', renderPrivTagSuggest);
+    input.addEventListener('blur', () => setTimeout(hidePrivTagSuggest, 120));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        if (movePrivTagSuggest(e.key === 'ArrowDown' ? 1 : -1)) e.preventDefault();
+        return;
+      }
+      if (e.key === 'Escape') {
+        hidePrivTagSuggest();
+        return;
+      }
+      if (e.key === 'Tab') {
+        hidePrivTagSuggest();
+        return;
+      }
+      if (e.key === 'Enter') {
+        if (!privSuggestEl().hidden && privSuggestActive >= 0 && privSuggestItems[privSuggestActive]) {
+          e.preventDefault();
+          input.value = privSuggestItems[privSuggestActive].tag;
+          hidePrivTagSuggest();
+          doAdd();
+          return;
+        }
+        doAdd();
+      }
+    });
+  }
+
+  const field = $('.priv-tag-field');
+  if (field) {
+    document.addEventListener('pointerdown', (e) => {
+      if (!privSuggestEl() || privSuggestEl().hidden) return;
+      if (!field.contains(e.target)) hidePrivTagSuggest();
     });
   }
 
