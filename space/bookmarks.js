@@ -3,6 +3,7 @@
 import { colorFor } from '../lib/palette.js';
 import { PATH_SEP } from '../lib/index.js';
 import { splitTagInput, normalizeTagOrNull } from '../lib/title.js';
+import { quoteTag } from '../lib/query.js';
 
 const $ = (sel) => document.querySelector(sel);
 const PAGE = 200;
@@ -167,6 +168,7 @@ const curPane = () => paneState[activePane];
 let selected = paneState.L.selected; // 活动窗格的选中集
 let colors = {};
 let tagCounts = new Map(); // 小写标签名 → 全库条数（行内加标签候选显示用）
+let allTagList = []; // 全库标签 + 条数（批量加标签候选）
 let foldersFlat = [];
 let folderTree = []; // folders:list 的原始树（下拉浮层用）
 let idToPath = new Map(); // 目录 id → 路径
@@ -1540,9 +1542,9 @@ function closeEditor() {
 }
 
 /** 候选浮层贴在输入框下沿：行区可滚动，用 fixed 定位避免被单元格裁掉 */
-function placeBmSuggest() {
-  if (!editor || !editor.sug || editor.sug.hidden) return;
-  const r = editor.input.getBoundingClientRect();
+function placeTagPop(pop, input) {
+  if (!pop || pop.hidden || !input) return;
+  const r = input.getBoundingClientRect();
   const vw = window.innerWidth || 800;
   const vh = window.innerHeight || 600;
   const w = Math.min(340, Math.max(240, r.width || 260));
@@ -1551,9 +1553,14 @@ function placeBmSuggest() {
   const top = (vh - (r.bottom || 0) < 180 && (r.top || 0) > h + 12)
     ? (r.top - h - 4)
     : ((r.bottom || 0) + 4);
-  editor.sug.style.left = `${Math.round(left)}px`;
-  editor.sug.style.top = `${Math.round(top)}px`;
-  editor.sug.style.width = `${Math.round(w)}px`;
+  pop.style.left = `${Math.round(left)}px`;
+  pop.style.top = `${Math.round(top)}px`;
+  pop.style.width = `${Math.round(w)}px`;
+}
+
+function placeBmSuggest() {
+  if (!editor) return;
+  placeTagPop(editor.sug, editor.input);
 }
 
 function openEditor(box, row) {
@@ -1797,6 +1804,71 @@ async function bulkTag(kind) {
   }
 }
 
+// ---------------------------------------------------------------- 批量加标签候选
+// 与行内加标签共用 .bm-sug 浮层样式；数据取全库标签，点一个填进输入框
+
+let bulkSug = null;
+
+function ensureBulkSug() {
+  if (bulkSug) return bulkSug;
+  bulkSug = document.createElement('div');
+  bulkSug.id = 'bmTagSuggest';
+  bulkSug.className = 'bm-sug';
+  bulkSug.hidden = true;
+  bulkSug.addEventListener('mousedown', (e) => e.preventDefault());
+  document.body.append(bulkSug);
+  return bulkSug;
+}
+
+/** 只按输入框里的最后一个词过滤，前面已定的标签不参与 */
+function bulkTagNeedle(input) {
+  const m = /([^\s,]+)$/.exec(input.value || '');
+  return m ? m[1].replace(/"/g, '').toLowerCase() : '';
+}
+
+function renderBulkSug() {
+  const input = $('#bmTags');
+  if (!input || !bulkSug) return;
+  const needle = bulkTagNeedle(input);
+  const picked = new Set(tagList(input.value).map((t) => t.toLowerCase()));
+  const shown = allTagList
+    .filter((t) => !picked.has(String(t.tag).toLowerCase()))
+    .filter((t) => !needle || String(t.tag).toLowerCase().includes(needle))
+    .slice(0, 80);
+  bulkSug.textContent = '';
+  if (!shown.length) {
+    bulkSug.hidden = true;
+    return;
+  }
+  for (const t of shown) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'bm-sug-item';
+    b.style.color = colorFor(t.tag, colors);
+    b.title = `${t.tag} · ${t.count} 条`;
+    const name = document.createElement('span');
+    name.textContent = t.tag;
+    const c = document.createElement('span');
+    c.className = 'c';
+    c.textContent = t.count;
+    b.append(name, c);
+    b.addEventListener('mousedown', (e) => e.preventDefault());
+    b.addEventListener('click', () => {
+      const cur = input.value || '';
+      const m = /([^\s,]*)$/.exec(cur);
+      const head = m ? cur.slice(0, m.index) : cur;
+      const sep = head && !/[\s,]$/.test(head) ? ' ' : '';
+      input.value = head + sep + quoteTag(t.tag) + ' ';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
+      renderBulkSug();
+    });
+    bulkSug.append(b);
+  }
+  bulkSug.hidden = false;
+  placeTagPop(bulkSug, input);
+}
+
 // ---------------------------------------------------------------- 绑定
 
 function bind() {
@@ -1999,6 +2071,29 @@ function bind() {
 
   $('#bmAdd').addEventListener('click', () => bulkTag('add'));
   $('#bmRemove').addEventListener('click', () => bulkTag('remove'));
+
+  // 批量加标签输入框：聚焦/输入时弹彩色候选，Esc 收起
+  ensureBulkSug();
+  const bmTags = $('#bmTags');
+  bmTags.addEventListener('focus', renderBulkSug);
+  bmTags.addEventListener('input', renderBulkSug);
+  bmTags.addEventListener('blur', () => setTimeout(() => {
+    if (document.activeElement === bmTags) return; // 点清除 × 后重新聚焦，别把刚弹出的候选收掉
+    if (document.activeElement && document.activeElement.closest && document.activeElement.closest('.bm-sug')) return;
+    if (bulkSug) bulkSug.hidden = true;
+  }, 120));
+  bmTags.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && bulkSug && !bulkSug.hidden) {
+      e.stopPropagation();
+      bulkSug.hidden = true;
+    }
+  });
+  window.addEventListener('scroll', () => {
+    if (bulkSug && !bulkSug.hidden) placeTagPop(bulkSug, bmTags);
+  }, true);
+  window.addEventListener('resize', () => {
+    if (bulkSug && !bulkSug.hidden) placeTagPop(bulkSug, bmTags);
+  });
   $('#bmClearSel').addEventListener('click', () => {
     selected.clear();
     render();
@@ -2771,7 +2866,8 @@ export async function init() {
   try {
     const s = await send({ type: 'state', includePrivate: true });
     colors = (s.config && s.config.colors) || {};
-    tagCounts = new Map((s.tags || []).map((t) => [String(t.tag).toLowerCase(), t.count]));
+    allTagList = s.tags || [];
+    tagCounts = new Map(allTagList.map((t) => [String(t.tag).toLowerCase(), t.count]));
   } catch {}
   // 目录折叠状态（下拉树 + 按目录分组共用，存本机）
   try {

@@ -2187,10 +2187,19 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
   ok(bm.includes('document.body.append(sug)'), 'T185a 候选浮层挂到 body，避免被行单元格裁掉');
-  ok(bm.includes('function placeBmSuggest') && bm.includes("editor.sug.style.left"), 'T185b 按输入框位置 fixed 定位');
+  ok(bm.includes('function placeTagPop') && bm.includes('pop.style.left'), 'T185b 按输入框位置 fixed 定位');
   ok(bm.includes('b.style.color = colorFor(s.tag, colors)'), 'T185c 候选按标签配色显示');
-  ok(bm.includes('tagCounts = new Map((s.tags || [])'), 'T185d 候选带全库标签条数');
+  ok(bm.includes('tagCounts = new Map(allTagList.map'), 'T185d 候选带全库标签条数');
   ok(css.includes('position: fixed; z-index: 250;') && css.includes('.bm-sug-item .c'), 'T185e 浮层与胶囊计数样式');
+}
+
+// T186：批量加标签输入框也使用同款彩色胶囊候选浮层
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  ok(bm.includes('function renderBulkSug') && bm.includes("bulkSug.id = 'bmTagSuggest'"), 'T186a 批量输入框有独立候选浮层');
+  ok(bm.includes("bmTags.addEventListener('focus', renderBulkSug)") && bm.includes("bmTags.addEventListener('input', renderBulkSug)"), 'T186b 聚焦和输入都刷新候选');
+  ok(bm.includes('input.value = head + sep + quoteTag(t.tag)') && bm.includes("input.dispatchEvent(new Event('input'"), 'T186c 点候选替换当前词并填回输入框');
+  ok(bm.includes('function bulkTagNeedle') && bm.includes('allTagList\n    .filter'), 'T186d 按最后一个词过滤全库标签');
 }
 
 console.log(`\n通过 ${pass} 项`);
