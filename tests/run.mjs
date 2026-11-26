@@ -340,6 +340,11 @@ const p5 = planReplaceTags(idx, ['前端'], '前端');
 eq(p5.writes.length, 0, 'T13 改成同名不产生写');
 eq(p5.unchangedKeys, 3, 'T14 三个集合被跳过');
 
+const p5b = planReplaceTags(idx, ['vue'], 'VUE');
+eq(p5b.writes.length, 2, 'T14b 只改大小写仍要改写标题');
+eq(p5b.unchangedKeys, 0, 'T14c 大小写变化不算无变化');
+ok(p5b.writes[0].after.includes('[#VUE]'), 'T14d 新写法写进标题');
+
 const p6 = planReplaceTags(idx, ['不存在的标签'], 'X');
 eq(p6.writes.length, 0, 'T15 没有匹配的标签');
 eq(p6.keys, 0, 'T16 影响集合为 0');

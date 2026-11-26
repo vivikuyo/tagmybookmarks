@@ -471,9 +471,9 @@ async function doReplace(tags) {
   const label = tags.length > 1 ? `把 ${tags.length} 个标签合并到` : `把「${tags[0]}」重命名为`;
   const to = await modal({
     title: label,
-    desc: '输入新的标签名。若该标签已存在，则相当于合并（不会出现两个同名标签）。',
+    desc: '输入新的标签名。若该标签已存在，则相当于合并（不会出现两个同名标签）。\n下一步只是预览影响，确认之后才改写。',
     input: tags.length === 1 ? tags[0] : '',
-    okText: '预演',
+    okText: '下一步',
   });
   if (to === null) return;
   const target = String(to || '').trim();
