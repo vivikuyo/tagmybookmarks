@@ -354,6 +354,22 @@ function bind() {
   });
   if (tagMenuEl) {
     tagInput.addEventListener('focus', () => openTagMenu());
+    // 鼠标一走开就收起；指针挪到候选框上时不收，便于点选
+    tagInput.addEventListener('mouseenter', () => {
+      holdTagMenu();
+      // 收起后鼠标又回到框里，且焦点还在，就重新弹一次（否则得重新点一下）
+      if (tagMenuEl.hidden && document.activeElement === tagInput) openTagMenu();
+    });
+    tagInput.addEventListener('mouseleave', () => {
+      tagMenuHover = false;
+      scheduleTagMenuClose();
+    });
+    tagMenuEl.addEventListener('mouseenter', holdTagMenu);
+    tagMenuEl.addEventListener('mouseleave', () => {
+      tagMenuHover = false;
+      scheduleTagMenuClose();
+    });
+    tagInput.addEventListener('blur', () => scheduleTagMenuClose());
     tagInput.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !tagMenuEl.hidden) {
         e.stopPropagation();
@@ -1821,8 +1837,27 @@ function tagMenuNeedle() {
   return m ? m[1].replace(/"/g, '').toLowerCase() : '';
 }
 
+let tagMenuTimer = 0;
+let tagMenuHover = false;
+
 function closeTagMenu() {
+  clearTimeout(tagMenuTimer);
+  tagMenuHover = false;
   if (tagMenuEl) tagMenuEl.hidden = true;
+}
+
+/** 鼠标离开输入框和候选框后延时收起：留 280ms 跨过两者之间那道缝，
+ *  指针在延时内进到候选框就把这一趟取消掉 */
+function scheduleTagMenuClose() {
+  clearTimeout(tagMenuTimer);
+  tagMenuTimer = setTimeout(() => {
+    if (!tagMenuHover) closeTagMenu();
+  }, 280);
+}
+
+function holdTagMenu() {
+  tagMenuHover = true;
+  clearTimeout(tagMenuTimer);
 }
 
 function renderTagMenu(list) {

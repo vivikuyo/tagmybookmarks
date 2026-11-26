@@ -595,6 +595,20 @@ if (api) {
     ok(api.tagMenuEl.children.length === 3, '输入框清空后列出全部已有标签');
     api.tagMenuEl.children[1].dispatch('click');
     ok(api.tagInput.value.trim() === '"Chrome 扩展"', '带空格的标签自动加引号');
+
+    api.tagMenuEl.hidden = false;
+    api.tagInput.dispatch('mouseleave');
+    flushTimers();
+    ok(api.tagMenuEl.hidden === true, '鼠标离开输入框后候选框自动收起');
+
+    api.tagMenuEl.hidden = false;
+    api.tagInput.dispatch('mouseleave');
+    api.tagMenuEl.dispatch('mouseenter');
+    flushTimers();
+    ok(api.tagMenuEl.hidden === false, '指针挪到候选框上时不收，能点得到');
+    api.tagMenuEl.dispatch('mouseleave');
+    flushTimers();
+    ok(api.tagMenuEl.hidden === true, '从候选框移开也收起');
   } catch (e) {
     fail.push('打标签候选框抛异常：' + e.message);
   }
