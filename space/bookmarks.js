@@ -166,6 +166,7 @@ const curPane = () => paneState[activePane];
 
 let selected = paneState.L.selected; // 活动窗格的选中集
 let colors = {};
+let tagCounts = new Map(); // 小写标签名 → 全库条数（行内加标签候选显示用）
 let foldersFlat = [];
 let folderTree = []; // folders:list 的原始树（下拉浮层用）
 let idToPath = new Map(); // 目录 id → 路径
@@ -1533,7 +1534,26 @@ function closeEditor() {
   editor.input.remove();
   editor.tip.remove();
   editor.sug.remove();
+  window.removeEventListener('scroll', placeBmSuggest, true);
+  window.removeEventListener('resize', placeBmSuggest);
   editor = null;
+}
+
+/** 候选浮层贴在输入框下沿：行区可滚动，用 fixed 定位避免被单元格裁掉 */
+function placeBmSuggest() {
+  if (!editor || !editor.sug || editor.sug.hidden) return;
+  const r = editor.input.getBoundingClientRect();
+  const vw = window.innerWidth || 800;
+  const vh = window.innerHeight || 600;
+  const w = Math.min(340, Math.max(240, r.width || 260));
+  const h = 224;
+  const left = Math.max(8, Math.min(r.left || 0, vw - w - 8));
+  const top = (vh - (r.bottom || 0) < 180 && (r.top || 0) > h + 12)
+    ? (r.top - h - 4)
+    : ((r.bottom || 0) + 4);
+  editor.sug.style.left = `${Math.round(left)}px`;
+  editor.sug.style.top = `${Math.round(top)}px`;
+  editor.sug.style.width = `${Math.round(w)}px`;
 }
 
 function openEditor(box, row) {
@@ -1546,13 +1566,17 @@ function openEditor(box, row) {
   tip.textContent = '空格/逗号分隔多个；"Chrome 扩展" 用引号包住算一个';
   const sug = document.createElement('div');
   sug.className = 'bm-sug';
+  sug.hidden = true;
 
   box.append(input);
   box.append(tip);
-  box.append(sug);
+  document.body.append(sug);
   input.focus();
 
   editor = { row, input, box, sug, tip };
+  window.addEventListener('scroll', placeBmSuggest, true);
+  window.addEventListener('resize', placeBmSuggest);
+  sug.addEventListener('mousedown', (e) => e.preventDefault());
 
   input.addEventListener('input', () => {
     clearTimeout(sugTimer);
@@ -1566,7 +1590,8 @@ function openEditor(box, row) {
       commitEditor();
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      closeEditor();
+      if (!sug.hidden) sug.hidden = true; // 先收候选，再按一次才退出编辑
+      else closeEditor();
     }
   });
   input.addEventListener('blur', () => setTimeout(() => {
@@ -1588,24 +1613,40 @@ function openEditor(box, row) {
 }
 
 async function fillSuggest(row, text) {
-  if (!editor) return;
+  const ed = editor;
+  if (!ed) return;
   let list = [];
   try {
-    const r = await send({ type: 'suggest:tags', url: row.url, title: row.title, text });
-    list = (r.items || []).filter((s) => !row.tags.some((t) => t.toLowerCase() === s.tag.toLowerCase()));
+    const r = await send({ type: 'suggest:tags', url: row.url, title: row.title, text, limit: 20 });
+    const picked = new Set(splitTagInput(String(text || '')).map((t) => t.toLowerCase()));
+    list = (r.items || []).filter((s) => {
+      const k = s.tag.toLowerCase();
+      return !picked.has(k) && !row.tags.some((t) => t.toLowerCase() === k);
+    });
   } catch {}
-  const sug = editor.sug;
+  if (editor !== ed) return; // 等待期间已换行/关闭，别再写旧浮层
+  const sug = ed.sug;
   sug.textContent = '';
-  if (!list.length) return;
-  const label = document.createElement('span');
-  label.className = 'bm-sug-label';
-  label.textContent = '推荐';
-  sug.append(label);
-  for (const s of list.slice(0, 8)) {
+  if (!list.length) {
+    sug.hidden = true;
+    return;
+  }
+  for (const s of list) {
     const b = document.createElement('button');
+    b.type = 'button';
     b.className = 'bm-sug-item';
-    b.textContent = s.tag;
-    b.title = s.reason || '';
+    b.style.color = colorFor(s.tag, colors);
+    const count = tagCounts.get(String(s.tag).toLowerCase()) || 0;
+    b.title = `${s.tag}${count ? ` · ${count} 条` : ''}${s.reason ? ` · ${s.reason}` : ''}`;
+    const name = document.createElement('span');
+    name.textContent = s.tag;
+    b.append(name);
+    if (count) {
+      const c = document.createElement('span');
+      c.className = 'c';
+      c.textContent = count;
+      b.append(c);
+    }
     b.addEventListener('mousedown', (e) => {
       e.preventDefault();
       const cur = editor.input.value.trim();
@@ -1615,6 +1656,8 @@ async function fillSuggest(row, text) {
     });
     sug.append(b);
   }
+  sug.hidden = false;
+  placeBmSuggest();
 }
 
 // ---------------------------------------------------------------- 批量
@@ -2728,6 +2771,7 @@ export async function init() {
   try {
     const s = await send({ type: 'state', includePrivate: true });
     colors = (s.config && s.config.colors) || {};
+    tagCounts = new Map((s.tags || []).map((t) => [String(t.tag).toLowerCase(), t.count]));
   } catch {}
   // 目录折叠状态（下拉树 + 按目录分组共用，存本机）
   try {

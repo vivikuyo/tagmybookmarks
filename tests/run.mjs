@@ -2182,6 +2182,17 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(bm.includes('editor = { row, input, box, sug, tip };'), 'T184c 编辑态保存提示节点');
 }
 
+// T185：书签行内加标签候选改为侧栏同款彩色胶囊浮层
+{
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
+  ok(bm.includes('document.body.append(sug)'), 'T185a 候选浮层挂到 body，避免被行单元格裁掉');
+  ok(bm.includes('function placeBmSuggest') && bm.includes("editor.sug.style.left"), 'T185b 按输入框位置 fixed 定位');
+  ok(bm.includes('b.style.color = colorFor(s.tag, colors)'), 'T185c 候选按标签配色显示');
+  ok(bm.includes('tagCounts = new Map((s.tags || [])'), 'T185d 候选带全库标签条数');
+  ok(css.includes('position: fixed; z-index: 250;') && css.includes('.bm-sug-item .c'), 'T185e 浮层与胶囊计数样式');
+}
+
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);
