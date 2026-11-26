@@ -652,16 +652,16 @@ if (api) {
     const clickByVisual = (btn) => btn.dispatch('click');
 
     // 配置槽位是 阅读(1) 收藏(2) 稍后(3)，标签云里按字母序变成 收藏 稍后 阅读；
-    // 用户按眼前从左到右点，也必须能进入。
+    // 只按眼前从左到右点不算，入口只认管理台的 1→2→3。
     let btns = renderFakes();
     ok(btns.length === 3, '三个伪装按钮都渲染出来了');
     clickByVisual(btns[0]);
     clickByVisual(btns[1]);
     clickByVisual(btns[2]);
-    ok(api.app.privView === true, '按标签云从左到右点三个按钮能进入隐私视图');
+    ok(api.app.privView === false, '只按标签云从左到右点不进隐私视图');
     await api.exitPrivateView();
 
-    // 用户也可能照管理台里的 1→2→3 槽位顺序点，同样要能进
+    // 必须照管理台里的 1→2→3 槽位顺序点
     api.resetFakeSeq();
     btns = renderFakes();
     const byName = (n) => btns.find((b) => b.children && b.children[0] && b.children[0].textContent === n);
