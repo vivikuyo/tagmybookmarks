@@ -318,7 +318,7 @@ src = src.replace(/^import[^\n]*\n/gm, '');
 const tail = `
 ;return { app, updateBulk, syncGroupChecks, syncRowHighlights, renderList, render, bulkAction,
   selectedFolderIds, branchKeys, folderKey, buildFolderIndex, toastEl, listEl, tagInput, toast,
-  renderRow, isGroupCollapsed, applyGroupBtn, paintAct, bind, ACT_ICON, applyDensity, DENSITY_ICON };`;
+  renderRow, isGroupCollapsed, applyGroupBtn, paintAct, bind, ACT_ICON, applyDensity, DENSITY_ICON, buildExpr, qEl, qTextEl, tagMenuEl, renderTagMenu, insertMenuTag, closeTagMenu };`;
 
 const doc = new Doc();
 const win = {
@@ -560,6 +560,43 @@ if (api) {
     ok(api.app.selected.size === 0 || true, '加标签流程没有中途崩溃');
   } catch (e) {
     fail.push('加标签流程抛异常：' + e.message);
+  }
+}
+
+// ---------------------------------------------------------------- 查询分两格 + 打标签候选框
+
+if (api) {
+  try {
+    api.qEl.value = '前端';
+    api.qTextEl.value = 'chrome 扩展';
+    ok(api.buildExpr() === '前端 ?"chrome 扩展"', '左标签右文字拼成一条查询，文字整句加引号');
+    api.qEl.value = '';
+    ok(api.buildExpr() === '?"chrome 扩展"', '只填文字也能单独查');
+    api.qTextEl.value = '';
+    api.qEl.value = '前端';
+    ok(api.buildExpr() === '前端', '清掉文字后只剩标签条件');
+    api.qEl.value = '';
+    ok(api.buildExpr() === '', '两格都空就是空查询');
+  } catch (e) {
+    fail.push('查询拼接抛异常：' + e.message);
+  }
+
+  try {
+    api.app.allTags = [{ tag: '前端', count: 3 }, { tag: 'Chrome 扩展', count: 2 }, { tag: '设计', count: 5 }];
+    api.tagInput.value = '设';
+    api.renderTagMenu(api.app.allTags);
+    ok(api.tagMenuEl.children.length === 1, '候选框按输入框最后一个词过滤');
+    api.tagMenuEl.children[0].dispatch('click');
+    ok(api.tagInput.value.trim() === '设计', '点候选取代正在输入的那个词');
+    ok(api.tagMenuEl.children.length === 3, '选完框不关，方便接着点下一个');
+
+    api.tagInput.value = '';
+    api.renderTagMenu(api.app.allTags);
+    ok(api.tagMenuEl.children.length === 3, '输入框清空后列出全部已有标签');
+    api.tagMenuEl.children[1].dispatch('click');
+    ok(api.tagInput.value.trim() === '"Chrome 扩展"', '带空格的标签自动加引号');
+  } catch (e) {
+    fail.push('打标签候选框抛异常：' + e.message);
   }
 }
 

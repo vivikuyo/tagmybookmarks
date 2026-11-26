@@ -18,10 +18,19 @@
   </header>
 
   <div class="query">
-    <input id="q" type="text" spellcheck="false" autocomplete="off"
-           placeholder="前端, Chrome + 设计 - 旧    ?关键词" />
-    <button id="btnClear" class="clear" title="清空">×</button>
-    <div id="suggest" class="suggest" hidden></div>
+    <div class="q-cell">
+      <input id="q" type="text" spellcheck="false" autocomplete="off"
+             placeholder="标签：前端, 设计"
+             title="按标签、目录筛选；支持 , + - & ! ~ 以及 @目录、#标签" />
+      <button id="btnClear" class="clear" title="清空标签条件">×</button>
+      <div id="suggest" class="suggest" hidden></div>
+    </div>
+    <div class="q-cell">
+      <input id="qText" type="text" spellcheck="false" autocomplete="off"
+             placeholder="搜标题、网址"
+             title="按书签标题和网址里的文字筛选，与左侧条件同时满足" />
+      <button id="btnTextClear" class="clear" title="清空文字搜索">×</button>
+    </div>
   </div>
   <div id="syntax" class="syntax" hidden></div>
 
@@ -60,6 +69,7 @@
       </div>
       <button id="foldBtn" class="icon-btn" title="折叠全部" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4l4 4 4-4"/><path d="M8 20l4-4 4 4"/></svg></button>
       <div id="bulkFloat" class="bulk-float">
+        <div id="tagMenu" class="tag-menu" hidden></div>
         <span class="bulk-tagwrap">
           <input id="tagInput" type="text" placeholder='标签：空格 or , 分隔' autocomplete="off" />
           <button id="tagClear" class="clear" title="清空输入">×</button>

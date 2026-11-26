@@ -2005,6 +2005,17 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(sp2.includes('<h1>TagMyBookmarks</h1>'), 'T182c 管理台标题是 TagMyBookmarks');
 }
 
+// T183：查询分成两格 + 打标签输入框弹出已有标签
+{
+  const pu = readFileSync(new URL('../sidepanel/panel.html', import.meta.url), 'utf8');
+  const pjs = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const pc2 = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  ok((pu.match(/<div class="q-cell">/g) || []).length === 2 && pu.includes('id="qText"') && pu.includes('id="btnTextClear"'), 'T183a 查询分成两格：左边 #q 标签条件，右边 #qText 标题网址文字');
+  ok(pu.includes('id="tagMenu"') && pc2.includes('.tag-menu {') && pc2.includes('.tag-menu .tm-tag'), 'T183b 打标签输入框带一个候选浮框');
+  ok(pjs.includes('function buildExpr()') && pjs.includes('return tags ? `${tags} ${text}` : text;') && pjs.includes("'?\"'"), 'T183c 两格拼成一条查询：文字整句加引号，空格不当并列词');
+  ok(pjs.includes('function renderTagMenu(list)') && pjs.includes('function insertMenuTag(tag)') && pjs.includes('function openTagMenu()'), 'T183d 候选框按输入过滤、点一下填进输入框');
+}
+
 // T168：页脚那句"这三个文件只存全局配置"只在配置页显示，其他页只留通用那句
 {
   const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');

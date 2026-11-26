@@ -5,6 +5,7 @@ import { splitTagInput, normalizeTagOrNull, tagKey } from '../lib/title.js';
 const $ = (sel) => document.querySelector(sel);
 const PATH_SEP = String.fromCharCode(31); // 后台的目录路径分隔符（文件夹名里的 / 不会被当层级）
 const qEl = $('#q');
+const qTextEl = $('#qText');   // 右侧纯文字框：只筛标题和网址，不参与标签语法
 const listEl = $('#list');
 const cloudEl = $('#cloud');
 const countEl = $('#count');
@@ -14,6 +15,7 @@ const bulkEl = $('#bulk');
 const floatEl = $('#bulkFloat');
 const bulkCountEl = $('#bulkCount');
 const tagInput = $('#tagInput');
+const tagMenuEl = $('#tagMenu');   // 点输入框弹出的已有标签候选
 const toastEl = $('#toast');
 
 const app = {
@@ -91,8 +93,9 @@ async function boot() {
     toast(e.message, true);
   }
 
-  const saved = (await chrome.storage.local.get('panel.expr'))['panel.expr'];
-  if (saved) qEl.value = saved;
+  const saved = await chrome.storage.local.get(['panel.expr', 'panel.text']);
+  if (saved['panel.expr']) qEl.value = saved['panel.expr'];
+  if (qTextEl && saved['panel.text']) qTextEl.value = saved['panel.text'];
 
   bind();
   await run();
@@ -227,12 +230,56 @@ function bind() {
   };
   $('#btnClear').addEventListener('click', clearQuery);
 
+  // 右侧文字框：普通输入，防抖重查；回车立即查；Esc 清空
+  if (qTextEl) {
+    let typingText = null;
+    const syncTextClear = () => {
+      const b = $('#btnTextClear');
+      if (b) b.style.display = qTextEl.value ? 'block' : 'none';
+    };
+    syncTextClear();
+    qTextEl.addEventListener('input', () => {
+      syncTextClear();
+      app.pageLimit = 1000;
+      app.jumpOnce = true;
+      clearTimeout(typingText);
+      typingText = setTimeout(run, 160);
+    });
+    qTextEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        clearTimeout(typingText);
+        app.jumpOnce = true;
+        run();
+      } else if (e.key === 'Escape' && qTextEl.value) {
+        qTextEl.value = '';
+        syncTextClear();
+        app.jumpOnce = true;
+        run();
+      }
+    });
+    const tb = $('#btnTextClear');
+    if (tb) tb.addEventListener('click', () => {
+      qTextEl.value = '';
+      syncTextClear();
+      app.jumpOnce = true;
+      run();
+      qTextEl.focus();
+    });
+  }
+
   // 双击云区空白处也清空输入（点到 chip/按钮/输入框不算）
   for (const id of ['cloud', 'dirCloud']) {
     const el = document.getElementById(id);
     if (!el) continue;
     el.addEventListener('dblclick', (e) => {
       if (e.target.closest('.tag, button, input, a, label, .mini')) return;
+      // 两个查询框一起清，单清左边会让人以为右边还留着条件
+      if (qTextEl) {
+        qTextEl.value = '';
+        const tb = $('#btnTextClear');
+        if (tb) tb.style.display = 'none';
+      }
       clearQuery();
     });
   }
@@ -301,7 +348,25 @@ function bind() {
   const syncTagClear = () => {
     $('#tagClear').style.display = tagInput.value ? 'block' : 'none';
   };
-  tagInput.addEventListener('input', syncTagClear);
+  tagInput.addEventListener('input', () => {
+    syncTagClear();
+    if (tagMenuEl && !tagMenuEl.hidden) renderTagMenu(app.allTags || []);
+  });
+  if (tagMenuEl) {
+    tagInput.addEventListener('focus', () => openTagMenu());
+    tagInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !tagMenuEl.hidden) {
+        e.stopPropagation();
+        closeTagMenu();
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (tagMenuEl.hidden) return;
+      const t = e.target;
+      if (t === tagInput || (t.closest && t.closest('#tagMenu'))) return;
+      closeTagMenu();
+    });
+  }
   $('#tagClear').addEventListener('click', () => {
     tagInput.value = '';
     syncTagClear();
@@ -311,10 +376,25 @@ function bind() {
 
 // ---------------------------------------------------------------- 查询
 
+/** 右侧文字框转成查询里的 ?"..."，整句作为一个词组匹配，空格不会被当成并列词 */
+function textQuery() {
+  const t = (qTextEl && qTextEl.value ? qTextEl.value : '').trim();
+  if (!t) return '';
+  return '?"' + t.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+}
+
+/** 实际发给后台的表达式：两边都写就同时满足（隐式 AND） */
+function buildExpr() {
+  const tags = qEl.value.trim();
+  const text = textQuery();
+  if (!text) return qEl.value;
+  return tags ? `${tags} ${text}` : text;
+}
+
 async function run() {
-  app.expr = qEl.value;
-  chrome.storage.local.set({ 'panel.expr': app.expr });
-  $('#btnClear').style.display = app.expr ? 'block' : 'none';
+  app.expr = buildExpr();
+  chrome.storage.local.set({ 'panel.expr': qEl.value, 'panel.text': qTextEl ? qTextEl.value : '' });
+  $('#btnClear').style.display = qEl.value ? 'block' : 'none';
 
   try {
     const data = await send({
@@ -1733,6 +1813,85 @@ function askTrashSetup() {
   });
 }
 
+// ---------------------------------------------------------------- 批量打标签的候选框
+
+/** 输入框里最后一个词：只按它过滤候选，前面已经定下来的标签不参与 */
+function tagMenuNeedle() {
+  const m = /([^\s,]+)$/.exec(tagInput.value || '');
+  return m ? m[1].replace(/"/g, '').toLowerCase() : '';
+}
+
+function closeTagMenu() {
+  if (tagMenuEl) tagMenuEl.hidden = true;
+}
+
+function renderTagMenu(list) {
+  if (!tagMenuEl) return;
+  const needle = tagMenuNeedle();
+  const src = list || [];
+  const shown = (needle ? src.filter((t) => String(t.tag).toLowerCase().includes(needle)) : src).slice(0, 80);
+  tagMenuEl.textContent = '';
+  if (!shown.length) {
+    const p = document.createElement('div');
+    p.className = 'tm-empty';
+    p.textContent = needle ? '没有匹配的标签' : '还没有标签';
+    tagMenuEl.append(p);
+    return;
+  }
+  for (const t of shown) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'tag tm-tag';
+    b.style.color = colorFor(t.tag, app.colors);
+    b.title = `${t.tag} · ${t.count} 条`;
+    const name = document.createElement('span');
+    name.textContent = t.tag;
+    const cnt = document.createElement('span');
+    cnt.className = 'c';
+    cnt.textContent = t.count;
+    b.append(name, cnt);
+    b.addEventListener('mousedown', (e) => e.preventDefault()); // 别让输入框先失焦，否则框跟着关
+    b.addEventListener('click', () => insertMenuTag(t.tag));
+    tagMenuEl.append(b);
+  }
+}
+
+/** 选中一个候选：替换正在输入的那个词，接在后面 */
+function insertMenuTag(tag) {
+  const cur = tagInput.value || '';
+  const m = /([^\s,]*)$/.exec(cur);
+  const head = m ? cur.slice(0, m.index) : cur;
+  const sep = head && !/[\s,]$/.test(head) ? ' ' : '';
+  tagInput.value = head + sep + quoteTag(tag) + ' ';
+  const tc = $('#tagClear');
+  if (tc) tc.style.display = 'block';
+  tagInput.focus();
+  // 连续打多个标签时框不关：重画一遍，过滤词跟着清空
+  renderTagMenu(app.allTags || []);
+}
+
+async function ensureTagList() {
+  if (app.allTags && app.allTags.length) return app.allTags;
+  try {
+    const d = await send({ type: 'query', expr: '', limit: 40, allTags: true });
+    if (d && d.allTags) app.allTags = d.allTags;
+  } catch { /* 取不到就显示空列表，不影响手动输入 */ }
+  return app.allTags || [];
+}
+
+async function openTagMenu() {
+  if (!tagMenuEl) return;
+  renderTagMenu(await ensureTagList());
+  tagMenuEl.hidden = false;
+  // 贴在输入框下沿；宽度跟着面板走，别超出右边界
+  const r = tagInput.getBoundingClientRect();
+  const vw = window.innerWidth || 420;
+  const w = Math.min(268, Math.max(180, vw - 16));
+  tagMenuEl.style.width = `${w}px`;
+  tagMenuEl.style.left = `${Math.round(Math.max(8, Math.min(r.left || 0, vw - w - 8)))}px`;
+  tagMenuEl.style.top = `${Math.round((r.bottom || 0) + 4)}px`;
+}
+
 // ---------------------------------------------------------------- 补全
 
 // ---------------------------------------------------------------- 行密度
@@ -2070,7 +2229,7 @@ async function loadGroup() {
 }
 
 function inputEmpty() {
-  return qEl.value.trim() === '';
+  return qEl.value.trim() === '' && (!qTextEl || qTextEl.value.trim() === '');
 }
 
 function currentToken() {
