@@ -771,7 +771,7 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
   const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
   ok(sp.includes('id="bmTextSearch"'), 'T93a 操作带书签搜索框');
-  ok(sp.indexOf('bmTextSearch') < sp.indexOf('bmAllPage'), 'T93b 搜索框在「全选可见」左侧');
+  ok(sp.indexOf('bmAllPage') < sp.indexOf('bmTextSearch'), 'T93b 全选组在搜索框左侧');
   ok(sp.includes('平铺书签'), 'T93c 按标题已改名平铺书签');
   ok(!sp.includes('按标题'), 'T93d 旧「按标题」文案已移除');
   ok(sp.indexOf('id="bmSort"') > sp.indexOf('id="bmBulk"'), 'T93e 排序切换已搬进操作带');
@@ -815,12 +815,12 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
   ok(!/<div id="bmCrumb"/.test(sp), 'T95b 顶部独立面包屑行已移除');
   const seps = [...sp.matchAll(/bulk-sep/g)].map((m) => m.index);
   // 操作带新分区：视图切换 | 打标签与目录操作 | 选择与剪贴板，两处分隔符夹住中间组
-  const iDual = sp.indexOf('id="bmDual"');
-  const iAllPage = sp.indexOf('id="bmAllPage"');
+  const iClear = sp.indexOf('id="bmClearSel"');
+  const iText = sp.indexOf('id="bmTextSearch"');
   const iNewFolder = sp.indexOf('id="bmNewFolder"');
   const iCopy = sp.indexOf('id="bmCopy"');
   const sepBetween = (a, b) => seps.some((i) => i > a && i < b);
-  ok(sepBetween(iDual, iAllPage), 'T95c 批量选择组左侧分隔符（收起目录/双窗之后）');
+  ok(sepBetween(iClear, iText), 'T95c 全选组与搜索框之间的分隔符');
   ok(sepBetween(iNewFolder, iCopy), 'T95c2 剪贴板组左侧分隔符（新建文件夹之后）');
   ok(bm.includes('const isCur = dirIsOpen(pane, node.id)'), 'T95d 橙色=展开状态（手动+自动都算，按窗格）');
   ok(css.includes('.bm-folder-row.cur') && css.includes('#f59e0b'), 'T95e 展开行橙色样式');
@@ -1139,14 +1139,14 @@ for (const f of ['space/space.js', 'space/tags.js', 'space/overview.js', 'sidepa
 // T119：操作带三段分区（视图切换 | 打标签与目录操作 | 选择与剪贴板），中间组两侧有分隔符
 {
   const sp = readFileSync(new URL('../space/space.html', import.meta.url), 'utf8');
-  const ids = ['bmTextSearch', 'bmSort', 'bmCollapse', 'bmDual', 'bmAllPage', 'bmAllMatch', 'bmClearSel',
+  const ids = ['bmAllPage', 'bmAllMatch', 'bmClearSel', 'bmTextSearch', 'bmSort', 'bmCollapse', 'bmDual',
     'bmTags', 'bmAdd', 'bmRemove', 'bmNewFolder', 'bmCopy', 'bmCut', 'bmPaste', 'bmDelete'];
   const pos = ids.map((id) => sp.indexOf(`id="${id}"`));
-  ok(pos.every((v, i) => v > 0 && (i === 0 || v > pos[i - 1])), 'T119a 操作带顺序：搜索|切换|收起目录|双窗 → 全选组|打标签 → 剪贴板');
+  ok(pos.every((v, i) => v > 0 && (i === 0 || v > pos[i - 1])), 'T119a 操作带顺序：全选组|搜索|切换|收起目录|双窗 → 打标签 → 剪贴板');
   const seps = [...sp.matchAll(/bulk-sep/g)].map((m) => m.index);
   const sepBetween = (a, b) => seps.some((i) => i > a && i < b);
-  ok(sepBetween(sp.indexOf('id="bmDual"'), sp.indexOf('id="bmAllPage"')) && sepBetween(sp.indexOf('id="bmNewFolder"'), sp.indexOf('id="bmCopy"')),
-    'T119b 两处分隔符：双窗之后、新建文件夹之后');
+  ok(sepBetween(sp.indexOf('id="bmClearSel"'), sp.indexOf('id="bmTextSearch"')) && sepBetween(sp.indexOf('id="bmNewFolder"'), sp.indexOf('id="bmCopy"')),
+    'T119b 两处分隔符：全选组之后、新建文件夹之后');
 }
 
 // T120：品牌名 TagMyBookmarks / 作者 vivikuyo，且磁盘数据标识（TagSpace 配置目录）保持不变
