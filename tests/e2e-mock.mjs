@@ -940,6 +940,8 @@ if (srcId) {
   const stPrivNow = await call({ type: 'state', includePrivate: true });
   const stOnly = await call({ type: 'state', includePrivate: true, onlyPrivate: true });
   eq(stOnly.counts.keys, stPrivNow.privacy.counts.hiddenKeys, 'E222 隐私视图的总数只算隐私网址');
+  ok(stOnly.tags.length < stPrivNow.tags.length, 'E226 隐私视图标签云只留隐私标签');
+  ok(stOnly.dirTags.length > 0 && stOnly.dirTags.length < stPrivNow.dirTags.length, 'E227 隐私视图目录云只留含隐私书签的目录');
   const qOnly = await call({ type: 'query', expr: '', includePrivate: true, onlyPrivate: true, includeUntagged: true });
   ok(qOnly.total > 0 && qOnly.total < allOpen.items.length, 'E223 隐私视图只列隐私书签');
   ok(qOnly.items.every((i) => (i.tags || []).includes('Vue') || String(i.path || '').includes('program/ff'))

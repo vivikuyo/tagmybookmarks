@@ -85,14 +85,18 @@ async function boot() {
   bindCloudSplit();
   await loadGroup();
   try {
-    await fetchState(false, false);
+    // app:changed 会重新 boot；隐私视图开着时必须继续取隐私态，否则目录云会被刷成公开全量
+    await fetchState(app.privView, app.privView);
   } catch (e) {
     toast(e.message, true);
   }
 
-  const saved = await chrome.storage.local.get(['panel.expr', 'panel.text']);
-  if (saved['panel.expr']) qEl.value = saved['panel.expr'];
-  if (qTextEl && saved['panel.text']) qTextEl.value = saved['panel.text'];
+  // 隐私视图里不要从旧会话恢复查询：进入时已经清空，boot 恢复会把旧条件又塞回来
+  if (!app.privView) {
+    const saved = await chrome.storage.local.get(['panel.expr', 'panel.text']);
+    if (saved['panel.expr']) qEl.value = saved['panel.expr'];
+    if (qTextEl && saved['panel.text']) qTextEl.value = saved['panel.text'];
+  }
 
   bind();
   await run();
