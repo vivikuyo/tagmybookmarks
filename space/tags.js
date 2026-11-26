@@ -975,6 +975,8 @@ function privTagCount(name) {
 
 function renderPrivacy() {
   const p = state.privacy;
+  privSuggestSelected.clear();
+  syncPrivAddLabel();
   hidePrivTagSuggest();
   if (!p) return;
 
@@ -1097,6 +1099,27 @@ async function savePrivacy(patch) {
 // 隐私标签候选浮层：照侧边栏「打标签」候选框做彩色胶囊，不用浏览器原生 datalist
 let privSuggestItems = [];
 let privSuggestActive = -1;
+let privSuggestSelected = new Set(); // 候选里已经点选的标签（保留原始大小写），支持一次加入多个
+
+function hasPrivSelected(name) {
+  const k = String(name).toLowerCase();
+  return [...privSuggestSelected].some((x) => String(x).toLowerCase() === k);
+}
+
+function togglePrivSelected(name) {
+  const k = String(name).toLowerCase();
+  const cur = [...privSuggestSelected].find((x) => String(x).toLowerCase() === k);
+  if (cur) privSuggestSelected.delete(cur);
+  else privSuggestSelected.add(String(name));
+  return !cur;
+}
+
+function syncPrivAddLabel() {
+  const btn = $('#privTagAdd');
+  if (!btn) return;
+  const n = privSuggestSelected.size;
+  btn.textContent = n ? `加入 ${n} 个` : '加入';
+}
 
 function privSuggestEl() {
   return $('#privTagSuggest');
@@ -1137,17 +1160,21 @@ function renderPrivTagSuggest() {
       b.className = 'priv-suggest-chip';
       b.style.setProperty('--tc', colorFor(t.tag, state.colors));
       b.title = `${t.tag}：${t.count} 条书签`;
+      const on = hasPrivSelected(t.tag);
+      b.classList.toggle('on', on);
       const n = document.createElement('span');
       n.textContent = t.tag;
       const c = document.createElement('span');
       c.className = 'n';
       c.textContent = t.count;
       b.append(n, c);
-      // 点候选只填进输入框，是否加入仍由旁边的「加入」或回车决定
+      // 多选：点一下选中，再点一下取消；选完统一用「加入 N 个」提交
       b.addEventListener('mousedown', (e) => e.preventDefault());
       b.addEventListener('click', () => {
-        input.value = t.tag;
-        hidePrivTagSuggest();
+        const picked = togglePrivSelected(t.tag);
+        b.classList.toggle('on', picked);
+        b.title = picked ? `再点一下取消 ${t.tag}` : `${t.tag}：${t.count} 条书签`;
+        syncPrivAddLabel();
         input.focus();
       });
       box.append(b);
@@ -1174,15 +1201,29 @@ function bindPrivacy() {
     const input = $('#privTagInput');
     const doAdd = () => {
       const p = state.privacy;
-      const name = input.value.trim();
-      if (!name || !p) return;
-      if (p.tags.some((x) => x.toLowerCase() === name.toLowerCase())) {
+      if (!p) return;
+      const typed = input.value.trim();
+      const picked = privSuggestSelected.size ? [...privSuggestSelected] : (typed ? [typed] : []);
+      if (!picked.length) {
+        toast('先选候选标签，或输入标签名');
+        return;
+      }
+      const used = new Set(p.tags.map((x) => x.toLowerCase()));
+      const fresh = [];
+      for (const name of picked) {
+        const k = String(name).toLowerCase();
+        if (used.has(k) || fresh.some((x) => x.toLowerCase() === k)) continue;
+        fresh.push(name);
+      }
+      if (!fresh.length) {
         toast('已经在隐私组里了');
         return;
       }
       input.value = '';
+      privSuggestSelected.clear();
+      syncPrivAddLabel();
       hidePrivTagSuggest();
-      savePrivacy({ tags: [...p.tags, name] });
+      savePrivacy({ tags: [...p.tags, ...fresh] });
     };
     addTag.addEventListener('click', doAdd);
     input.addEventListener('focus', renderPrivTagSuggest);
@@ -1203,10 +1244,17 @@ function bindPrivacy() {
       }
       if (e.key === 'Enter') {
         if (!privSuggestEl().hidden && privSuggestActive >= 0 && privSuggestItems[privSuggestActive]) {
+          // 回车只切换高亮候选，最后统一按「加入 N 个」提交
           e.preventDefault();
-          input.value = privSuggestItems[privSuggestActive].tag;
-          hidePrivTagSuggest();
-          doAdd();
+          const item = privSuggestItems[privSuggestActive];
+          const tag = item.tag;
+          const picked = togglePrivSelected(tag);
+          const btn = privSuggestEl().querySelectorAll('.priv-suggest-chip')[privSuggestActive];
+          if (btn) {
+            btn.classList.toggle('on', picked);
+            btn.title = picked ? `再点一下取消 ${tag}` : `${tag}：${item.count} 条书签`;
+          }
+          syncPrivAddLabel();
           return;
         }
         doAdd();
