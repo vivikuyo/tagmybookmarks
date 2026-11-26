@@ -2,7 +2,7 @@
 
 给书签打标签，查询时按标签组合筛选，不必依赖书签存放在哪里。
 
-作者 vivikuyo。当前版本 1.0.2。安装包在 [Releases](https://github.com/vivikuyo/tagmybookmarks/releases) 页面下载。
+作者 vivikuyo。当前版本 1.0.3。安装包在 [Releases](https://github.com/vivikuyo/tagmybookmarks/releases) 页面下载。
 
 ## 一、解决的问题
 
@@ -16,7 +16,7 @@
 
 ## 二、安装
 
-1. 从 Releases 页面下载 `TagMyBookmarks-1.0.2.zip`，解压，得到一个包含 `manifest.json` 的文件夹。
+1. 从 Releases 页面下载 `TagMyBookmarks-1.0.3.zip`，解压，得到一个包含 `manifest.json` 的文件夹。
 2. 打开 `chrome://extensions`。
 3. 在右上角开启「开发者模式」。
 4. 点击「加载已解压的扩展程序」，选择该文件夹。
