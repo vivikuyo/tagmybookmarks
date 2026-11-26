@@ -115,12 +115,14 @@ async function fetchState(includePrivate) {
 }
 
 // ---------------------------------------------------------------- 隐私视图
-// 入口：在全量标签云里依次点三个伪装按钮（每步 2.5 秒、整体 10 秒）。
+// 入口：在全量标签云里点三个不同的伪装按钮（每步 2.5 秒、整体 10 秒；顺序不限）。
 // 退出：双击顶栏空白/品牌、Esc、10 分钟无操作、侧边栏关闭。
 
 const FAKE_GAP = 2500;
 const FAKE_TOTAL = 10000;
 const PRIV_IDLE = 10 * 60 * 1000;
+// 入口只认"三个不同的伪装按钮"：配置槽位顺序、标签云里的字母序、或混着点都行。
+// 之前要求严格顺次，按钮被字母序重排后按管理台 1→2→3 点会失败，实际用起来太脆。
 let fakeSeq = { buf: [], last: 0, started: 0 };
 let privIdleTimer = null;
 
@@ -136,26 +138,20 @@ function armPrivIdle() {
   privIdleTimer = setTimeout(() => exitPrivateView(), PRIV_IDLE);
 }
 
-function onFakeClick(idx) {
+function onFakeClick(slot) {
   if (app.privView) return;
   const now = Date.now();
   if (!fakeSeq.buf.length || now - fakeSeq.started > FAKE_TOTAL || now - fakeSeq.last > FAKE_GAP) {
-    fakeSeq.buf = [];
+    resetFakeSeq();
     fakeSeq.started = now;
   }
-  if (idx === fakeSeq.buf.length) {
-    fakeSeq.buf.push(idx);
-    fakeSeq.last = now;
-    if (fakeSeq.buf.length === 3) {
-      resetFakeSeq();
-      enterPrivateView();
-    }
-    return;
+  if (fakeSeq.buf.includes(slot)) return; // 同一个按钮点两下不算进度
+  fakeSeq.buf.push(slot);
+  fakeSeq.last = now;
+  if (fakeSeq.buf.length === 3) {
+    resetFakeSeq();
+    enterPrivateView();
   }
-  // 点错：从第一个重新开始（不提示、不影响正常标签操作）
-  fakeSeq.buf = idx === 0 ? [0] : [];
-  fakeSeq.started = idx === 0 ? now : 0;
-  fakeSeq.last = idx === 0 ? now : 0;
 }
 
 async function enterPrivateView() {
@@ -642,7 +638,7 @@ function renderCloud() {
   const fakeItems =
     fullCloud && !needle && app.fakes.length === 3 && app.fakes.every((f) => f.name)
       ? app.fakes
-          .map((f) => ({ tag: f.name, count: f.count, fake: true, idx: 0 }))
+          .map((f, slot) => ({ tag: f.name, count: f.count, fake: true, slot, idx: 0 }))
           .sort((a, b) => String(a.tag).localeCompare(String(b.tag), 'zh'))
           .map((f, idx) => ({ ...f, idx }))
       : [];
@@ -669,7 +665,7 @@ function renderCloud() {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        onFakeClick(t.idx);
+        onFakeClick(t.slot);
       });
       btn.addEventListener('dblclick', (e) => {
         e.preventDefault();

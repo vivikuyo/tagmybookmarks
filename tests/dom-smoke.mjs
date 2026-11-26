@@ -319,7 +319,7 @@ const tail = `
 ;return { app, updateBulk, syncGroupChecks, syncRowHighlights, renderList, render, bulkAction,
   selectedFolderIds, branchKeys, folderKey, buildFolderIndex, toastEl, listEl, tagInput, toast,
   renderRow, isGroupCollapsed, applyGroupBtn, paintAct, bind, ACT_ICON, applyDensity, DENSITY_ICON, buildExpr, qEl, qTextEl, tagMenuEl, renderTagMenu, insertMenuTag, closeTagMenu,
-  onFakeClick, enterPrivateView, exitPrivateView, resetFakeSeq };`;
+  onFakeClick, enterPrivateView, exitPrivateView, resetFakeSeq, renderCloud, cloudEl };`;
 
 const doc = new Doc();
 const win = {
@@ -617,6 +617,63 @@ if (api) {
 
 // ---------------------------------------------------------------- 输出
 
+
+// ---------------------------------------------------------------- 伪装按钮的实际点击顺序
+
+if (api) {
+  try {
+    respond = (msg) => {
+      if (msg.type === 'state') {
+        return {
+          ok: true,
+          config: { colors: {} },
+          prefs: {},
+          tags: [],
+          dirTags: [],
+          dirStats: { folders: 0, deepFolders: 0, tags: 0 },
+          privacy: { fakes: api.app.fakes },
+        };
+      }
+      if (msg.type === 'query') {
+        return { ok: true, items: [], total: 0, counts: { all: 0, untagged: 0 }, related: [], allTags: [], untaggedTotal: 0 };
+      }
+      return { ok: true };
+    };
+    const fakeNames = ['阅读', '收藏', '稍后'];
+    const renderFakes = () => {
+      api.qEl.value = '';
+      api.qTextEl.value = '';
+      api.app.filterText = '';
+      api.app.fakes = fakeNames.map((name, i) => ({ name, count: 10 + i }));
+      api.app.data = { allTags: [{ tag: '前端', count: 2 }], related: [], untaggedTotal: 1 };
+      api.renderCloud();
+      return [...api.cloudEl.querySelectorAll('button.tag')].filter((b) => b.children && b.children[0] && fakeNames.includes(b.children[0].textContent));
+    };
+    const clickByVisual = (btn) => btn.dispatch('click');
+
+    // 配置槽位是 阅读(1) 收藏(2) 稍后(3)，标签云里按字母序变成 收藏 稍后 阅读；
+    // 用户按眼前从左到右点，也必须能进入。
+    let btns = renderFakes();
+    ok(btns.length === 3, '三个伪装按钮都渲染出来了');
+    clickByVisual(btns[0]);
+    clickByVisual(btns[1]);
+    clickByVisual(btns[2]);
+    ok(api.app.privView === true, '按标签云从左到右点三个按钮能进入隐私视图');
+    await api.exitPrivateView();
+
+    // 用户也可能照管理台里的 1→2→3 槽位顺序点，同样要能进
+    api.resetFakeSeq();
+    btns = renderFakes();
+    const byName = (n) => btns.find((b) => b.children && b.children[0] && b.children[0].textContent === n);
+    clickByVisual(byName('阅读'));
+    clickByVisual(byName('收藏'));
+    clickByVisual(byName('稍后'));
+    ok(api.app.privView === true, '按管理台 1→2→3 顺序点三个按钮也能进入隐私视图');
+    await api.exitPrivateView();
+  } catch (e) {
+    fail.push('伪装按钮点击抛异常：' + e.message);
+  }
+}
 
 // ---------------------------------------------------------------- 隐私视图入口
 
