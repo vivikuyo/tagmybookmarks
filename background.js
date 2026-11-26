@@ -2064,7 +2064,10 @@ async function handle(msg) {
       for (const n of Object.values(configNodes)) if (n && n.id) skip.add(String(n.id));
       const trashNow = await resolveTrash(false);
       if (trashNow) skip.add(String(trashNow.id));
-      rows.push(...allTreeRows(skip));
+      // 侧边栏目录模式也必须按隐私组过滤；管理台显式带 includePrivate:true
+      const hidden = msg.includePrivate ? null : privacyInfo().keys;
+      const all = allTreeRows(skip);
+      rows.push(...(hidden ? all.filter((r) => !hidden.has(r.key)) : all));
       cAll = rows.length;
       cUntagged = rows.filter((r) => !r.tags || !r.tags.length).length;
     } else if (folderId) {
@@ -2204,12 +2207,19 @@ async function handle(msg) {
     const trashNow = await resolveTrash(false);
     if (trashNow) skipIds.add(trashNow.id);
 
+    // 侧边栏目录树：隐私目录整枝不出现，其余目录的条数也只数看得见的书签
+    const sidebar = !!msg.sidebar;
+    const hidden = (sidebar && !msg.includePrivate) ? privacyInfo() : null;
+    const privDirs = (hidden ? hidden.dirPaths : []) || [];
     const countOf = (node) => {
       let direct = 0;
       let total = 0;
       for (const c of node.children || []) {
-        if (c.url) { direct++; total++; }
-        else if (c.children) { const s = countOf(c); total += s.total; }
+        if (c.url) {
+          const key = canonicalUrl(c.url);
+          if (hidden && hidden.keys.has(key)) continue;
+          direct++; total++;
+        } else if (c.children) { const s = countOf(c); total += s.total; }
       }
       return { direct, total };
     };
@@ -2221,6 +2231,7 @@ async function handle(msg) {
         if (skipIds.has(node.id)) continue;
         if (node.title === CONFIG_DIR_NAME) continue;
         const path = parentPath ? `${parentPath}${PATH_SEP}${node.title}` : node.title;
+        if (sidebar && !msg.includePrivate && privDirs.some((p) => path === p || path.startsWith(`${p}${PATH_SEP}`))) continue;
         const c = countOf(node);
         out.push({
           id: node.id,

@@ -161,11 +161,16 @@ function onFakeClick(idx) {
 async function enterPrivateView() {
   if (app.privView) return;
   app.privView = true;
-  app.privPrev = { expr: qEl.value, text: qTextEl ? qTextEl.value : '' };
+  app.privPrev = { expr: qEl.value, text: qTextEl ? qTextEl.value : '', pageLimit: app.pageLimit };
   qEl.value = '';
   if (qTextEl) qTextEl.value = '';
   app.pageLimit = 1000;
   app.jumpOnce = false;
+  app.allRows = null;
+  app.foldersTree = null;
+  app.folderById = null;
+  app.subtreeKeys = null;
+  app.subtreeFolders = null;
   document.body.classList.add('priv-view');
   if (privHintEl) privHintEl.hidden = false;
   try {
@@ -187,8 +192,13 @@ async function exitPrivateView() {
   if (listEl) listEl.textContent = '';
   qEl.value = prev && prev.expr ? prev.expr : '';
   if (qTextEl) qTextEl.value = prev && prev.text ? prev.text : '';
-  app.pageLimit = 1000;
+  app.pageLimit = prev && prev.pageLimit ? prev.pageLimit : 1000;
   app.jumpOnce = false;
+  app.allRows = null;
+  app.foldersTree = null;
+  app.folderById = null;
+  app.subtreeKeys = null;
+  app.subtreeFolders = null;
   try {
     await fetchState(false);
   } catch {}
@@ -832,8 +842,8 @@ function renderDirPane(enabled) {
 async function loadAllRows() {
   if (app.allRows && app.foldersTree) return;
   const [r, f] = await Promise.all([
-    send({ type: 'bookmarks:all' }),
-    send({ type: 'folders:list' }),
+    send({ type: 'bookmarks:all', includePrivate: !!app.privView }),
+    send({ type: 'folders:list', sidebar: true, includePrivate: !!app.privView }),
   ]);
   app.allRows = r.items || [];
   app.allTotal = r.total || app.allRows.length;

@@ -928,6 +928,13 @@ if (srcId) {
   ok(qDirOpen.total >= 2, 'E211 隐私视图里目录书签完整');
   const lockedDirState = await call({ type: 'state' });
   ok(!lockedDirState.dirTags.some((t) => t.tag === 'program/ff'), 'E212 侧栏目录云不含隐私目录');
+  const allLocked = await call({ type: 'bookmarks:all' });
+  ok(!allLocked.items.some((r) => String(r.path || '').includes('program/ff')), 'E219 侧栏目录模式的全库清单也不含隐私目录书签');
+  const fLocked = await call({ type: 'folders:list', sidebar: true });
+  const flatDirs = (nodes) => (nodes || []).flatMap((n) => [n, ...flatDirs(n.children)]);
+  ok(!flatDirs(fLocked.tree).some((f) => String(f.title || '').includes('program/ff')), 'E220 侧栏目录树不含隐私目录');
+  const allOpen = await call({ type: 'bookmarks:all', includePrivate: true });
+  ok(allOpen.items.some((r) => String(r.path || '').includes('program/ff')), 'E221 隐私视图里全库清单完整');
 
   // 3) 隐私与排除互斥
   await call({ type: 'dirs:exclude', tag: 'program/ff', excluded: true });
