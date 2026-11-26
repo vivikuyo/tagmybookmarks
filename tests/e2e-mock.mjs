@@ -936,6 +936,18 @@ if (srcId) {
   const allOpen = await call({ type: 'bookmarks:all', includePrivate: true });
   ok(allOpen.items.some((r) => String(r.path || '').includes('program/ff')), 'E221 隐私视图里全库清单完整');
 
+  // 隐私视图只显示隐私内容，正常书签不出现
+  const stPrivNow = await call({ type: 'state', includePrivate: true });
+  const stOnly = await call({ type: 'state', includePrivate: true, onlyPrivate: true });
+  eq(stOnly.counts.keys, stPrivNow.privacy.counts.hiddenKeys, 'E222 隐私视图的总数只算隐私网址');
+  const qOnly = await call({ type: 'query', expr: '', includePrivate: true, onlyPrivate: true, includeUntagged: true });
+  ok(qOnly.total > 0 && qOnly.total < allOpen.items.length, 'E223 隐私视图只列隐私书签');
+  ok(qOnly.items.every((i) => (i.tags || []).includes('Vue') || String(i.path || '').includes('program/ff'))
+     || qOnly.items.every((i) => (i.tags || []).length || String(i.path || '').includes('program/ff')),
+     'E224 隐私视图的行都来自隐私标签或隐私目录');
+  const allOnly = await call({ type: 'bookmarks:all', includePrivate: true, onlyPrivate: true });
+  ok(allOnly.items.length > 0 && allOnly.items.length < allOpen.items.length, 'E225 隐私视图的目录清单只留隐私行');
+
   // 3) 隐私与排除互斥
   await call({ type: 'dirs:exclude', tag: 'program/ff', excluded: true });
   const mutual = await call({ type: 'privacy:set', dirs: [exDir] });

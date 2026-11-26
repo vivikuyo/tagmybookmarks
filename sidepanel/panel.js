@@ -85,7 +85,7 @@ async function boot() {
   bindCloudSplit();
   await loadGroup();
   try {
-    await fetchState(app.privView);
+    await fetchState(false, false);
   } catch (e) {
     toast(e.message, true);
   }
@@ -98,9 +98,9 @@ async function boot() {
   await run();
 }
 
-/** 取一份界面状态；includePrivate=false 时后台已把隐私成员全部剔掉 */
-async function fetchState(includePrivate) {
-  const st = await send({ type: 'state', includePrivate: !!includePrivate });
+/** 取一份界面状态；includePrivate=false 时后台已把隐私成员全部剔掉；onlyPrivate 只统计隐私内容 */
+async function fetchState(includePrivate, onlyPrivate) {
+  const st = await send({ type: 'state', includePrivate: !!includePrivate, onlyPrivate: !!onlyPrivate });
   app.colors = (st.config && st.config.colors) || {};
   app.prefs = st.prefs || {};
   app.allTags = st.tags || [];
@@ -115,21 +115,28 @@ async function fetchState(includePrivate) {
 }
 
 // ---------------------------------------------------------------- 隐私视图
-// 入口：在全量标签云里点三个不同的伪装按钮（每步 2.5 秒、整体 10 秒；顺序不限）。
+// 入口：在全量标签云里按顺序点三个伪装按钮（每步 2.5 秒、整体 10 秒）。
 // 退出：双击顶栏空白/品牌、Esc、10 分钟无操作、侧边栏关闭。
 
 const FAKE_GAP = 2500;
 const FAKE_TOTAL = 10000;
 const PRIV_IDLE = 10 * 60 * 1000;
-// 入口只认"三个不同的伪装按钮"：配置槽位顺序、标签云里的字母序、或混着点都行。
-// 之前要求严格顺次，按钮被字母序重排后按管理台 1→2→3 点会失败，实际用起来太脆。
-let fakeSeq = { buf: [], last: 0, started: 0 };
+// 入口必须按顺序：管理台里的 1→2→3，或标签云里从左到右（字母序）。
+// 两种顺序各自累计，任意一种按顺序点满三个才进入；乱点、插着点都不算。
+let fakeSeq = { slot: [], order: [], last: 0, started: 0 };
 let privIdleTimer = null;
 
 function resetFakeSeq() {
-  fakeSeq.buf = [];
+  fakeSeq.slot = [];
+  fakeSeq.order = [];
   fakeSeq.last = 0;
   fakeSeq.started = 0;
+}
+
+function advanceFakeSeq(buf, idx) {
+  if (idx === buf.length) return [...buf, idx];
+  if (idx === 0) return [0];
+  return [];
 }
 
 function armPrivIdle() {
@@ -138,17 +145,17 @@ function armPrivIdle() {
   privIdleTimer = setTimeout(() => exitPrivateView(), PRIV_IDLE);
 }
 
-function onFakeClick(slot) {
+function onFakeClick(slot, order) {
   if (app.privView) return;
   const now = Date.now();
-  if (!fakeSeq.buf.length || now - fakeSeq.started > FAKE_TOTAL || now - fakeSeq.last > FAKE_GAP) {
+  if ((!fakeSeq.slot.length && !fakeSeq.order.length) || now - fakeSeq.started > FAKE_TOTAL || now - fakeSeq.last > FAKE_GAP) {
     resetFakeSeq();
     fakeSeq.started = now;
   }
-  if (fakeSeq.buf.includes(slot)) return; // 同一个按钮点两下不算进度
-  fakeSeq.buf.push(slot);
+  fakeSeq.slot = advanceFakeSeq(fakeSeq.slot, slot);
+  fakeSeq.order = advanceFakeSeq(fakeSeq.order, order);
   fakeSeq.last = now;
-  if (fakeSeq.buf.length === 3) {
+  if (fakeSeq.slot.length === 3 || fakeSeq.order.length === 3) {
     resetFakeSeq();
     enterPrivateView();
   }
@@ -170,7 +177,7 @@ async function enterPrivateView() {
   document.body.classList.add('priv-view');
   if (privHintEl) privHintEl.hidden = false;
   try {
-    await fetchState(true);
+    await fetchState(true, true);
   } catch {}
   armPrivIdle();
   await run();
@@ -196,7 +203,7 @@ async function exitPrivateView() {
   app.subtreeKeys = null;
   app.subtreeFolders = null;
   try {
-    await fetchState(false);
+    await fetchState(false, false);
   } catch {}
   await run();
 }
@@ -550,6 +557,8 @@ async function run() {
       limit: app.group === 'dir' ? 20000 : app.pageLimit,
       allTags: !$('#relatedOnly').checked,
       includePrivate: !!app.privView,
+      onlyPrivate: !!app.privView,
+      includeUntagged: !!app.privView, // 隐私视图默认把隐私目录里未打标签的书签也列出来
     });
     app.data = data;
     if (data.allTags) app.allTags = data.allTags;
@@ -636,7 +645,7 @@ function renderCloud() {
   // 三个伪装按钮按名字排在标签云里，入口顺序就取这个从左到右的顺序；
   // 过滤标签时不出伪装按钮，免得只看见其中一两个、序列对不上。
   const fakeItems =
-    fullCloud && !needle && app.fakes.length === 3 && app.fakes.every((f) => f.name)
+    !app.privView && fullCloud && !needle && app.fakes.length === 3 && app.fakes.every((f) => f.name)
       ? app.fakes
           .map((f, slot) => ({ tag: f.name, count: f.count, fake: true, slot, idx: 0 }))
           .sort((a, b) => String(a.tag).localeCompare(String(b.tag), 'zh'))
@@ -665,7 +674,7 @@ function renderCloud() {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        onFakeClick(t.slot);
+        onFakeClick(t.slot, t.idx);
       });
       btn.addEventListener('dblclick', (e) => {
         e.preventDefault();
@@ -838,8 +847,8 @@ function renderDirPane(enabled) {
 async function loadAllRows() {
   if (app.allRows && app.foldersTree) return;
   const [r, f] = await Promise.all([
-    send({ type: 'bookmarks:all', includePrivate: !!app.privView }),
-    send({ type: 'folders:list', sidebar: true, includePrivate: !!app.privView }),
+    send({ type: 'bookmarks:all', includePrivate: !!app.privView, onlyPrivate: !!app.privView }),
+    send({ type: 'folders:list', sidebar: true, includePrivate: !!app.privView, onlyPrivate: !!app.privView }),
   ]);
   app.allRows = r.items || [];
   app.allTotal = r.total || app.allRows.length;
@@ -2071,7 +2080,7 @@ function insertMenuTag(tag) {
 async function ensureTagList() {
   if (app.allTags && app.allTags.length) return app.allTags;
   try {
-    const d = await send({ type: 'query', expr: '', limit: 40, allTags: true, includePrivate: !!app.privView });
+    const d = await send({ type: 'query', expr: '', limit: 40, allTags: true, includePrivate: !!app.privView, onlyPrivate: !!app.privView });
     if (d && d.allTags) app.allTags = d.allTags;
   } catch { /* 取不到就显示空列表，不影响手动输入 */ }
   return app.allTags || [];

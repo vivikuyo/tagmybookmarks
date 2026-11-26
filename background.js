@@ -1124,16 +1124,17 @@ function descendantDirNames(name) {
 }
 
 /** 目录标签频次（给侧边栏"目录"一栏与标签页）；屏蔽的不出现 */
-function dirTagCounts(idx, excludeKeys) {
+function dirTagCounts(idx, excludeKeys, onlyKeys) {
   if (!idx) return [];
   const blocked = blockedDirKeys();
   const out = [];
   for (const [k, keys] of idx.dirTagToKeys) {
     if (blocked.has(k)) continue;
-    let count = keys.size;
-    if (excludeKeys && excludeKeys.size) {
-      count = 0;
-      for (const key of keys) if (!excludeKeys.has(key)) count++;
+    let count = 0;
+    for (const key of keys) {
+      if (excludeKeys && excludeKeys.has(key)) continue;
+      if (onlyKeys && !onlyKeys.has(key)) continue;
+      count++;
     }
     if (!count) continue;
     out.push({ key: k, tag: idx.dirTagForm.get(k) || k, count });
@@ -1146,16 +1147,21 @@ async function doQuery(expr, opts = {}) {
   const { ast, errors } = parseQuery(expr);
   // 侧边栏默认不含隐私；管理台与隐私视图传 includePrivate:true
   const includePrivate = !!opts.includePrivate;
-  const hidden = includePrivate ? null : privacyInfo().keys;
+  const privInfo = privacyInfo();
+  const hidden = includePrivate ? null : privInfo.keys;
+  // 隐私视图：只留隐私组命中的网址，正常书签一律排除
+  const onlyPrivate = opts.onlyPrivate ? privInfo.keys : null;
   // 默认空查询 = 已打标签的书签；侧边栏点「全部书签」时传 includeUntagged，才把未打标签的也算进来
   const taggedKeys = new Set(index.allKeys);
   for (const k of index.untaggedKeys) taggedKeys.delete(k);
   if (hidden) for (const k of hidden) taggedKeys.delete(k);
+  if (onlyPrivate) for (const k of [...taggedKeys]) if (!onlyPrivate.has(k)) taggedKeys.delete(k);
   const dirEnabled = String(config.prefs.folderTags ?? '1') !== '0';
   const keys = ast
     ? evaluate(ast, index, { resolveAlias: (k) => aliasMap.get(k) || k, dirEnabled })
-    : new Set(opts.includeUntagged ? index.allKeys : taggedKeys);
+    : (onlyPrivate ? new Set(onlyPrivate) : new Set(opts.includeUntagged ? index.allKeys : taggedKeys));
   if (hidden) for (const k of [...keys]) if (hidden.has(k)) keys.delete(k);
+  if (onlyPrivate) for (const k of [...keys]) if (!onlyPrivate.has(k)) keys.delete(k);
   const queryTags = collectQueryTags(ast);
   const queryDirs = [...collectQueryDirs(ast)];
   // 裸名（mac）会同时命中同名目录，所以目录栏的高亮与「同枝收窄」也要把它算进去。
@@ -1204,7 +1210,11 @@ async function doQuery(expr, opts = {}) {
   // 隐私模式下未打标签总数、全部/未打标签计数都要按可见集合算
   let visibleUntagged = index.untaggedKeys.size;
   let visibleAll = index.counts.keys;
-  if (hidden) {
+  if (onlyPrivate) {
+    visibleUntagged = 0;
+    for (const k of index.untaggedKeys) if (onlyPrivate.has(k)) visibleUntagged++;
+    visibleAll = onlyPrivate.size;
+  } else if (hidden) {
     visibleUntagged = 0;
     for (const k of index.untaggedKeys) if (!hidden.has(k)) visibleUntagged++;
     visibleAll = index.allKeys.size;
@@ -1226,7 +1236,7 @@ async function doQuery(expr, opts = {}) {
     relatedDirs,
     errors,
     ast: !!ast,
-    allTags: opts.allTags ? globalTagCounts(index, hidden) : null,
+    allTags: opts.allTags ? globalTagCounts(index, hidden, onlyPrivate) : null,
   };
 }
 
@@ -1395,16 +1405,24 @@ async function handle(msg) {
     await ready;
     if (rebuildPending) await rebuild();
     const includePrivate = !!msg.includePrivate;
-    const hidden = includePrivate ? null : privacyInfo().keys;
-    const tags = globalTagCounts(index, hidden);
-    const dirTags = dirTagCounts(index, hidden);
+    const privInfo = privacyInfo();
+    const hidden = includePrivate ? null : privInfo.keys;
+    const onlyPrivate = msg.onlyPrivate ? privInfo.keys : null;
+    const tags = globalTagCounts(index, hidden, onlyPrivate);
+    const dirTags = dirTagCounts(index, hidden, onlyPrivate);
     let visibleUntagged = index ? index.untaggedKeys.size : 0;
     let visibleAll = index ? index.counts.keys : 0;
     let visibleNodes = index ? index.counts.nodes : 0;
     let visibleFolders = 0;
     let visibleDeep = 0;
     if (index) {
-      if (hidden) {
+      if (onlyPrivate) {
+        visibleUntagged = 0;
+        for (const k of index.untaggedKeys) if (onlyPrivate.has(k)) visibleUntagged++;
+        visibleAll = onlyPrivate.size;
+        visibleNodes = 0;
+        for (const k of onlyPrivate) visibleNodes += (index.keyToNodes.get(k) || []).length;
+      } else if (hidden) {
         visibleUntagged = 0;
         for (const k of index.untaggedKeys) if (!hidden.has(k)) visibleUntagged++;
         visibleAll = index.allKeys.size;
@@ -1416,7 +1434,7 @@ async function handle(msg) {
       }
       const paths = new Set();
       for (const k of index.allKeys) {
-        if (hidden && hidden.has(k)) continue;
+        if (onlyPrivate ? !onlyPrivate.has(k) : (hidden && hidden.has(k))) continue;
         for (const rec of index.keyToNodes.get(k) || []) if (rec.path) paths.add(rec.path);
       }
       visibleFolders = paths.size;
@@ -1472,6 +1490,7 @@ async function handle(msg) {
         allTags: !!msg.allTags,
         includeUntagged: !!msg.includeUntagged,
         includePrivate: !!msg.includePrivate,
+        onlyPrivate: !!msg.onlyPrivate,
         limit: msg.limit,
       })),
     };
@@ -2064,10 +2083,13 @@ async function handle(msg) {
       for (const n of Object.values(configNodes)) if (n && n.id) skip.add(String(n.id));
       const trashNow = await resolveTrash(false);
       if (trashNow) skip.add(String(trashNow.id));
-      // 侧边栏目录模式也必须按隐私组过滤；管理台显式带 includePrivate:true
-      const hidden = msg.includePrivate ? null : privacyInfo().keys;
+      // 侧边栏目录模式也必须按隐私组过滤；管理台显式带 includePrivate:true。
+      // 隐私视图传 onlyPrivate:true，只保留隐私组命中的行。
+      const privInfo = privacyInfo();
+      const hidden = msg.includePrivate ? null : privInfo.keys;
+      const onlyPrivate = msg.onlyPrivate ? privInfo.keys : null;
       const all = allTreeRows(skip);
-      rows.push(...(hidden ? all.filter((r) => !hidden.has(r.key)) : all));
+      rows.push(...all.filter((r) => (hidden ? !hidden.has(r.key) : true) && (onlyPrivate ? onlyPrivate.has(r.key) : true)));
       cAll = rows.length;
       cUntagged = rows.filter((r) => !r.tags || !r.tags.length).length;
     } else if (folderId) {
@@ -2210,6 +2232,7 @@ async function handle(msg) {
     // 侧边栏目录树：隐私目录整枝不出现，其余目录的条数也只数看得见的书签
     const sidebar = !!msg.sidebar;
     const hidden = (sidebar && !msg.includePrivate) ? privacyInfo() : null;
+    const onlyPrivate = (sidebar && msg.onlyPrivate) ? privacyInfo().keys : null;
     const privDirs = (hidden ? hidden.dirPaths : []) || [];
     const countOf = (node) => {
       let direct = 0;
@@ -2218,6 +2241,7 @@ async function handle(msg) {
         if (c.url) {
           const key = canonicalUrl(c.url);
           if (hidden && hidden.keys.has(key)) continue;
+          if (onlyPrivate && !onlyPrivate.has(key)) continue;
           direct++; total++;
         } else if (c.children) { const s = countOf(c); total += s.total; }
       }
@@ -2233,6 +2257,7 @@ async function handle(msg) {
         const path = parentPath ? `${parentPath}${PATH_SEP}${node.title}` : node.title;
         if (sidebar && !msg.includePrivate && privDirs.some((p) => path === p || path.startsWith(`${p}${PATH_SEP}`))) continue;
         const c = countOf(node);
+        if (onlyPrivate && !c.total) continue; // 隐私视图只保留真正含隐私书签的目录
         out.push({
           id: node.id,
           title: node.title || '',

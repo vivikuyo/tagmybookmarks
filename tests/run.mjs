@@ -1668,7 +1668,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(bg.includes('const queryKeys = allMode ? null : await queryKeySet(msg.query);') && bg.includes("const limit = allMode ? 20000 :"), 'T147b 全量通道不套查询、上限放宽到 2 万');
   ok(bg.includes("const filter = allMode ? 'all'") && bg.includes("const q = allMode ? '' :") && bg.includes('const folderId = allMode ? null :'), 'T147c 全量通道不做筛选/不限定目录');
   ok(bg.includes("if (allMode || msg.sort === 'tree' || msg.sort === 'dir') {"), 'T147d 全量按书签树序（同目录书签相邻）');
-  ok(pn.includes("send({ type: 'bookmarks:all', includePrivate: !!app.privView })") && pn.includes('app.allRows = r.items || [];') && pn.includes("send({ type: 'folders:list', sidebar: true, includePrivate: !!app.privView })"), 'T147e 一次取全库清单 + 文件夹树并缓存');
+  ok(pn.includes("send({ type: 'bookmarks:all', includePrivate: !!app.privView, onlyPrivate: !!app.privView })") && pn.includes('app.allRows = r.items || [];') && pn.includes("send({ type: 'folders:list', sidebar: true, includePrivate: !!app.privView, onlyPrivate: !!app.privView })"), 'T147e 一次取全库清单 + 文件夹树并缓存');
   ok(pn.includes("if (app.group === 'dir') await loadAllRows();") && pn.includes('jumpToFirstHit();'), 'T147f 每次查询后：先保全量、再跳转');
   ok(pn.includes('const hit = new Set(app.data.items.map((i) => i.key));')
      && pn.includes('if (!target || (r.seq ?? Infinity) < (target.seq ?? Infinity)) target = r;'), 'T147g 跳转目标 = 命中里树序最靠前的那一行');
@@ -1755,10 +1755,10 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
   ok(bg.includes('function allTreeRows(skipIds)') && bg.includes('})(rawTree);'), 'T152a 新增 allTreeRows：递归真实树组行');
   ok(bg.includes('const parsed = parseTitle(n.title || \'\');') && bg.includes('tags: tagsOf(key, parsed),'), 'T152b 行内的标题/标签从书签题解出，不依赖索引');
-  ok(bg.includes('allTreeRows(skip)') && bg.includes('rows.push(...(hidden ? all.filter((r) => !hidden.has(r.key)) : all));') && bg.includes('cAll = rows.length;'), 'T152c allMode 直接吃真实树的行与计数');
+  ok(bg.includes('allTreeRows(skip)') && bg.includes('rows.push(...all.filter((r) => (hidden ? !hidden.has(r.key) : true) && (onlyPrivate ? onlyPrivate.has(r.key) : true)));') && bg.includes('cAll = rows.length;'), 'T152c allMode 直接吃真实树的行与计数');
   ok(bg.includes("} else if (folderId) {") && bg.includes('} else for (const [key, nodes] of index.keyToNodes) {'), 'T152d 索引循环只在非 allMode 分支里跑');
   ok(bg.includes('if (trashNow) skip.add(String(trashNow.id));'), 'T152e 回收站与配置目录不进目录模式');
-  ok(pn.includes("send({ type: 'bookmarks:all', includePrivate: !!app.privView })"), 'T152f 侧边栏仍走同一个 bookmarks:all 通道');
+  ok(pn.includes("send({ type: 'bookmarks:all', includePrivate: !!app.privView, onlyPrivate: !!app.privView })"), 'T152f 侧边栏仍走同一个 bookmarks:all 通道');
 }
 
 
@@ -1804,7 +1804,7 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
 {
   const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
   ok(bg.includes('const taggedKeys = new Set(index.allKeys);') && bg.includes('for (const k of index.untaggedKeys) taggedKeys.delete(k);'), 'T156a 默认空查询仍只算已打标签');
-  ok(bg.includes(': new Set(opts.includeUntagged ? index.allKeys : taggedKeys);'), 'T156b includeUntagged 时才把未打标签算进来');
+  ok(bg.includes(': (onlyPrivate ? new Set(onlyPrivate) : new Set(opts.includeUntagged ? index.allKeys : taggedKeys));'), 'T156b includeUntagged 时才把未打标签算进来');
   ok(bg.includes("includeUntagged: !!msg.includeUntagged"), 'T156d query 通道透传 includeUntagged');
   ok(bg.includes('counts: { all: visibleAll, untagged: visibleUntagged },'), 'T156c counts 同时给全部与未打标签');
 }

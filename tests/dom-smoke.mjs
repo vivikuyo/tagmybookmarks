@@ -670,6 +670,14 @@ if (api) {
     clickByVisual(byName('稍后'));
     ok(api.app.privView === true, '按管理台 1→2→3 顺序点三个按钮也能进入隐私视图');
     await api.exitPrivateView();
+
+    // 乱序（管理台槽位和字母序都不是）不能进
+    api.resetFakeSeq();
+    btns = renderFakes();
+    clickByVisual(byName('阅读'));
+    clickByVisual(byName('稍后'));
+    clickByVisual(byName('收藏'));
+    ok(api.app.privView === false, '乱序点三个伪装按钮不进入隐私视图');
   } catch (e) {
     fail.push('伪装按钮点击抛异常：' + e.message);
   }
