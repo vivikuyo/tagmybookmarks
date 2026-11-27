@@ -6,7 +6,7 @@
   "scripts": {
     "test": "node tests/run.mjs && node tests/dom-smoke.mjs && node tests/e2e-mock.mjs"
   },
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "书签标签化管理扩展：标签写在标题里，随浏览器同步",
   "license": "MIT"
 }
