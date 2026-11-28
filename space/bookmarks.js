@@ -167,7 +167,6 @@ const curPane = () => paneState[activePane];
 
 let selected = paneState.L.selected; // 活动窗格的选中集
 let colors = {};
-let tagCounts = new Map(); // 小写标签名 → 全库条数（行内加标签候选显示用）
 let allTagList = []; // 全库标签 + 条数（批量加标签候选）
 let foldersFlat = [];
 let folderTree = []; // folders:list 的原始树（下拉浮层用）
@@ -1430,7 +1429,7 @@ function renderRow(row, pane, depth = 0) {
   cb.checked = sel.has(row.id);
   cb.addEventListener('change', () => setSelected(row.id, cb.checked, line, cb, sel));
 
-  // 整行可点：只挡真正的交互件（复选框、标题链接、chip、推荐、徽标），
+  // 整行可点：只挡真正的交互件（复选框、标题链接、chip、候选、徽标），
   // 标题右侧、标签行缝隙等空白区都能勾选（与侧边栏一致）
   line.addEventListener('click', (e) => {
     if (e.target.closest('input, button, a, .chip, .x, .bm-badge, .bm-sug')) return;
@@ -1602,7 +1601,7 @@ function openEditor(box, row) {
     }
   });
   input.addEventListener('blur', () => setTimeout(() => {
-    // 点到推荐 chip 时不要立刻关掉
+    // 点到候选 chip 时不要立刻关掉
     if (editor && !document.activeElement?.closest('.bm-sug-item')) closeEditor();
   }, 120));
 
@@ -1619,45 +1618,41 @@ function openEditor(box, row) {
   }
 }
 
-async function fillSuggest(row, text) {
-  const ed = editor;
-  if (!ed) return;
-  let list = [];
-  try {
-    const r = await send({ type: 'suggest:tags', url: row.url, title: row.title, text, limit: 20 });
-    const picked = new Set(splitTagInput(String(text || '')).map((t) => t.toLowerCase()));
-    list = (r.items || []).filter((s) => {
-      const k = s.tag.toLowerCase();
-      return !picked.has(k) && !row.tags.some((t) => t.toLowerCase() === k);
-    });
-  } catch {}
-  if (editor !== ed) return; // 等待期间已换行/关闭，别再写旧浮层
-  const sug = ed.sug;
+/** 行内加标签候选：全库标签按输入框里最后一个词过滤，已打上/已选中的不再出现 */
+function fillSuggest(row, text) {
+  if (!editor) return;
+  const sug = editor.sug;
+  const m = /([^\s,]+)$/.exec(String(text || ''));
+  const needle = m ? m[1].replace(/"/g, '').toLowerCase() : '';
+  const skip = new Set([...row.tags, ...splitTagInput(String(text || ''))].map((t) => t.toLowerCase()));
+  const list = allTagList
+    .filter((t) => {
+      const k = String(t.tag).toLowerCase();
+      return !skip.has(k) && (!needle || k.includes(needle));
+    })
+    .slice(0, 80);
   sug.textContent = '';
   if (!list.length) {
     sug.hidden = true;
     return;
   }
-  for (const s of list) {
+  for (const t of list) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'bm-sug-item';
-    b.style.color = colorFor(s.tag, colors);
-    const count = tagCounts.get(String(s.tag).toLowerCase()) || 0;
-    b.title = `${s.tag}${count ? ` · ${count} 条` : ''}${s.reason ? ` · ${s.reason}` : ''}`;
+    b.style.color = colorFor(t.tag, colors);
+    b.title = `${t.tag} · ${t.count} 条`;
     const name = document.createElement('span');
-    name.textContent = s.tag;
-    b.append(name);
-    if (count) {
-      const c = document.createElement('span');
-      c.className = 'c';
-      c.textContent = count;
-      b.append(c);
-    }
+    name.textContent = t.tag;
+    const c = document.createElement('span');
+    c.className = 'c';
+    c.textContent = t.count;
+    b.append(name, c);
     b.addEventListener('mousedown', (e) => {
       e.preventDefault();
-      const cur = editor.input.value.trim();
-      editor.input.value = cur ? `${cur} ${s.tag}` : s.tag;
+      // 末尾留一个空格：下一次过滤词为空，候选继续整列显示，方便连着选
+      const cur = editor.input.value.replace(/\s+$/, '');
+      editor.input.value = `${cur} ${quoteTag(t.tag)} `;
       editor.input.focus();
       fillSuggest(row, editor.input.value);
     });
@@ -2867,7 +2862,6 @@ export async function init() {
     const s = await send({ type: 'state', includePrivate: true });
     colors = (s.config && s.config.colors) || {};
     allTagList = s.tags || [];
-    tagCounts = new Map(allTagList.map((t) => [String(t.tag).toLowerCase(), t.count]));
   } catch {}
   // 目录折叠状态（下拉树 + 按目录分组共用，存本机）
   try {

@@ -628,15 +628,6 @@ eq(mv.moved, 1, 'E133 移动成功');
 const afterMove = await call({ type: 'bookmarks:page', folderId: moveTo.id });
 ok(afterMove.items.some((x) => x.url === 'https://svelte.dev/'), 'E134 移动到目标目录后出现在该目录');
 
-// 34. 推荐标签（suggest:tags）：同域/标题信号，带理由，且不含目录标签
-const sug = await call({ type: 'suggest:tags', url: 'https://vuejs.org/new', title: 'Vue 新文档' });
-ok((sug.items || []).length > 0, 'E135 推荐有结果');
-ok((sug.items || []).every((x) => x.reason && !x.tag.startsWith('@')), 'E136 每条都有理由，且不带目录标签');
-ok((sug.items || []).some((x) => x.tag === 'Vue' || x.tag === '前端'), 'E137 同域/标题信号命中已有标签');
-
-const sugOwn = await call({ type: 'suggest:tags', url: 'https://vuejs.org/guide/', title: 'Vue 指南' });
-ok(!(sugOwn.items || []).some((x) => x.tag === '前端'), 'E138 已经有的标签不再推荐');
-
 // 35. 全选：bookmarks:ids 与同一筛选下的列表逐条对齐
 const pNow = await call({ type: 'bookmarks:page', limit: 500 });
 const idsAll = await call({ type: 'bookmarks:ids' });

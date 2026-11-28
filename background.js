@@ -450,122 +450,6 @@ async function applyUndo(index) {
   return { ...stat, label: entry.label };
 }
 
-// ---------------------------------------------------------------- 推荐标签
-// 纯本地启发式，五路信号加权；每条都带理由，便于解释与排查。
-// 目录标签（@文件夹）不参与推荐：它是投影，写进标题会和文件夹名打架。
-function hostOf(url) {
-  try {
-    return new URL(url).host || '';
-  } catch {
-    return '';
-  }
-}
-
-function suggestTagsFor({ url, title, text, limit }) {
-  if (!index) return [];
-  const key = canonicalUrl(url || '');
-  const own = new Set((index.keyToTags.get(key) || []).map(tagKey));
-  const titleLow = String(title || '').toLowerCase();
-  const host = hostOf(url || '');
-
-  const scores = new Map(); // tagKey → {tag, score, why:Set}
-  const bump = (tag, tagKey_, add, reason) => {
-    if (!tag) return;
-    const norm = normalizeTagOrNull(tag);
-    if (!norm) return;
-    const k = tagKey(norm);
-    if (own.has(k)) return; // 已经有了不推荐
-    const rec = scores.get(k) || { tag: norm, score: 0, why: new Set() };
-    rec.score += add;
-    if (reason) rec.why.add(reason);
-    scores.set(k, rec);
-  };
-
-  // 1) 标题/地址里直接出现某个已有标签名（≥2 字，忽略大小写）
-  const names = [];
-  for (const [k, tag] of index.tagForm) names.push([k, tag]);
-  const urlLow = String(url || '').toLowerCase();
-  for (const [k, tag] of names) {
-    const t = String(tag).toLowerCase();
-    if (t.length < 2) continue;
-    if (titleLow.includes(t) || urlLow.includes(t)) bump(tag, k, 3, '标题命中');
-  }
-
-  // 2) 同域共现：同一 host 下其他书签最爱用的标签
-  if (host) {
-    const counts = new Map();
-    let max = 1;
-    for (const [k, nodes] of index.keyToNodes) {
-      const u = index.keyToUrl.get(k) || '';
-      if (!u || hostOf(u) !== host) continue;
-      for (const tag of index.keyToTags.get(k) || []) {
-        const kk = tagKey(tag);
-        counts.set(kk, (counts.get(kk) || 0) + 1);
-        if (counts.get(kk) > max) max = counts.get(kk);
-      }
-    }
-    for (const [kk, cnt] of counts) {
-      const tag = index.tagForm.get(kk) || kk;
-      bump(tag, kk, (2 * cnt) / max, cnt > 1 ? `同域 ${cnt} 次` : '同域');
-    }
-  }
-
-  // 3) 同目录常用：这条书签所在文件夹里其他书签的标签
-  const nodes = index.keyToNodes.get(key) || [];
-  const folders = new Set(nodes.map((n) => n.parentId).filter(Boolean));
-  if (folders.size) {
-    const counts = new Map();
-    let max = 1;
-    for (const [k, ns] of index.keyToNodes) {
-      if (!ns.some((n) => folders.has(n.parentId))) continue;
-      if (k === key) continue;
-      for (const tag of index.keyToTags.get(k) || []) {
-        const kk = tagKey(tag);
-        counts.set(kk, (counts.get(kk) || 0) + 1);
-        if (counts.get(kk) > max) max = counts.get(kk);
-      }
-    }
-    for (const [kk, cnt] of counts) {
-      const tag = index.tagForm.get(kk) || kk;
-      bump(tag, kk, (2 * cnt) / max, '同目录常用');
-    }
-  }
-
-  // 4) 别名命中：标题里写了别名，推荐它的规范标签
-  for (const [alias, canonical] of Object.entries(config.aliases || {})) {
-    const a = String(alias || '');
-    if (a.length < 2) continue;
-    if (titleLow.includes(a.toLowerCase()) || urlLow.includes(a.toLowerCase())) {
-      bump(canonical, tagKey(canonical), 2, '别名命中');
-    }
-  }
-
-  // 5) 全局高频（权重最低，只用来补位）
-  const total = new Set(index.allKeys).size || 1;
-  for (const [kk, keys] of index.tagToKeys) {
-    bump(index.tagForm.get(kk) || kk, kk, (1 * keys.size) / total, '全局常用');
-  }
-
-  // 输入中的半截文本也算命中（打字过程中即时提示）
-  const typed = String(text || '').trim().toLowerCase();
-  if (typed && typed.length >= 1) {
-    for (const [k, tag] of names) {
-      const t = String(tag).toLowerCase();
-      if (t.startsWith(typed) || typed.startsWith(t)) bump(tag, k, 1.5, '输入匹配');
-    }
-  }
-
-  const items = [...scores.values()]
-    .sort((a, b) => b.score - a.score || cpCompare(a.tag, b.tag))
-    .slice(0, Math.min(Math.max(Number(limit) || 8, 1), 20))
-    .map((r) => ({
-      tag: r.tag,
-      score: Math.round(r.score * 100) / 100,
-      reason: [...r.why].join(' · ') || '推荐',
-    }));
-  return items;
-}
-
 /**
  * 真实书签树的索引缓存：id→节点、id→路径（PATH_SEP 形态）、id→树序。
  * 书签页按目录取行时用——目录被"排除"只是从标签/查询体系里摘掉，
@@ -700,7 +584,7 @@ async function rebuild() {
   if (exPaths.join('\u0001') !== exEntries.join('\u0001')) {
     await writePrefs({ excludeDirs: joinList(exPaths) });
   }
-  // 回收站自动排除（不占用户自己的排除名单）：删掉的书签不该再出现在查询/云/推荐里
+  // 回收站自动排除（不占用户自己的排除名单）：删掉的书签不该再出现在查询/云里
   const trashPath = String(config.prefs.trashPath || '').trim();
   const skip = trashPath && !exPaths.includes(trashPath) ? [...exPaths, trashPath] : exPaths;
   index = buildIndex(tree, { excludeIds: exclude, skipDirs: skip });
@@ -2043,19 +1927,6 @@ async function handle(msg) {
     await ready;
     const idx = await rebuild();
     return { ok: true, counts: idx.counts };
-  }
-
-  if (type === 'suggest:tags') {
-    await ready;
-    return {
-      ok: true,
-      items: suggestTagsFor({
-        url: msg.url,
-        title: msg.title,
-        text: msg.text,
-        limit: msg.limit,
-      }),
-    };
   }
 
   // ------------------------------------------------ 书签视图（M1/M2）

@@ -2188,8 +2188,8 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const css = readFileSync(new URL('../space/space.css', import.meta.url), 'utf8');
   ok(bm.includes('document.body.append(sug)'), 'T185a 候选浮层挂到 body，避免被行单元格裁掉');
   ok(bm.includes('function placeTagPop') && bm.includes('pop.style.left'), 'T185b 按输入框位置 fixed 定位');
-  ok(bm.includes('b.style.color = colorFor(s.tag, colors)'), 'T185c 候选按标签配色显示');
-  ok(bm.includes('tagCounts = new Map(allTagList.map'), 'T185d 候选带全库标签条数');
+  ok(bm.includes('b.style.color = colorFor(t.tag, colors)'), 'T185c 候选按标签配色显示');
+  ok(bm.includes("b.title = `${t.tag} · ${t.count} 条`"), 'T185d 候选带全库标签条数');
   ok(css.includes('position: fixed; z-index: 250;') && css.includes('.bm-sug-item .c'), 'T185e 浮层与胶囊计数样式');
 }
 
@@ -2215,6 +2215,26 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pn.includes('skipDuplicate: true'), 'T187e 创建时带同目录去重开关');
   ok(bg.includes('if (msg.skipDuplicate)') && bg.includes('existed: true'), 'T187f 后台同目录同网址返回 existed，不再创建');
   ok(pc.includes('.ctx-menu button:disabled'), 'T187g 不可收藏时菜单项置灰');
+}
+
+// T188：推荐标签功能整体移除；弹窗与书签行内的候选都改为全库标签过滤
+{
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  const pp = readFileSync(new URL('../popup/popup.js', import.meta.url), 'utf8');
+  const ph = readFileSync(new URL('../popup/popup.html', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../popup/popup.css', import.meta.url), 'utf8');
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  ok(!bg.includes('suggestTagsFor') && !bg.includes("type === 'suggest:tags'"), 'T188a 后台推荐接口已删');
+  ok(!pp.includes('renderSuggest') && !ph.includes('sugBox'), 'T188b 弹窗「推荐」一栏已删');
+  ok(!bm.includes("type: 'suggest:tags'"), 'T188c 书签行内候选不再依赖推荐');
+  ok(ph.includes('id="tagMenu" class="tag-menu"'), 'T188d 弹窗标签输入框有候选面板');
+  ok(pp.includes('allTagList = st.tags || []') && pp.includes('function renderTagMenu') && pp.includes('function menuNeedle'), 'T188e 弹窗候选取全库标签并按最后一个词过滤');
+  ok(pp.includes("const skip = new Set([...page.tags, ...tagsFromInput(tagInput.value)]"), 'T188f 本页已有和已填入的标签不重复出现');
+  ok(pp.includes("tagInput.addEventListener('focus', openTagMenu)") && pp.includes("tagInput.addEventListener('input'") && pp.includes('renderTagMenu();'), 'T188g 聚焦与输入都刷新候选');
+  ok(pp.includes('function moveMenu') && pp.includes('insertMenuTag(rows[menuIdx].querySelector'), 'T188h 支持 ↑↓ 选择、Enter 填入');
+  ok(pp.includes("if (e.key === 'Escape' && tagMenuEl && !tagMenuEl.hidden)") && pp.includes('closeTagMenu();'), 'T188i Esc 先收候选');
+  ok(pp.includes('b.style.color = colorFor(t.tag, colors)') && pc.includes('.tm-tag.active'), 'T188j 候选按标签配色，带键盘选中态');
+  ok(/\.tag-menu \{\s*margin: 0 10px 8px;\s*max-height: 120px;/.test(pc), 'T188k 候选随内容排布并限高，弹窗不超 600px');
 }
 
 console.log(`\n通过 ${pass} 项`);

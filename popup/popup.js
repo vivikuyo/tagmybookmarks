@@ -1,5 +1,6 @@
 import { colorFor } from '../lib/palette.js';
 import { splitTagInput, normalizeTagOrNull } from '../lib/title.js';
+import { quoteTag } from '../lib/query.js';
 
 const $ = (s) => document.querySelector(s);
 const tagInput = $('#tagInput');
@@ -7,13 +8,15 @@ const btnCollect = $('#btnCollect');
 const toastEl = $('#toast');
 const destSelect = $('#destSelect');
 const previewEl = $('#tagPreview');
+const tagMenuEl = $('#tagMenu');
 
 const DEST_KEY = 'ui:dest';
 
 let page = { url: '', title: '', collected: 0, tags: [], ids: [] };
 let colors = {};
 let foldersFlat = [];
-let sugTimer = null;
+let allTagList = []; // 全库标签 + 条数（标签候选）
+let menuIdx = -1;    // 候选里 ↑↓ 选中的下标
 
 function toast(text, isErr = false) {
   toastEl.textContent = text;
@@ -147,34 +150,83 @@ async function loadFolders() {
   });
 }
 
-async function renderSuggest(text) {
-  const box = $('#sugBox');
-  const chips = $('#sugChips');
-  if (!box || !chips) return;
-  let items = [];
-  try {
-    const r = await send({ type: 'suggest:tags', url: page.url, title: page.title, text: text || '' });
-    items = r.items || [];
-  } catch {}
-  chips.textContent = '';
-  if (!items.length) {
-    box.hidden = true;
+// ---------------------------------------------------------------- 标签候选
+// 与侧边栏批量打标签同款：全库标签按输入框里最后一个词过滤；本页已有的、已经填进去的不重复出现
+
+function menuNeedle() {
+  const m = /([^\s,]+)$/.exec(tagInput.value || '');
+  return m ? m[1].replace(/"/g, '').toLowerCase() : '';
+}
+
+function renderTagMenu() {
+  if (!tagMenuEl || tagMenuEl.hidden) return;
+  const needle = menuNeedle();
+  const skip = new Set([...page.tags, ...tagsFromInput(tagInput.value)].map((t) => t.toLowerCase()));
+  const shown = allTagList.filter((t) => {
+    const k = String(t.tag).toLowerCase();
+    return !skip.has(k) && (!needle || k.includes(needle));
+  });
+  tagMenuEl.textContent = '';
+  menuIdx = -1;
+  if (!shown.length) {
+    const p = document.createElement('div');
+    p.className = 'tm-empty';
+    p.textContent = needle ? '没有匹配的标签' : '还没有标签';
+    tagMenuEl.append(p);
     return;
   }
-  box.hidden = false;
-  for (const s of items.slice(0, 8)) {
+  for (const t of shown) {
     const b = document.createElement('button');
-    b.className = 'sug-chip';
-    b.textContent = s.tag;
-    b.title = s.reason || '';
-    b.addEventListener('click', () => {
-      const cur = tagInput.value.trim();
-      tagInput.value = cur ? `${cur} ${s.tag}` : s.tag;
-      renderPreview();
-      tagInput.focus();
-    });
-    chips.append(b);
+    b.type = 'button';
+    b.className = 'tm-tag';
+    b.style.color = colorFor(t.tag, colors);
+    b.title = `${t.tag} · ${t.count} 条`;
+    const name = document.createElement('span');
+    name.textContent = t.tag;
+    const c = document.createElement('span');
+    c.className = 'c';
+    c.textContent = t.count;
+    b.append(name, c);
+    b.addEventListener('mousedown', (e) => e.preventDefault()); // 别让输入框先失焦，否则候选跟着关
+    b.addEventListener('click', () => insertMenuTag(t.tag));
+    tagMenuEl.append(b);
   }
+}
+
+function openTagMenu() {
+  if (!tagMenuEl) return;
+  tagMenuEl.hidden = false;
+  renderTagMenu();
+}
+
+function closeTagMenu() {
+  if (!tagMenuEl) return;
+  tagMenuEl.hidden = true;
+  menuIdx = -1;
+}
+
+function menuRows() {
+  return [...tagMenuEl.querySelectorAll('.tm-tag')];
+}
+
+function moveMenu(delta) {
+  const rows = menuRows();
+  if (!rows.length) return;
+  menuIdx = (menuIdx + delta + rows.length) % rows.length;
+  rows.forEach((r, i) => r.classList.toggle('active', i === menuIdx));
+  rows[menuIdx].scrollIntoView({ block: 'nearest' });
+}
+
+/** 选中一个候选：替换正在输入的那个词，接在后面；框不关，可以连着选 */
+function insertMenuTag(tag) {
+  const cur = tagInput.value || '';
+  const m = /([^\s,]*)$/.exec(cur);
+  const head = m ? cur.slice(0, m.index) : cur;
+  const sep = head && !/[\s,]$/.test(head) ? ' ' : '';
+  tagInput.value = head + sep + quoteTag(tag) + ' ';
+  renderPreview();
+  tagInput.focus();
+  renderTagMenu();
 }
 
 async function refresh() {
@@ -190,6 +242,7 @@ async function refresh() {
   if (destRow) destRow.hidden = page.collected > 0;
   $('#hint').textContent = page.collected ? '' : '先收藏，才能挂标签';
   renderTags();
+  renderTagMenu(); // 本页标签变了，候选里的"已有标签"要跟着更新
 }
 
 async function addTags() {
@@ -254,25 +307,59 @@ async function boot() {
   try {
     const st = await send({ type: 'state' });
     colors = (st.config && st.config.colors) || {};
+    allTagList = st.tags || [];
   } catch {}
 
   await loadFolders();
   await refresh();
   renderPreview();
-  renderSuggest('').catch(() => {});
 }
 
 btnCollect.addEventListener('click', collectOnly);
 
 tagInput.addEventListener('input', () => {
   renderPreview();
-  clearTimeout(sugTimer);
-  sugTimer = setTimeout(() => renderSuggest(tagInput.value).catch(() => {}), 180);
+  renderTagMenu();
 });
 
+if (tagMenuEl) {
+  tagInput.addEventListener('focus', openTagMenu);
+  tagMenuEl.addEventListener('mousedown', (e) => e.preventDefault());
+  tagInput.addEventListener('blur', () => setTimeout(() => {
+    const a = document.activeElement;
+    // 焦点落到按钮/下拉框时不在这里收：等 click 再收。候选是随内容排布的，
+    // 按下和松开之间就收起会让下方控件上移，这一下就点空了
+    if (a && (a.tagName === 'BUTTON' || a.tagName === 'SELECT' || a.tagName === 'INPUT')) return;
+    closeTagMenu();
+  }, 120));
+  document.addEventListener('click', (e) => {
+    if (tagMenuEl.hidden) return;
+    const t = e.target;
+    if (t === tagInput || (t.closest && t.closest('#tagMenu'))) return;
+    closeTagMenu();
+  });
+}
+
 tagInput.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (tagMenuEl && !tagMenuEl.hidden) {
+      e.preventDefault();
+      moveMenu(e.key === 'ArrowDown' ? 1 : -1);
+    }
+    return;
+  }
+  if (e.key === 'Escape' && tagMenuEl && !tagMenuEl.hidden) {
+    e.stopPropagation(); // 先收候选，不关弹窗
+    closeTagMenu();
+    return;
+  }
   if (e.key === 'Enter') {
     e.preventDefault();
+    const rows = menuRows();
+    if (rows.length && menuIdx >= 0) {
+      insertMenuTag(rows[menuIdx].querySelector('span').textContent);
+      return;
+    }
     addTags();
   }
 });
