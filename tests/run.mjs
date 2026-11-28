@@ -2257,15 +2257,17 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   const ph = readFileSync(new URL('../popup/popup.html', import.meta.url), 'utf8');
   const pj = readFileSync(new URL('../popup/popup.js', import.meta.url), 'utf8');
   const pc = readFileSync(new URL('../popup/popup.css', import.meta.url), 'utf8');
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
   ok(ph.includes('id="destPick"') && ph.includes('id="destPanel"') && ph.includes('id="destSearch"') && ph.includes('id="destList"'), 'T190a 收藏位置改成按钮 + 可搜索面板');
   ok(!ph.includes('<select id="destSelect"') && !pj.includes('destSelect'), 'T190b 原生 select 整套撤掉');
-  ok(pj.includes('function renderDestList()') && pj.includes('function pickDest(id)') && pj.includes('function placeDestPanel()') && pj.includes('function markText(text, words)'), 'T190c 渲染/选中/定位/高亮四个函数都在');
+  ok(pj.includes('function renderDestList()') && pj.includes('function pickDest(id)') && pj.includes('function openDest()') && pj.includes('function markText(text, words)'), 'T190c 渲染/选中/展开/高亮四个函数都在');
   ok(pj.includes("words.every((w) => (f.hay || '').includes(w))") && pj.includes("`${segs.join(' / ')} ${n.title || ''}`.toLowerCase()"), 'T190d 搜索按名字和整条路径匹配，空格分词取交集');
   ok(pj.includes("destSearch.addEventListener('keydown'") && pj.includes("moveDest(e.key === 'ArrowDown' ? 1 : -1)") && pj.includes("if (f) pickDest(f.id)"), 'T190e 方向键移动、回车落第一个');
-  ok(pj.includes("destPanel.style.maxHeight = `${Math.max(120, Math.floor(natural <= room ? natural : room))}px`"), 'T190f 放得下就整块展开，放不下才在列表内滚动');
+  ok(pc.includes('position: fixed; inset: 0;') && pc.includes('body.picking { min-height: 560px; }') && pj.includes("document.body.classList.add('picking')"), 'T190f 选目录时面板铺满弹窗并撑到 560px，一屏看十几行');
   ok(pj.includes("destId = saved && foldersFlat.some((f) => f.id === saved) ? saved : ''") && pj.includes('parentId: destId || undefined,'), 'T190g 落点记住上次选择，收藏时用这个目录');
   ok(pc.includes('.dest-item') && pc.includes('min-height: 26px') && pc.includes('.dest-parent') && pc.includes('.dest-cnt'), 'T190h 目录行紧凑：26px 行高、父路径淡色、条数右对齐');
   ok(!pc.includes('.dest {'), 'T190i 旧 select 样式清掉');
+  ok(bg.includes('if (!depth && !node.title) {') && bg.includes('out.push(...build(node.children, 0, parentPath));'), 'T190j 无名根节点展开成孩子，不再出现「空名 + 全部书签」的一行');
 }
 
 console.log(`\n通过 ${pass} 项`);

@@ -105,32 +105,6 @@ function renderPreview() {
 
 const PATH_SEP = String.fromCharCode(31); // 与后台一致：内部目录路径分隔符
 
-/** 目录面板能放多高：上下取更宽敞的一边，铺满剩余空间；内容放得下就不出滚动条 */
-function placeDestPanel() {
-  if (!destPanel || destPanel.hidden) return;
-  const r = destPick.getBoundingClientRect();
-  const vh = window.innerHeight || 600;
-  const vw = window.innerWidth || 320;
-  const w = Math.max(200, Math.floor(vw - 24));
-  destPanel.style.width = `${w}px`;
-  destPanel.style.left = '12px';
-  destPanel.style.maxHeight = 'none';
-  const natural = destPanel.getBoundingClientRect().height;
-  const below = vh - (r.bottom || 0) - 8;
-  const above = (r.top || 0) - 8;
-  const up = above > below;
-  const room = up ? above : below;
-  // 放得下就整块展开，真放不下才让列表内部滚动（120px = 搜索框加两行）
-  destPanel.style.maxHeight = `${Math.max(120, Math.floor(natural <= room ? natural : room))}px`;
-  if (up) {
-    destPanel.style.top = 'auto';
-    destPanel.style.bottom = `${Math.round(vh - (r.top || 0) + 4)}px`;
-  } else {
-    destPanel.style.bottom = 'auto';
-    destPanel.style.top = `${Math.round((r.bottom || 0) + 4)}px`;
-  }
-}
-
 /** 收起态只留末两级面包屑：320px 宽放不下全路径，尾巴才是你要看的那级 */
 function paintDestPick() {
   if (destFailed) {
@@ -191,7 +165,6 @@ function showDestEmpty(text, retry) {
     e.addEventListener('click', () => loadFolders().then(() => {
       destIdx = 0;
       renderDestList();
-      placeDestPanel();
     }).catch(() => {}));
   }
   destList.append(e);
@@ -235,7 +208,7 @@ function renderDestList() {
     }
     const name = document.createElement('span');
     name.className = 'dest-name';
-    name.append(markText(segs.length ? segs[segs.length - 1] : f.title, words));
+    name.append(markText((segs.length ? segs[segs.length - 1] : f.title) || '(无标题)', words));
     b.append(name);
 
     if (f.total > 0) {
@@ -258,7 +231,7 @@ function openDest() {
   renderDestList();
   destPanel.hidden = false;
   destPick.setAttribute('aria-expanded', 'true');
-  placeDestPanel();
+  document.body.classList.add('picking'); // 顺便把弹窗撑到 560px，一屏能看 18 行左右
   destSearch.focus();
   destSearch.select();
 }
@@ -267,6 +240,7 @@ function closeDest() {
   if (!destPanel || destPanel.hidden) return;
   destPanel.hidden = true;
   destPick.setAttribute('aria-expanded', 'false');
+  document.body.classList.remove('picking');
 }
 
 function pickDest(id) {
@@ -281,7 +255,6 @@ function moveDest(delta) {
   if (!destRows.length) return;
   destIdx = destIdx < 0 ? 0 : Math.min(destRows.length - 1, Math.max(0, destIdx + delta));
   renderDestList();
-  placeDestPanel();
 }
 
 async function loadFolders() {
@@ -535,7 +508,6 @@ if (destPick) {
   destSearch.addEventListener('input', () => {
     destIdx = 0;
     renderDestList();
-    placeDestPanel();
   });
   destSearch.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -555,13 +527,8 @@ if (destPick) {
       destPick.focus();
     }
   });
-  document.addEventListener('click', (e) => {
-    if (destPanel.hidden) return;
-    const t = e.target;
-    if (destPanel.contains(t) || destPick.contains(t)) return;
-    closeDest();
-  });
-  window.addEventListener('resize', () => placeDestPanel());
+  const destClose = $('#destClose');
+  if (destClose) destClose.addEventListener('click', closeDest);
 }
 
 

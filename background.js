@@ -2123,6 +2123,11 @@ async function handle(msg) {
       const out = [];
       for (const node of nodes || []) {
         if (node.url || !node.children) continue;
+        // getTree 的根节点没有名字：把它的孩子提到顶层，别让它变成「空名 + 全部书签」的一行
+        if (!depth && !node.title) {
+          out.push(...build(node.children, 0, parentPath));
+          continue;
+        }
         if (skipIds.has(node.id)) continue;
         if (node.title === CONFIG_DIR_NAME) continue;
         const path = parentPath ? `${parentPath}${PATH_SEP}${node.title}` : node.title;
