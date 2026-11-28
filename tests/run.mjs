@@ -2237,6 +2237,21 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(/\.tag-menu \{\s*margin: 0 10px 8px;\s*max-height: 120px;/.test(pc), 'T188k 候选随内容排布并限高，弹窗不超 600px');
 }
 
+// T189：所有标签候选面板按剩余空间定高——放得下就整列展开，不出滚动条
+{
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const pp = readFileSync(new URL('../popup/popup.js', import.meta.url), 'utf8');
+  const bm = readFileSync(new URL('../space/bookmarks.js', import.meta.url), 'utf8');
+  const tg = readFileSync(new URL('../space/tags.js', import.meta.url), 'utf8');
+  ok(pn.includes('function fitTagMenu') && pn.includes("tagMenuEl.style.maxHeight = 'none'") && pn.includes("tagMenuEl.style.maxHeight = `${Math.max(60, Math.floor(below))}px`"), 'T189a 侧边栏候选按输入框到窗口底部的剩余空间限高');
+  ok(pn.includes('natural <= below || below >= above') && pn.includes('- Math.min(natural, above) - 4'), 'T189b 下方放不下且上方更宽敞时翻到输入框上方');
+  ok(/function renderTagMenu\(list\) \{\s*try \{\s*paintTagMenu\(list\);\s*\} finally \{\s*fitTagMenu\(\);/.test(pn), 'T189c 每次重画候选后重新定高');
+  ok(pn.includes("window.addEventListener('resize', fitTagMenu)") && pn.includes("suggestEl.style.maxHeight = `${Math.max(60"), 'T189d 窗口缩放时重算；查询补全列表同口径');
+  ok(pp.includes('const POPUP_MAX = 600') && pp.includes("el.id === 'toast' || el.hidden") && pp.includes('tagMenuEl.style.maxHeight = `${Math.max(60, Math.floor(avail))}px`'), 'T189e 弹窗候选按 600px 上限减去上下控件后的剩余空间限高');
+  ok(/function placeTagPop\(pop, input\) \{[\s\S]*pop\.style\.maxHeight = 'none';[\s\S]*natural <= below \|\| below >= above/.test(bm) && !bm.includes('const h = 224'), 'T189f 书签页行内/批量候选不再写死 224px');
+  ok(tg.includes('box.style.maxHeight = `${Math.max(60, Math.floor(below))}px`'), 'T189g 隐私标签候选同口径');
+}
+
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);

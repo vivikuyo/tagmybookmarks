@@ -1540,20 +1540,29 @@ function closeEditor() {
   editor = null;
 }
 
-/** 候选浮层贴在输入框下沿：行区可滚动，用 fixed 定位避免被单元格裁掉 */
+/**
+ * 候选浮层贴在输入框下沿：行区可滚动，用 fixed 定位避免被单元格裁掉。
+ * 高度按剩余空间定：内容放得下就整列展开（不出滚动条），真的放不下才在框内滚动；
+ * 下方太挤且上方更宽敞时翻到输入框上方。
+ */
 function placeTagPop(pop, input) {
   if (!pop || pop.hidden || !input) return;
   const r = input.getBoundingClientRect();
   const vw = window.innerWidth || 800;
   const vh = window.innerHeight || 600;
   const w = Math.min(340, Math.max(240, r.width || 260));
-  const h = 224;
-  const left = Math.max(8, Math.min(r.left || 0, vw - w - 8));
-  const top = (vh - (r.bottom || 0) < 180 && (r.top || 0) > h + 12)
-    ? (r.top - h - 4)
-    : ((r.bottom || 0) + 4);
-  pop.style.left = `${Math.round(left)}px`;
-  pop.style.top = `${Math.round(top)}px`;
+  pop.style.maxHeight = 'none';
+  const natural = pop.getBoundingClientRect().height;
+  const below = vh - (r.bottom || 0) - 10;
+  const above = (r.top || 0) - 10;
+  if (natural <= below || below >= above) {
+    pop.style.top = `${Math.round((r.bottom || 0) + 4)}px`;
+    pop.style.maxHeight = `${Math.max(60, Math.floor(below))}px`;
+  } else {
+    pop.style.top = `${Math.round((r.top || 0) - Math.min(natural, above) - 4)}px`;
+    pop.style.maxHeight = `${Math.max(60, Math.floor(above))}px`;
+  }
+  pop.style.left = `${Math.round(Math.max(8, Math.min(r.left || 0, vw - w - 8)))}px`;
   pop.style.width = `${Math.round(w)}px`;
 }
 

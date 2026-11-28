@@ -510,6 +510,7 @@ function bind() {
       scheduleTagMenuClose();
     });
     tagInput.addEventListener('blur', () => scheduleTagMenuClose());
+    window.addEventListener('resize', fitTagMenu);
     tagInput.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !tagMenuEl.hidden) {
         e.stopPropagation();
@@ -2112,6 +2113,36 @@ function holdTagMenu() {
 }
 
 function renderTagMenu(list) {
+  try {
+    paintTagMenu(list);
+  } finally {
+    fitTagMenu(); // 内容变了高度就变：每次重画后重新按剩余空间定高
+  }
+}
+
+/**
+ * 候选框能放多高：按输入框到窗口底部的剩余空间限高。
+ * 内容放得下就整列展开（不出滚动条），真的放不下才在框内滚动；
+ * 下方太挤且上方更宽敞时翻到输入框上方。
+ */
+function fitTagMenu() {
+  if (!tagMenuEl || tagMenuEl.hidden) return;
+  const r = tagInput.getBoundingClientRect();
+  const vh = window.innerHeight || 600;
+  tagMenuEl.style.maxHeight = 'none';
+  const natural = tagMenuEl.getBoundingClientRect().height;
+  const below = vh - (r.bottom || 0) - 10;
+  const above = (r.top || 0) - 10;
+  if (natural <= below || below >= above) {
+    tagMenuEl.style.top = `${Math.round((r.bottom || 0) + 4)}px`;
+    tagMenuEl.style.maxHeight = `${Math.max(60, Math.floor(below))}px`;
+  } else {
+    tagMenuEl.style.top = `${Math.round((r.top || 0) - Math.min(natural, above) - 4)}px`;
+    tagMenuEl.style.maxHeight = `${Math.max(60, Math.floor(above))}px`;
+  }
+}
+
+function paintTagMenu(list) {
   if (!tagMenuEl) return;
   const needle = tagMenuNeedle();
   const src = list || [];
@@ -2175,7 +2206,7 @@ async function openTagMenu() {
   const w = Math.min(268, Math.max(180, vw - 16));
   tagMenuEl.style.width = `${w}px`;
   tagMenuEl.style.left = `${Math.round(Math.max(8, Math.min(r.left || 0, vw - w - 8)))}px`;
-  tagMenuEl.style.top = `${Math.round((r.bottom || 0) + 4)}px`;
+  fitTagMenu(); // 上面那次重画时框还藏着，量不到高度；现在按剩余空间定高、定位
 }
 
 // ---------------------------------------------------------------- 补全
@@ -2604,6 +2635,8 @@ function updateSuggest() {
     suggestEl.append(row);
   });
   suggestEl.hidden = false;
+  // 补全列表同理：按到窗口底部的剩余空间限高，放得下就不出滚动条
+  suggestEl.style.maxHeight = `${Math.max(60, Math.floor((window.innerHeight || 600) - suggestEl.getBoundingClientRect().top - 8))}px`;
 }
 
 function moveSuggest(delta) {

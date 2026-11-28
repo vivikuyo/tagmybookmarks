@@ -159,6 +159,31 @@ function menuNeedle() {
 }
 
 function renderTagMenu() {
+  try {
+    paintTagMenu();
+  } finally {
+    fitTagMenu(); // 内容变了高度就变：每次重画后重新按剩余空间定高
+  }
+}
+
+/**
+ * 候选框能放多高：Chrome 工具栏弹窗最高 600px，减去候选框上方的页面信息、
+ * 下方的预览/「收藏到」/底栏，剩下的都给候选框。放得下就整列展开，不出滚动条。
+ */
+function fitTagMenu() {
+  if (!tagMenuEl || tagMenuEl.hidden) return;
+  const POPUP_MAX = 600;
+  let belowH = 0;
+  for (let el = tagMenuEl.nextElementSibling; el; el = el.nextElementSibling) {
+    if (el.id === 'toast' || el.hidden) continue; // toast 是浮层，不占高度
+    belowH += el.getBoundingClientRect().height;
+  }
+  const top = tagMenuEl.getBoundingClientRect().top;
+  const avail = POPUP_MAX - 6 - top - belowH - 8; // 8 = 候选框的下外边距
+  tagMenuEl.style.maxHeight = `${Math.max(60, Math.floor(avail))}px`;
+}
+
+function paintTagMenu() {
   if (!tagMenuEl || tagMenuEl.hidden) return;
   const needle = menuNeedle();
   const skip = new Set([...page.tags, ...tagsFromInput(tagInput.value)].map((t) => t.toLowerCase()));

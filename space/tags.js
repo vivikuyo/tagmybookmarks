@@ -1182,6 +1182,9 @@ function renderPrivTagSuggest() {
   }
   privSuggestItems = items;
   box.hidden = false;
+  // 放得下就整列展开：按到窗口底部的剩余空间限高，真的放不下才在框内滚动
+  const below = (window.innerHeight || 600) - box.getBoundingClientRect().top - 10;
+  box.style.maxHeight = `${Math.max(60, Math.floor(below))}px`;
 }
 
 function movePrivTagSuggest(delta) {
