@@ -6,7 +6,11 @@ const $ = (s) => document.querySelector(s);
 const tagInput = $('#tagInput');
 const btnCollect = $('#btnCollect');
 const toastEl = $('#toast');
-const destSelect = $('#destSelect');
+const destPick = $('#destPick');
+const destPickText = $('#destPickText');
+const destPanel = $('#destPanel');
+const destSearch = $('#destSearch');
+const destList = $('#destList');
 const previewEl = $('#tagPreview');
 const tagMenuEl = $('#tagMenu');
 
@@ -15,6 +19,10 @@ const DEST_KEY = 'ui:dest';
 let page = { url: '', title: '', collected: 0, tags: [], ids: [] };
 let colors = {};
 let foldersFlat = [];
+let destId = '';        // 当前收藏位置：'' = TagSpace 收件箱
+let destRows = [];      // 目录面板当前渲染出来的行（含收件箱）
+let destIdx = -1;       // ↑↓ 高亮的下标
+let destFailed = false; // 目录没取到：面板里给一行重试
 let allTagList = []; // 全库标签 + 条数（标签候选）
 let menuIdx = -1;    // 候选里 ↑↓ 选中的下标
 
@@ -95,59 +103,228 @@ function renderPreview() {
   }
 }
 
+const PATH_SEP = String.fromCharCode(31); // 与后台一致：内部目录路径分隔符
+
+/** 目录面板能放多高：上下取更宽敞的一边，铺满剩余空间；内容放得下就不出滚动条 */
+function placeDestPanel() {
+  if (!destPanel || destPanel.hidden) return;
+  const r = destPick.getBoundingClientRect();
+  const vh = window.innerHeight || 600;
+  const vw = window.innerWidth || 320;
+  const w = Math.max(200, Math.floor(vw - 24));
+  destPanel.style.width = `${w}px`;
+  destPanel.style.left = '12px';
+  destPanel.style.maxHeight = 'none';
+  const natural = destPanel.getBoundingClientRect().height;
+  const below = vh - (r.bottom || 0) - 8;
+  const above = (r.top || 0) - 8;
+  const up = above > below;
+  const room = up ? above : below;
+  // 放得下就整块展开，真放不下才让列表内部滚动（120px = 搜索框加两行）
+  destPanel.style.maxHeight = `${Math.max(120, Math.floor(natural <= room ? natural : room))}px`;
+  if (up) {
+    destPanel.style.top = 'auto';
+    destPanel.style.bottom = `${Math.round(vh - (r.top || 0) + 4)}px`;
+  } else {
+    destPanel.style.bottom = 'auto';
+    destPanel.style.top = `${Math.round((r.bottom || 0) + 4)}px`;
+  }
+}
+
+/** 收起态只留末两级面包屑：320px 宽放不下全路径，尾巴才是你要看的那级 */
+function paintDestPick() {
+  if (destFailed) {
+    destPickText.textContent = '目录加载失败，点此重试';
+    destPick.title = '目录加载失败，点此重试';
+    return;
+  }
+  const f = destId ? foldersFlat.find((x) => x.id === destId) : null;
+  const segs = f && f.path ? f.path.split(PATH_SEP).filter(Boolean) : [];
+  destPickText.textContent = segs.length ? segs.slice(-2).join(' › ') : 'TagSpace 收件箱（默认）';
+  destPick.title = segs.length ? `收藏到：${segs.join(' › ')}` : '收藏到 TagSpace 收件箱';
+}
+
+/** 命中词包成 <mark>，其余原样拼——不拼 innerHTML，目录名里带符号也不会出事 */
+function markText(text, words) {
+  const frag = document.createDocumentFragment();
+  const head = String(text || '');
+  if (!words.length || !head) {
+    frag.append(head);
+    return frag;
+  }
+  const lower = head.toLowerCase();
+  const spans = [];
+  for (const w of words) {
+    let from = 0;
+    while (from <= lower.length) {
+      const at = lower.indexOf(w, from);
+      if (at < 0) break;
+      spans.push([at, at + w.length]);
+      from = at + w.length;
+    }
+  }
+  spans.sort((x, y) => x[0] - y[0]);
+  const merged = [];
+  for (const sp of spans) {
+    const last = merged[merged.length - 1];
+    if (last && sp[0] <= last[1]) last[1] = Math.max(last[1], sp[1]);
+    else merged.push(sp.slice());
+  }
+  let pos = 0;
+  for (const [st, ed] of merged) {
+    if (st > pos) frag.append(head.slice(pos, st));
+    const m = document.createElement('mark');
+    m.textContent = head.slice(st, ed);
+    frag.append(m);
+    pos = ed;
+  }
+  if (pos < head.length) frag.append(head.slice(pos));
+  return frag;
+}
+
+function showDestEmpty(text, retry) {
+  const e = document.createElement(retry ? 'button' : 'div');
+  e.className = 'dest-empty';
+  e.textContent = text;
+  if (retry) {
+    e.type = 'button';
+    e.addEventListener('click', () => loadFolders().then(() => {
+      destIdx = 0;
+      renderDestList();
+      placeDestPanel();
+    }).catch(() => {}));
+  }
+  destList.append(e);
+}
+
+function renderDestList() {
+  const words = destSearch.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const inbox = { id: '', title: 'TagSpace 收件箱（默认）', path: '', depth: 0, total: 0, hay: 'tagspace 收件箱 默认' };
+  destRows = [inbox, ...foldersFlat].filter((f) => words.every((w) => (f.hay || '').includes(w)));
+  if (destIdx >= destRows.length) destIdx = destRows.length - 1;
+  if (!destRows.length) destIdx = -1;
+
+  destList.textContent = '';
+  if (destFailed) {
+    showDestEmpty('目录没取到', true);
+    return;
+  }
+  if (!destRows.length) {
+    showDestEmpty('没有匹配的目录');
+    return;
+  }
+  destRows.forEach((f, i) => {
+    const segs = f.path ? f.path.split(PATH_SEP).filter(Boolean) : [];
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'dest-item' + (f.id === destId ? ' sel' : '') + (i === destIdx ? ' on' : '');
+    b.style.paddingLeft = `${6 + Math.min(f.depth || 0, 3) * 10}px`; // 缩进最多三级，全角空格缩进这套不用了
+    b.setAttribute('role', 'option');
+    b.setAttribute('aria-selected', f.id === destId ? 'true' : 'false');
+
+    const tick = document.createElement('span');
+    tick.className = 'dest-tick';
+    tick.textContent = f.id === destId ? '✓' : '';
+    b.append(tick);
+
+    if (segs.length > 1) {
+      const par = document.createElement('span');
+      par.className = 'dest-parent';
+      par.append(markText(`${segs.slice(0, -1).slice(-2).join(' › ')} ›`, words));
+      b.append(par);
+    }
+    const name = document.createElement('span');
+    name.className = 'dest-name';
+    name.append(markText(segs.length ? segs[segs.length - 1] : f.title, words));
+    b.append(name);
+
+    if (f.total > 0) {
+      const c = document.createElement('span');
+      c.className = 'dest-cnt';
+      c.textContent = String(f.total);
+      b.append(c);
+    }
+    b.addEventListener('click', () => pickDest(f.id));
+    destList.append(b);
+  });
+  const cur = destList.children[destIdx];
+  if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
+}
+
+function openDest() {
+  if (!destPanel) return;
+  destSearch.value = '';
+  destIdx = destFailed || !foldersFlat.length ? -1 : 0;
+  renderDestList();
+  destPanel.hidden = false;
+  destPick.setAttribute('aria-expanded', 'true');
+  placeDestPanel();
+  destSearch.focus();
+  destSearch.select();
+}
+
+function closeDest() {
+  if (!destPanel || destPanel.hidden) return;
+  destPanel.hidden = true;
+  destPick.setAttribute('aria-expanded', 'false');
+}
+
+function pickDest(id) {
+  destId = id || '';
+  chrome.storage.local.set({ [DEST_KEY]: destId }).catch(() => {});
+  paintDestPick();
+  closeDest();
+  destPick.focus();
+}
+
+function moveDest(delta) {
+  if (!destRows.length) return;
+  destIdx = destIdx < 0 ? 0 : Math.min(destRows.length - 1, Math.max(0, destIdx + delta));
+  renderDestList();
+  placeDestPanel();
+}
+
 async function loadFolders() {
   let tree = [];
-  // 后台 service worker 冷启动时首次消息可能失败：重试一次，避免收藏位置下拉空白
+  // 后台 service worker 冷启动时首次消息可能失败：重试一次，避免目录面板空白
   for (let i = 0; i < 2; i++) {
     try {
       const r = await send({ type: 'folders:list' });
       tree = r.tree || [];
+      destFailed = false;
       break;
     } catch (e) {
       if (i === 1) {
-        const destRow = $('#destRow');
-        if (destRow) {
-          destRow.hidden = false;
-          destSelect.textContent = '';
-          const opt = document.createElement('option');
-          opt.value = '';
-          opt.textContent = '目录加载失败，点此重试';
-          destSelect.append(opt);
-          destSelect.addEventListener('change', () => loadFolders().then(refresh).catch(() => {}), { once: true });
-        }
+        destFailed = true;
+        foldersFlat = [];
       }
     }
   }
-  foldersFlat = [];
-  const walk = (nodes, depth) => {
-    for (const n of nodes || []) {
-      foldersFlat.push({ id: n.id, title: n.title, depth, total: n.total });
-      walk(n.children, depth + 1);
-    }
-  };
-  walk(tree, 0);
 
-  destSelect.textContent = '';
-  const inbox = document.createElement('option');
-  inbox.value = '';
-  inbox.textContent = 'TagSpace 收件箱（默认）';
-  destSelect.append(inbox);
-  for (const f of foldersFlat) {
-    const opt = document.createElement('option');
-    opt.value = f.id;
-    opt.textContent = `${'　'.repeat(f.depth)}${f.title || '(无标题)'} · ${f.total}`;
-    destSelect.append(opt);
+  if (!destFailed) {
+    foldersFlat = [];
+    const walk = (nodes, depth) => {
+      for (const n of nodes || []) {
+        const segs = n.path ? n.path.split(PATH_SEP).filter(Boolean) : [];
+        foldersFlat.push({
+          id: n.id,
+          title: n.title || '',
+          path: n.path || '',
+          depth,
+          total: n.total,
+          hay: `${segs.join(' / ')} ${n.title || ''}`.toLowerCase(), // 名字、整条路径都能搜到
+        });
+        walk(n.children, depth + 1);
+      }
+    };
+    walk(tree, 0);
+    try {
+      const o = await chrome.storage.local.get(DEST_KEY);
+      const saved = String((o && o[DEST_KEY]) || '');
+      destId = saved && foldersFlat.some((f) => f.id === saved) ? saved : '';
+    } catch {}
   }
-
-  try {
-    const o = await chrome.storage.local.get(DEST_KEY);
-    const saved = o && o[DEST_KEY];
-    if (saved && foldersFlat.some((f) => f.id === saved)) destSelect.value = saved;
-  } catch {}
-
-  destSelect.addEventListener('change', () => {
-    chrome.storage.local.set({ [DEST_KEY]: destSelect.value }).catch(() => {});
-  });
+  paintDestPick();
 }
 
 // ---------------------------------------------------------------- 标签候选
@@ -279,7 +456,7 @@ async function addTags() {
   try {
     if (!page.collected) {
       // 未收藏：按所选目录创建 + 打标签
-      const parentId = destSelect.value || undefined;
+      const parentId = destId || undefined;
       const r = await send({
         type: 'bookmark:create',
         url: page.url,
@@ -309,7 +486,7 @@ async function collectOnly() {
       type: 'bookmark:create',
       url: page.url,
       title: page.title,
-      parentId: destSelect.value || undefined,
+      parentId: destId || undefined,
       tags: tagsFromInput(tagInput.value),
     });
     tagInput.value = '';
@@ -341,6 +518,52 @@ async function boot() {
 }
 
 btnCollect.addEventListener('click', collectOnly);
+
+if (destPick) {
+  destPick.addEventListener('click', () => {
+    if (destPanel.hidden) openDest();
+    else closeDest();
+  });
+  destPick.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      openDest();
+    }
+  });
+  // 面板内按下不抢焦点：否则搜索框一失焦、列表跟着塌，这一下就点空了
+  destPanel.addEventListener('mousedown', (e) => e.preventDefault());
+  destSearch.addEventListener('input', () => {
+    destIdx = 0;
+    renderDestList();
+    placeDestPanel();
+  });
+  destSearch.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      moveDest(e.key === 'ArrowDown' ? 1 : -1);
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const f = destRows[destIdx] || destRows[0];
+      if (f) pickDest(f.id);
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.stopPropagation(); // 只收目录面板，不连弹窗一起关
+      closeDest();
+      destPick.focus();
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (destPanel.hidden) return;
+    const t = e.target;
+    if (destPanel.contains(t) || destPick.contains(t)) return;
+    closeDest();
+  });
+  window.addEventListener('resize', () => placeDestPanel());
+}
+
 
 tagInput.addEventListener('input', () => {
   renderPreview();
