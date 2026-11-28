@@ -3,6 +3,8 @@ import { splitTagInput, normalizeTagOrNull } from '../lib/title.js';
 import { quoteTag } from '../lib/query.js';
 
 const $ = (s) => document.querySelector(s);
+const ptitleInput = $('#ptitle');
+const purlInput = $('#purl');
 const tagInput = $('#tagInput');
 const btnCollect = $('#btnCollect');
 const toastEl = $('#toast');
@@ -23,6 +25,7 @@ let destId = '';        // 当前收藏位置：'' = TagSpace 收件箱
 let destRows = [];      // 目录面板当前渲染出来的行（含收件箱）
 let destIdx = -1;       // ↑↓ 高亮的下标
 let destFailed = false; // 目录没取到：面板里给一行重试
+let pageDirty = false; // 名称/网址被手动改过：刷新时不要拿后台的值盖掉
 let allTagList = []; // 全库标签 + 条数（标签候选）
 let menuIdx = -1;    // 候选里 ↑↓ 选中的下标
 
@@ -41,6 +44,22 @@ function send(msg) {
   });
 }
 
+/**
+ * 这次要收藏的名字和网址：用输入框里的值（允许未收藏时手动改），
+ * 空标题退回网址，空网址退回当前页原始地址。
+ */
+function collectTarget() {
+  const url = (purlInput.value || '').trim() || page.url;
+  const title = (ptitleInput.value || '').trim() || url;
+  return { url, title };
+}
+
+function paintPageFields() {
+  if (pageDirty) return;
+  ptitleInput.value = page.title || page.url;
+  purlInput.value = page.url;
+}
+
 function tagsFromInput(value) {
   return splitTagInput(value)
     .map(normalizeTagOrNull)
@@ -51,12 +70,16 @@ function renderTags() {
   const box = $('#tags');
   box.textContent = '';
   if (!page.tags.length) {
+    // 未收藏时状态只在「收藏到」下面写一行，这里不再重复一句
+    box.hidden = !page.collected;
+    if (!page.collected) return;
     const tip = document.createElement('span');
     tip.className = 'empty-tip';
-    tip.textContent = page.collected ? '还没有标签' : '这个页面还没被收藏';
+    tip.textContent = '还没有标签';
     box.append(tip);
     return;
   }
+  box.hidden = false;
   for (const tag of page.tags) {
     const chip = document.createElement('span');
     chip.className = 'chip';
@@ -106,8 +129,8 @@ function renderPreview() {
 const PATH_SEP = String.fromCharCode(31); // 与后台一致：内部目录路径分隔符
 
 /**
- * 面板贴在「收藏到」上沿向上展开（控件已经在底部，上方是空的）。
- * 高度 = min(内容自然高度, 上方剩余空间)：内容少就收着，多了才限高滚动。
+ * 面板贴在「收藏到」下沿展开（控件已经挪到第一行，下面空得很）。
+ * 高度 = min(内容自然高度, 可用空间)：内容少就收着，多了才限高滚动。
  */
 function placeDestPanel() {
   if (!destPanel || destPanel.hidden) return;
@@ -439,8 +462,10 @@ async function refresh() {
   btnCollect.hidden = page.collected > 0;
   const destRow = $('#destRow');
   if (destRow) destRow.hidden = page.collected > 0;
-  document.body.classList.toggle('can-pick', page.collected === 0);
-  $('#hint').textContent = page.collected ? '' : '先收藏，才能挂标签';
+  // 已收藏的书签不在这一屏改名改网址（那要动已有书签），这里只做本次收藏的预填
+  ptitleInput.readOnly = page.collected > 0;
+  purlInput.readOnly = page.collected > 0;
+  paintPageFields();
   renderTags();
   renderTagMenu(); // 本页标签变了，候选里的"已有标签"要跟着更新
 }
@@ -455,13 +480,17 @@ async function addTags() {
     if (!page.collected) {
       // 未收藏：按所选目录创建 + 打标签
       const parentId = destId || undefined;
+      const target = collectTarget();
       const r = await send({
         type: 'bookmark:create',
-        url: page.url,
-        title: page.title,
+        url: target.url,
+        title: target.title,
         parentId,
         tags,
       });
+      page.url = target.url;   // 之后的状态查询跟着改过的网址走
+      page.title = target.title;
+      pageDirty = false;
       tagInput.value = '';
       renderPreview();
       await refresh();
@@ -480,13 +509,17 @@ async function addTags() {
 
 async function collectOnly() {
   try {
+    const target = collectTarget();
     const r = await send({
       type: 'bookmark:create',
-      url: page.url,
-      title: page.title,
+      url: target.url,
+      title: target.title,
       parentId: destId || undefined,
       tags: tagsFromInput(tagInput.value),
     });
+    page.url = target.url;
+    page.title = target.title;
+    pageDirty = false;
     tagInput.value = '';
     renderPreview();
     await refresh();
@@ -501,8 +534,7 @@ async function boot() {
   page.url = (tab && tab.url) || '';
   page.title = (tab && tab.title) || '';
 
-  $('#ptitle').textContent = page.title || page.url;
-  $('#purl').textContent = page.url;
+  paintPageFields();
 
   try {
     const st = await send({ type: 'state' });
@@ -514,6 +546,9 @@ async function boot() {
   await refresh();
   renderPreview();
 }
+
+ptitleInput.addEventListener('input', () => { pageDirty = true; });
+purlInput.addEventListener('input', () => { pageDirty = true; });
 
 btnCollect.addEventListener('click', collectOnly);
 

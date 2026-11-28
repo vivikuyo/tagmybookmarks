@@ -14,8 +14,19 @@
   </header>
 
   <div class="page">
-    <div id="ptitle" class="ptitle">…</div>
-    <div id="purl" class="purl"></div>
+    <input id="ptitle" class="ptitle" type="text" spellcheck="false" aria-label="书签名称" />
+    <input id="purl" class="purl" type="text" spellcheck="false" aria-label="书签网址" />
+    <div id="destRow" class="row-dest">
+      <span class="dest-cap">收藏到</span>
+      <button id="destPick" class="dest-pick" type="button" aria-haspopup="listbox" aria-expanded="false" title="选择收藏到的目录">
+        <span id="destPickText" class="dest-pick-text">TagSpace 收件箱（默认）</span>
+        <span class="dest-caret" aria-hidden="true">▾</span>
+      </button>
+    </div>
+    <div id="destPanel" class="dest-panel" hidden>
+      <input id="destSearch" class="dest-search" type="text" placeholder="搜目录，回车选第一个" autocomplete="off" spellcheck="false" />
+      <div id="destList" class="dest-list" role="listbox"></div>
+    </div>
     <div id="pcoll" class="pcoll"></div>
   </div>
 
@@ -26,25 +37,10 @@
   </div>
   <div id="tagMenu" class="tag-menu" hidden></div>
   <div id="tagPreview" class="tag-preview" hidden></div>
-  <div class="hint-line">空格 / 逗号 分隔多个标签；<b>"Chrome 扩展"</b> 用引号包住算一个标签</div>
-
-  <div class="dest-grow" aria-hidden="true"></div>
-
-  <div id="destRow" class="row-dest">
-    <span class="dest-cap">收藏到</span>
-    <button id="destPick" class="dest-pick" type="button" aria-haspopup="listbox" aria-expanded="false" title="选择收藏到的目录">
-      <span id="destPickText" class="dest-pick-text">TagSpace 收件箱（默认）</span>
-      <span class="dest-caret" aria-hidden="true">▾</span>
-    </button>
-  </div>
-  <div id="destPanel" class="dest-panel" hidden>
-    <input id="destSearch" class="dest-search" type="text" placeholder="搜目录，回车选第一个" autocomplete="off" spellcheck="false" />
-    <div id="destList" class="dest-list" role="listbox"></div>
-  </div>
+  <div class="hint-line">Tag 用「，」或「空格」分开，带空格的 Tag 加「""」。（示例）</div>
 
   <footer class="foot">
     <button id="btnCollect" class="btn ghost" hidden>收藏到这个目录</button>
-    <span id="hint" class="hint"></span>
   </footer>
 
   <div id="toast" class="toast" hidden></div>

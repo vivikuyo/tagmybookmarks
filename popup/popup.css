@@ -56,12 +56,17 @@ body {
 .link:hover { color: var(--accent); }
 
 .page { padding: 9px 10px 4px; }
-.ptitle {
-  font-weight: 600;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  overflow: hidden;
+/* 名称和网址是输入框：未收藏时能改，收藏时用改完的值 */
+.ptitle, .purl {
+  display: block; width: 100%; box-sizing: border-box;
+  border: 0; border-bottom: 1px solid transparent; background: none; outline: none;
+  padding: 1px 0; color: var(--text); font: inherit;
 }
-.purl { color: var(--text-dim); font-size: 11px; margin-top: 2px; word-break: break-all; }
+.ptitle { font-weight: 600; }
+.purl { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+.ptitle:not([readonly]):hover, .purl:not([readonly]):hover { border-bottom-color: var(--line); }
+.ptitle:focus, .purl:focus { border-bottom-color: var(--accent); }
+.ptitle[readonly], .purl[readonly] { cursor: default; }
 .pcoll { margin-top: 4px; font-size: 11px; color: var(--text-dim); }
 
 .tags {
@@ -142,7 +147,7 @@ body {
 .hint-line { padding: 0 12px 6px; font-size: 11px; color: var(--text-dim); line-height: 1.5; }
 .hint-line b { font-weight: 600; }
 
-.row-dest { display: flex; align-items: center; gap: 8px; padding: 2px 12px 10px; }
+.row-dest { display: flex; align-items: center; gap: 8px; padding: 6px 0 2px; }
 .dest-cap { font-size: 12px; color: var(--text-dim); flex: 0 0 auto; }
 /* 收藏位置：一行面包屑按钮，点开是可搜索的目录面板（原生 select 没法搜、缩进也撑不开） */
 .dest-pick {
@@ -154,12 +159,6 @@ body {
 .dest-pick:hover { border-color: var(--accent); }
 .dest-pick-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dest-caret { flex: 0 0 auto; color: var(--text-dim); font-size: 11px; }
-
-/* 未收藏时把弹窗撑高，并让「收藏到」这一行贴到底：上方空出来的都留给目录面板，
-   面板仍然贴在控件上方、高度随内容走，不做整页切换 */
-body.can-pick { min-height: 560px; }
-.dest-grow { flex: 0 0 auto; height: 0; }
-body.can-pick .dest-grow { flex: 1 1 auto; }
 
 .dest-panel {
   position: fixed; z-index: 60; left: 10px; right: 10px;

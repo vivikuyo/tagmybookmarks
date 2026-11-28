@@ -2264,7 +2264,21 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pj.includes("words.every((w) => (f.hay || '').includes(w))") && pj.includes("`${segs.join(' / ')} ${n.title || ''}`.toLowerCase()"), 'T190d 搜索按名字和整条路径匹配，空格分词取交集');
   ok(pj.includes("destSearch.addEventListener('keydown'") && pj.includes("moveDest(e.key === 'ArrowDown' ? 1 : -1)") && pj.includes("if (f) pickDest(f.id)"), 'T190e 方向键移动、回车落第一个');
   ok(pj.includes('function placeDestPanel()') && pj.includes("destPanel.style.maxHeight = `${Math.min(Math.ceil(natural), room)}px`"), 'T190f 面板高度取「内容高度」与「上方空间」的较小值：内容少就收、多了才滚');
-  ok(pc.includes('body.can-pick { min-height: 560px; }') && pj.includes("document.body.classList.toggle('can-pick', page.collected === 0)") && pc.includes('body.can-pick .dest-grow'), 'T190k 未收藏时弹窗撑到 560px，「收藏到」贴底，上方留给出面板');
+  ok(!pc.includes('can-pick') && !ph.includes('dest-grow') && !pj.includes('can-pick'), 'T190k 撤掉人为撑高，「收藏到」不再被弹性空白推到最底');
+
+// T191：收藏到上移到第一行、名称网址可编辑、去提示、新文案
+{
+  const ph = readFileSync(new URL('../popup/popup.html', import.meta.url), 'utf8');
+  const pj = readFileSync(new URL('../popup/popup.js', import.meta.url), 'utf8');
+  ok(ph.indexOf('id="ptitle"') < ph.indexOf('id="destRow"') && ph.indexOf('id="destRow"') < ph.indexOf('id="pcoll"'), 'T191a 「收藏到」排在名称/网址之后、状态行之前');
+  ok(ph.includes('<input id="ptitle"') && ph.includes('<input id="purl"') && pj.includes('ptitleInput.readOnly = page.collected > 0'), 'T191b 名称/网址是输入框，已收藏时转只读');
+  ok(pj.includes('function collectTarget()') && pj.includes('const target = collectTarget();') && pj.includes('page.url = target.url;'), 'T191c 收藏用输入框里的值，收藏后状态查询跟着改过的网址走');
+  ok(pj.includes('if (pageDirty) return;') && pj.includes('pageDirty = true;'), 'T191d 手改过的名称/网址不被刷新覆盖');
+  ok(!ph.includes('先收藏，才能挂标签') && !pj.includes('先收藏，才能挂标签') && !ph.includes('id="hint"'), 'T191e 去掉底部「先收藏，才能挂标签」');
+  ok(ph.includes('Tag 用「，」或「空格」分开，带空格的 Tag 加「""」。（示例）'), 'T191f 提示文案改成新写法');
+  ok(pj.includes('box.hidden = !page.collected;') && !pj.includes('这个页面还没被收藏'), 'T191g 未收藏时不再重复一句状态');
+}
+
   ok(pj.includes("destId = saved && foldersFlat.some((f) => f.id === saved) ? saved : ''") && pj.includes('parentId: destId || undefined,'), 'T190g 落点记住上次选择，收藏时用这个目录');
   ok(pc.includes('.dest-item') && pc.includes('min-height: 26px') && pc.includes('.dest-parent') && pc.includes('.dest-cnt'), 'T190h 目录行紧凑：26px 行高、父路径淡色、条数右对齐');
   ok(!pc.includes('.dest {'), 'T190i 旧 select 样式清掉');
