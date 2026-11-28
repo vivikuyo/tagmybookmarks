@@ -160,6 +160,9 @@ body {
 .dest-pick-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dest-caret { flex: 0 0 auto; color: var(--text-dim); font-size: 11px; }
 
+/* 打开目录面板时把弹窗撑到 590（Chrome 上限 600）：不撑的话整窗只有两百多高，
+   面板刚出四五行就被窗口底边裁掉，看着像"没展开到底"。关掉即缩回。 */
+body.picking { min-height: 590px; }
 .dest-panel {
   position: fixed; z-index: 60; left: 10px; right: 10px;
   display: flex; flex-direction: column; overflow: hidden;

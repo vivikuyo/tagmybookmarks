@@ -135,7 +135,8 @@ const PATH_SEP = String.fromCharCode(31); // 与后台一致：内部目录路�
 function placeDestPanel() {
   if (!destPanel || destPanel.hidden) return;
   const r = destPick.getBoundingClientRect();
-  const vh = window.innerHeight || 560;
+  // 用弹窗上限算，不用 innerHeight：撑高那一帧窗口还没 resize，测出来还是旧值
+  const vh = 590;
   destPanel.style.maxHeight = 'none';
   const natural = destPanel.getBoundingClientRect().height;
   const below = vh - (r.bottom || 0) - 8;
@@ -279,6 +280,7 @@ function openDest() {
   renderDestList();
   destPanel.hidden = false;
   destPick.setAttribute('aria-expanded', 'true');
+  document.body.classList.add('picking'); // 先把弹窗长高，才有地方铺列表
   placeDestPanel();
   destSearch.focus();
   destSearch.select();
@@ -288,6 +290,7 @@ function closeDest() {
   if (!destPanel || destPanel.hidden) return;
   destPanel.hidden = true;
   destPick.setAttribute('aria-expanded', 'false');
+  document.body.classList.remove('picking');
 }
 
 function pickDest(id) {

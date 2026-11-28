@@ -2264,7 +2264,8 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pj.includes("words.every((w) => (f.hay || '').includes(w))") && pj.includes("`${segs.join(' / ')} ${n.title || ''}`.toLowerCase()"), 'T190d 搜索按名字和整条路径匹配，空格分词取交集');
   ok(pj.includes("destSearch.addEventListener('keydown'") && pj.includes("moveDest(e.key === 'ArrowDown' ? 1 : -1)") && pj.includes("if (f) pickDest(f.id)"), 'T190e 方向键移动、回车落第一个');
   ok(pj.includes('function placeDestPanel()') && pj.includes("destPanel.style.maxHeight = `${Math.min(Math.ceil(natural), room)}px`"), 'T190f 面板高度取「内容高度」与「上方空间」的较小值：内容少就收、多了才滚');
-  ok(!pc.includes('can-pick') && !ph.includes('dest-grow') && !pj.includes('can-pick'), 'T190k 撤掉人为撑高，「收藏到」不再被弹性空白推到最底');
+  ok(!pc.includes('can-pick') && !ph.includes('dest-grow') && !pj.includes('can-pick'), 'T190k 撤掉常驻撑高，「收藏到」不再被弹性空白推到最底');
+  ok(pc.includes('body.picking { min-height: 590px; }') && pj.includes("document.body.classList.add('picking')") && pj.includes('const vh = 590;'), 'T190l 只在面板打开时把弹窗撑到 590，列表才能铺到底');
 
 // T191：收藏到上移到第一行、名称网址可编辑、去提示、新文案
 {
