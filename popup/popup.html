@@ -28,6 +28,8 @@
   <div id="tagPreview" class="tag-preview" hidden></div>
   <div class="hint-line">空格 / 逗号 分隔多个标签；<b>"Chrome 扩展"</b> 用引号包住算一个标签</div>
 
+  <div class="dest-grow" aria-hidden="true"></div>
+
   <div id="destRow" class="row-dest">
     <span class="dest-cap">收藏到</span>
     <button id="destPick" class="dest-pick" type="button" aria-haspopup="listbox" aria-expanded="false" title="选择收藏到的目录">
@@ -36,10 +38,6 @@
     </button>
   </div>
   <div id="destPanel" class="dest-panel" hidden>
-    <div class="dest-head">
-      <span>选择收藏目录</span>
-      <button id="destClose" class="dest-close" type="button" title="取消（Esc）">✕</button>
-    </div>
     <input id="destSearch" class="dest-search" type="text" placeholder="搜目录，回车选第一个" autocomplete="off" spellcheck="false" />
     <div id="destList" class="dest-list" role="listbox"></div>
   </div>

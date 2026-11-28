@@ -105,6 +105,30 @@ function renderPreview() {
 
 const PATH_SEP = String.fromCharCode(31); // 与后台一致：内部目录路径分隔符
 
+/**
+ * 面板贴在「收藏到」上沿向上展开（控件已经在底部，上方是空的）。
+ * 高度 = min(内容自然高度, 上方剩余空间)：内容少就收着，多了才限高滚动。
+ */
+function placeDestPanel() {
+  if (!destPanel || destPanel.hidden) return;
+  const r = destPick.getBoundingClientRect();
+  const vh = window.innerHeight || 560;
+  destPanel.style.maxHeight = 'none';
+  const natural = destPanel.getBoundingClientRect().height;
+  const below = vh - (r.bottom || 0) - 8;
+  const above = (r.top || 0) - 8;
+  const up = above > below;
+  const room = Math.max(120, Math.floor(up ? above : below));
+  destPanel.style.maxHeight = `${Math.min(Math.ceil(natural), room)}px`;
+  if (up) {
+    destPanel.style.top = 'auto';
+    destPanel.style.bottom = `${Math.round(vh - (r.top || 0) + 4)}px`;
+  } else {
+    destPanel.style.bottom = 'auto';
+    destPanel.style.top = `${Math.round((r.bottom || 0) + 4)}px`;
+  }
+}
+
 /** 收起态只留末两级面包屑：320px 宽放不下全路径，尾巴才是你要看的那级 */
 function paintDestPick() {
   if (destFailed) {
@@ -165,6 +189,7 @@ function showDestEmpty(text, retry) {
     e.addEventListener('click', () => loadFolders().then(() => {
       destIdx = 0;
       renderDestList();
+      placeDestPanel();
     }).catch(() => {}));
   }
   destList.append(e);
@@ -231,7 +256,7 @@ function openDest() {
   renderDestList();
   destPanel.hidden = false;
   destPick.setAttribute('aria-expanded', 'true');
-  document.body.classList.add('picking'); // 顺便把弹窗撑到 560px，一屏能看 18 行左右
+  placeDestPanel();
   destSearch.focus();
   destSearch.select();
 }
@@ -240,7 +265,6 @@ function closeDest() {
   if (!destPanel || destPanel.hidden) return;
   destPanel.hidden = true;
   destPick.setAttribute('aria-expanded', 'false');
-  document.body.classList.remove('picking');
 }
 
 function pickDest(id) {
@@ -415,6 +439,7 @@ async function refresh() {
   btnCollect.hidden = page.collected > 0;
   const destRow = $('#destRow');
   if (destRow) destRow.hidden = page.collected > 0;
+  document.body.classList.toggle('can-pick', page.collected === 0);
   $('#hint').textContent = page.collected ? '' : '先收藏，才能挂标签';
   renderTags();
   renderTagMenu(); // 本页标签变了，候选里的"已有标签"要跟着更新
@@ -508,6 +533,7 @@ if (destPick) {
   destSearch.addEventListener('input', () => {
     destIdx = 0;
     renderDestList();
+    placeDestPanel(); // 结果少了面板跟着缩，别留一片空
   });
   destSearch.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -527,8 +553,13 @@ if (destPick) {
       destPick.focus();
     }
   });
-  const destClose = $('#destClose');
-  if (destClose) destClose.addEventListener('click', closeDest);
+  document.addEventListener('click', (e) => {
+    if (destPanel.hidden) return;
+    const t = e.target;
+    if (destPanel.contains(t) || destPick.contains(t)) return;
+    closeDest();
+  });
+  window.addEventListener('resize', () => placeDestPanel());
 }
 
 

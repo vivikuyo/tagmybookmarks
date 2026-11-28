@@ -2263,7 +2263,8 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(pj.includes('function renderDestList()') && pj.includes('function pickDest(id)') && pj.includes('function openDest()') && pj.includes('function markText(text, words)'), 'T190c 渲染/选中/展开/高亮四个函数都在');
   ok(pj.includes("words.every((w) => (f.hay || '').includes(w))") && pj.includes("`${segs.join(' / ')} ${n.title || ''}`.toLowerCase()"), 'T190d 搜索按名字和整条路径匹配，空格分词取交集');
   ok(pj.includes("destSearch.addEventListener('keydown'") && pj.includes("moveDest(e.key === 'ArrowDown' ? 1 : -1)") && pj.includes("if (f) pickDest(f.id)"), 'T190e 方向键移动、回车落第一个');
-  ok(pc.includes('position: fixed; inset: 0;') && pc.includes('body.picking { min-height: 560px; }') && pj.includes("document.body.classList.add('picking')"), 'T190f 选目录时面板铺满弹窗并撑到 560px，一屏看十几行');
+  ok(pj.includes('function placeDestPanel()') && pj.includes("destPanel.style.maxHeight = `${Math.min(Math.ceil(natural), room)}px`"), 'T190f 面板高度取「内容高度」与「上方空间」的较小值：内容少就收、多了才滚');
+  ok(pc.includes('body.can-pick { min-height: 560px; }') && pj.includes("document.body.classList.toggle('can-pick', page.collected === 0)") && pc.includes('body.can-pick .dest-grow'), 'T190k 未收藏时弹窗撑到 560px，「收藏到」贴底，上方留给出面板');
   ok(pj.includes("destId = saved && foldersFlat.some((f) => f.id === saved) ? saved : ''") && pj.includes('parentId: destId || undefined,'), 'T190g 落点记住上次选择，收藏时用这个目录');
   ok(pc.includes('.dest-item') && pc.includes('min-height: 26px') && pc.includes('.dest-parent') && pc.includes('.dest-cnt'), 'T190h 目录行紧凑：26px 行高、父路径淡色、条数右对齐');
   ok(!pc.includes('.dest {'), 'T190i 旧 select 样式清掉');
