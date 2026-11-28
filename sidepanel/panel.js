@@ -1197,7 +1197,7 @@ function renderFolderHead(node) {
     + (node.depth === 0 ? ' grp-top' : '');
   head.dataset.folder = id;
   head.style.paddingLeft = '6px'; // 不做层级缩进，层级由路径标签体现
-  head.title = `${folderLabel(node)} · ${node.total ?? 0} 条（右键可重命名）`;
+  head.title = `${folderLabel(node)} · ${node.total ?? 0} 条（右键可添加当前页或重命名）`;
 
   // 文件夹勾选框：勾上 = 这一枝（目录自己 + 各级子目录 + 里面所有书签）全选中，取消 = 全取消
   const branch = branchKeys(id);
@@ -1241,11 +1241,25 @@ function renderFolderHead(node) {
   head.append(cb, caret, name, n);
   head.addEventListener('click', () => toggleFolder(id));
 
-  // 右键：重命名文件夹（就地改，Enter 提交、Esc 取消）
-  head.addEventListener('contextmenu', (e) => {
+  // 右键：添加当前页到此目录 / 重命名文件夹
+  head.addEventListener('contextmenu', async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    openCtx(e.clientX, e.clientY, [{ label: '重命名文件夹', run: () => renameFolder(head, name, node) }]);
+    const x = e.clientX;
+    const y = e.clientY;
+    let page = null;
+    try { page = await activeBrowserTab(); } catch { /* 读不到就只留重命名 */ }
+    const canAdd = !!(page && pageUrlAllowed(page.url));
+    openCtx(x, y, [
+      {
+        label: '添加当前页到此目录',
+        disabled: !canAdd,
+        title: canAdd ? (page.title || page.url) : '当前标签页不可收藏（仅支持网页和本地文件）',
+        run: () => addCurrentPageToFolder(node),
+      },
+      '-',
+      { label: '重命名文件夹', run: () => renameFolder(head, name, node) },
+    ]);
   });
 
   // 拖放：书签拖到这个文件夹上 = 移进去（追加到末尾）
@@ -1358,6 +1372,64 @@ async function refreshAll() {
   await reloadRows();
 }
 
+/** 当前页能否作为书签：只放行普通网页和本地文件，浏览器内部页不收藏 */
+function pageUrlAllowed(url) {
+  try {
+    const u = new URL(String(url || ''));
+    return u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'file:';
+  } catch {
+    return false;
+  }
+}
+
+/** 取浏览器窗口里的活动标签页；避开扩展自己的弹窗/独立窗口 */
+async function activeBrowserTab() {
+  let win = null;
+  try {
+    win = await chrome.windows.getLastFocused({ windowTypes: ['normal'] });
+  } catch { /* 没有可用窗口时退回 lastFocusedWindow */ }
+  const q = win && win.id != null
+    ? { active: true, windowId: win.id }
+    : { active: true, lastFocusedWindow: true };
+  const tabs = await chrome.tabs.query(q);
+  const list = tabs || [];
+  return list.find((t) => pageUrlAllowed(t.url)) || list[0] || null;
+}
+
+/** 把当前标签页收藏到指定目录；同目录已有同网址时不重复创建 */
+async function addCurrentPageToFolder(node) {
+  let tab = null;
+  try { tab = await activeBrowserTab(); } catch {}
+  const url = tab && tab.url ? String(tab.url) : '';
+  if (!pageUrlAllowed(url)) {
+    toast('当前标签页不可收藏（仅支持网页和本地文件）', true);
+    return;
+  }
+  const title = String((tab && tab.title) || '').trim() || url;
+  try {
+    const r = await send({
+      type: 'bookmark:create',
+      url,
+      title,
+      parentId: String(node.id),
+      skipDuplicate: true,
+    });
+    if (!r || r.error) throw new Error((r && r.error) || '添加失败');
+    toast(r.existed
+      ? `这个页面已经在该目录：${folderLabel(node)}`
+      : `已添加到 ${folderLabel(node)}`);
+    const id = String(node.id);
+    if (isGroupCollapsed(id)) {
+      if (app.autoOpen) app.autoOpen.add(id);
+      else app.grpCollapsed.delete(id);
+      applyFoldBtn();
+    }
+    await refreshAll();
+  } catch (e) {
+    toast(e.message || '添加失败', true);
+  }
+}
+
 // ---------------------------------------------------------------- 右键菜单（复制网址 / 重命名）
 let ctxEl = null;
 function closeCtx() {
@@ -1380,10 +1452,16 @@ function openCtx(x, y, items) {
     const b = document.createElement('button');
     b.textContent = it.label;
     if (it.danger) b.classList.add('danger');
-    b.addEventListener('click', () => {
-      closeCtx();
-      it.run();
-    });
+    if (it.disabled) {
+      b.disabled = true;
+      b.title = it.title || '';
+    } else {
+      b.title = it.title || '';
+      b.addEventListener('click', () => {
+        closeCtx();
+        it.run();
+      });
+    }
     ctxEl.append(b);
   }
   document.body.append(ctxEl);

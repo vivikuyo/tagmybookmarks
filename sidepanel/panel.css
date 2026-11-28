@@ -507,6 +507,7 @@ body[data-density="ultra"] .grp .grp-n { font-size: 10px; }
   color: var(--text, #1c1f26); font-size: 12.5px; cursor: pointer; font-family: inherit;
 }
 .ctx-menu button:hover { background: color-mix(in srgb, var(--accent, #4a8af4) 12%, transparent); }
+.ctx-menu button:disabled { opacity: .55; cursor: default; background: transparent; }
 .ctx-menu button.danger { color: #c0392b; }
 .ctx-sep { height: 1px; margin: 3px 2px; background: var(--line, #e3e6ec); }
 .row-rename {

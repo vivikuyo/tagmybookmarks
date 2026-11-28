@@ -2202,6 +2202,21 @@ ok(cssSrc.includes('.tagchip .chip-name') && cssSrc.includes('max-width: 220px')
   ok(bm.includes('function bulkTagNeedle') && bm.includes('allTagList\n    .filter'), 'T186d 按最后一个词过滤全库标签');
 }
 
+// T187：侧边栏文件夹右键「添加当前页到此目录」
+{
+  const pn = readFileSync(new URL('../sidepanel/panel.js', import.meta.url), 'utf8');
+  const bg = readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+  const pc = readFileSync(new URL('../sidepanel/panel.css', import.meta.url), 'utf8');
+  const mf = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
+  ok(mf.permissions.includes('tabs'), 'T187a manifest 增加 tabs，跨标签页能读当前页 URL');
+  ok(pn.includes("label: '添加当前页到此目录'"), 'T187b 文件夹右键菜单有添加入口');
+  ok(pn.includes('function activeBrowserTab') && pn.includes("windowTypes: ['normal']"), 'T187c 只取普通浏览器窗口的活动标签页');
+  ok(pn.includes('function pageUrlAllowed') && pn.includes("u.protocol === 'http:'"), 'T187d 只允许 http/https/file');
+  ok(pn.includes('skipDuplicate: true'), 'T187e 创建时带同目录去重开关');
+  ok(bg.includes('if (msg.skipDuplicate)') && bg.includes('existed: true'), 'T187f 后台同目录同网址返回 existed，不再创建');
+  ok(pc.includes('.ctx-menu button:disabled'), 'T187g 不可收藏时菜单项置灰');
+}
+
 console.log(`\n通过 ${pass} 项`);
 if (failures.length) {
   console.log(`失败 ${failures.length} 项：\n`);

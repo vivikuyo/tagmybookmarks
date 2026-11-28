@@ -2279,6 +2279,15 @@ async function handle(msg) {
     if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) return { error: 'URL 不合法' };
     const parentId = msg.parentId || (await ensureInbox());
     const title = String(msg.title || url);
+    const place = index.folderPath.get(parentId) || parentId;
+    if (msg.skipDuplicate) {
+      // 侧边栏「添加当前页到此目录」：同目录已有同一网址就不要再造一条
+      try {
+        const kids = await chrome.bookmarks.getChildren(parentId);
+        const hit = (kids || []).find((n) => n.url && String(n.url) === url);
+        if (hit) return { ok: true, created: false, existed: true, id: hit.id, written: 0, place };
+      } catch { /* 父目录无效等情况交给下面的 create 统一报错 */ }
+    }
     let node;
     try {
       node = await chrome.bookmarks.create({ parentId, title, url });
@@ -2292,7 +2301,6 @@ async function handle(msg) {
       const r = await addTags([node.id], tags);
       written = r.written || 0;
     }
-    const place = index.folderPath.get(parentId) || parentId;
     return { ok: true, created: true, id: node.id, written, place };
   }
 

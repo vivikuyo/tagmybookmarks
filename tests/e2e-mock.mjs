@@ -608,6 +608,19 @@ const parsedCreated = parseTitle(rawCreated[0].title);
 ok(parsedCreated.tags.includes('前端') && parsedCreated.tags.includes('Svelte'), 'E131 创建时把标签写进标题');
 ok(String(rawCreated[0].parentId) === String(bmFolder.id), 'E132 落在指定目录');
 
+// 同目录同网址 + skipDuplicate：应返回已有书签，而不是再建一条
+const beforeDup = (await chrome.bookmarks.getChildren(bmFolder.id)).length;
+const dupBm = await call({
+  type: 'bookmark:create',
+  url: 'https://svelte.dev/',
+  title: 'Svelte 文档（重复）',
+  parentId: bmFolder.id,
+  skipDuplicate: true,
+});
+ok(dupBm.ok && dupBm.existed && String(dupBm.id) === String(newBm.id), 'E132b 同目录同网址返回 existed');
+const afterDup = (await chrome.bookmarks.getChildren(bmFolder.id)).length;
+eq(afterDup, beforeDup, 'E132c 同目录同网址不重复创建');
+
 // 33. 移动（bookmarks:move）
 const moveTo = await chrome.bookmarks.create({ parentId: '1', title: '移动目标' });
 const mv = await call({ type: 'bookmarks:move', ids: [newBm.id], parentId: moveTo.id });
